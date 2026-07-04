@@ -1,0 +1,103 @@
+{
+  "schema_version": "redevplugin.manifest.v1",
+  "publisher": {
+    "publisher_id": "com.redeven.official",
+    "display_name": "Redeven Official"
+  },
+  "plugin": {
+    "plugin_id": "com.redeven.official.containers",
+    "display_name": "Containers",
+    "version": "1.0.0",
+    "api_version": "plugin-v1",
+    "min_runtime_version": "0.1.0",
+    "ui_protocol_version": "plugin-ui-v1"
+  },
+  "surfaces": [
+    {
+      "surface_id": "containers.activity",
+      "kind": "activity",
+      "label": "Containers",
+      "entry": "ui/index.html",
+      "method": "containers.list",
+      "default_size": {
+        "width": 960,
+        "height": 720
+      }
+    }
+  ],
+  "capability_bindings": [
+    {
+      "binding_id": "container_runtime",
+      "capability_id": "redeven.capability.container_resources",
+      "min_capability_version": "1.0.0",
+      "required_permissions": ["read", "write", "execute", "delete"]
+    }
+  ],
+  "methods": [
+    {
+      "method": "containers.status",
+      "effect": "read",
+      "execution": "sync",
+      "dangerous": false,
+      "route": {
+        "kind": "capability",
+        "binding_id": "container_runtime",
+        "target_method": "containers.status"
+      },
+      "request_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema_version"],
+        "properties": {
+          "schema_version": { "const": "redeven.capability.container_resources.v1" },
+          "engine": { "enum": ["docker", "podman"] }
+        }
+      },
+      "response_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema_version", "capability_id", "capability_version", "engine", "available"],
+        "properties": {
+          "schema_version": { "const": "redeven.capability.container_resources.v1" },
+          "capability_id": { "const": "redeven.capability.container_resources" },
+          "capability_version": { "const": "1.0.0" },
+          "engine": { "enum": ["docker", "podman"] },
+          "available": { "type": "boolean" },
+          "engine_version": { "type": "string" }
+        }
+      }
+    },
+    {
+      "method": "containers.list",
+      "effect": "read",
+      "execution": "sync",
+      "dangerous": false,
+      "route": {
+        "kind": "capability",
+        "binding_id": "container_runtime",
+        "target_method": "containers.list"
+      },
+      "request_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema_version"],
+        "properties": {
+          "schema_version": { "const": "redeven.capability.container_resources.v1" },
+          "engine": { "enum": ["docker", "podman"] },
+          "all": { "type": "boolean" }
+        }
+      },
+      "response_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["schema_version", "capability_id", "engine", "containers"],
+        "properties": {
+          "schema_version": { "const": "redeven.capability.container_resources.v1" },
+          "capability_id": { "const": "redeven.capability.container_resources" },
+          "engine": { "enum": ["docker", "podman"] },
+          "containers": { "type": "array" }
+        }
+      }
+    }
+  ]
+}

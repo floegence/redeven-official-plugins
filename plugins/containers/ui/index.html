@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Containers</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="plugin-shell">
+      <header class="toolbar">
+        <div>
+          <p class="eyebrow">Redeven Official</p>
+          <h1>Containers</h1>
+        </div>
+        <div class="actions" aria-label="Container controls">
+          <button id="refresh" type="button">Refresh</button>
+        </div>
+      </header>
+      <section id="status" class="status" aria-live="polite">Connecting to Redeven container resources...</section>
+      <section class="content">
+        <table aria-label="Container list">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Image</th>
+              <th>State</th>
+              <th>Engine</th>
+            </tr>
+          </thead>
+          <tbody id="containers"></tbody>
+        </table>
+      </section>
+    </main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

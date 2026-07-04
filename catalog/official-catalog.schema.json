@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plugins.redeven.com/schemas/official-catalog.seed.v1.json",
+  "title": "Redeven official plugin catalog seed",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "publisher_id", "generated_from", "plugins"],
+  "properties": {
+    "schema_version": { "const": "redeven.official_plugin_catalog.seed.v1" },
+    "publisher_id": { "const": "com.redeven.official" },
+    "generated_from": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "source"],
+      "properties": {
+        "repository": { "const": "redeven-official-plugins" },
+        "source": { "const": "plugin_manifests" }
+      }
+    },
+    "plugins": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "plugin_id",
+          "display_name",
+          "description",
+          "publisher_id",
+          "latest_version",
+          "stable_version",
+          "min_redeven_version",
+          "min_redevplugin_version",
+          "rollout_state",
+          "default_surface_id",
+          "icon_fallback",
+          "distribution"
+        ],
+        "properties": {
+          "plugin_id": { "type": "string", "pattern": "^com\\.redeven\\.official\\." },
+          "display_name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
+          "publisher_id": { "const": "com.redeven.official" },
+          "latest_version": { "type": "string", "minLength": 1 },
+          "stable_version": { "type": "string", "minLength": 1 },
+          "min_redeven_version": { "type": "string", "minLength": 1 },
+          "min_redevplugin_version": { "type": "string", "minLength": 1 },
+          "rollout_state": { "enum": ["stable", "staged", "disabled", "revoked"] },
+          "default_surface_id": { "type": "string", "minLength": 1 },
+          "icon_fallback": { "enum": ["containers", "database", "github", "generic"] },
+          "distribution": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["release_channel", "artifact_name", "package_url_template", "requires_host_distribution_install_api"],
+            "properties": {
+              "release_channel": { "const": "github_release_and_redeven_cdn" },
+              "artifact_name": { "type": "string", "pattern": "\\.redevplugin$" },
+              "package_url_template": { "type": "string", "format": "uri-template" },
+              "requires_host_distribution_install_api": { "const": true }
+            }
+          }
+        }
+      }
+    }
+  }
+}
