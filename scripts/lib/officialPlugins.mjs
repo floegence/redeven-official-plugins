@@ -71,8 +71,7 @@ export function catalogItemForPlugin(source) {
     distribution: {
       release_channel: 'github_release_and_redeven_cdn',
       artifact_name: `${shortName}-${plugin.version}.redevplugin`,
-      package_url_template: `https://plugins.redeven.com/official/${shortName}/${plugin.version}/${shortName}-${plugin.version}.redevplugin`,
-      requires_host_distribution_install_api: true,
+      official_artifact_path: `official/${shortName}/${plugin.version}/${shortName}-${plugin.version}.redevplugin`,
     },
   };
 }
@@ -136,7 +135,7 @@ export async function validatePluginSource(source) {
 
 function descriptionForPlugin(name) {
   if (name === 'containers') {
-    return "Inspect Docker and Podman resources through Redeven's official container capability.";
+    return "Manage Docker and Podman resources through Redeven's official container capability.";
   }
   return 'Redeven official plugin.';
 }

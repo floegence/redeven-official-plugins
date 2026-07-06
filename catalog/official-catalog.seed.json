@@ -9,7 +9,7 @@
     {
       "plugin_id": "com.redeven.official.containers",
       "display_name": "Containers",
-      "description": "Inspect Docker and Podman resources through Redeven's official container capability.",
+      "description": "Manage Docker and Podman resources through Redeven's official container capability.",
       "publisher_id": "com.redeven.official",
       "latest_version": "1.0.0",
       "stable_version": "1.0.0",
@@ -21,8 +21,7 @@
       "distribution": {
         "release_channel": "github_release_and_redeven_cdn",
         "artifact_name": "containers-1.0.0.redevplugin",
-        "package_url_template": "https://plugins.redeven.com/official/containers/1.0.0/containers-1.0.0.redevplugin",
-        "requires_host_distribution_install_api": true
+        "official_artifact_path": "official/containers/1.0.0/containers-1.0.0.redevplugin"
       }
     }
   ]
