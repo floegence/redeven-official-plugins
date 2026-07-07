@@ -101,8 +101,12 @@ npm run package:containers
 ```
 
 `npm run package:containers` builds a deterministic `.redevplugin` package using
-the released ReDevPlugin CLI. If `REDEVEN_OFFICIAL_PLUGIN_SIGNING_KEY` is set,
-the script signs the package and validates the signed artifact.
+the released ReDevPlugin CLI. Any artifact published as an official installable
+release must be signed with `REDEVEN_OFFICIAL_PLUGIN_SIGNING_KEY`. Official
+release catalog metadata must reference only the validated signed artifact
+digest and signature metadata. Unsigned package output is allowed only as a
+local or CI negative fixture; it must not be marked official installable or
+included in signed official catalog metadata.
 
 ## Maintained Content
 
