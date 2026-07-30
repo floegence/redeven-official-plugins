@@ -40,13 +40,14 @@ describe('official plugin repository contract', () => {
     assert.equal(containers.release.channel, 'development');
     assert.equal(containers.release.source_version, '4.0.0');
     assert.equal(containers.release.installable, false);
-    assert.equal(containers.release.stable_catalog.version, '1.0.0');
+    assert.equal(containers.release.stable_catalog.version, '2.0.0');
 
     const catalog = buildCatalogSeed([containers]);
-    assert.equal(catalog.plugins[0].latest_version, '1.0.0');
-    assert.equal(catalog.plugins[0].stable_version, '1.0.0');
-    assert.equal(catalog.plugins[0].default_surface_id, 'containers.activity');
-    assert.equal(catalog.plugins[0].distribution.official_artifact_path, 'official/containers/1.0.0/containers-1.0.0.redevplugin');
+    assert.equal(catalog.plugins[0].latest_version, '2.0.0');
+    assert.equal(catalog.plugins[0].stable_version, '2.0.0');
+    assert.equal(catalog.plugins[0].default_surface_id, 'containers.dashboard');
+    assert.equal(catalog.plugins[0].distribution.official_artifact_path, 'official/containers/2.0.0/containers-2.0.0.redevplugin');
+    assert.equal(catalog.plugins[0].distribution.artifact_sha256, '6535a574a8a2ab6e8901509934634c2772d2f0cf52088e34530de4df589c1d9b');
   });
 
   it('generates the committed catalog deterministically', async () => {

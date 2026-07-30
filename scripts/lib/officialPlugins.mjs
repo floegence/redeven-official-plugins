@@ -74,6 +74,7 @@ export function catalogItemForPlugin(source) {
       release_channel: 'github_release_and_redeven_cdn',
       artifact_name: stable.artifact_name,
       official_artifact_path: stable.official_artifact_path,
+      artifact_sha256: stable.artifact_sha256,
     },
   };
 }
@@ -119,8 +120,16 @@ export async function validatePluginSource(source) {
   const stable = source.release?.stable_catalog;
   if (!stable || stable.version === manifest.plugin?.version ||
       !String(stable.artifact_name ?? '').endsWith('.redevplugin') ||
-      !String(stable.official_artifact_path ?? '').startsWith(`official/${name}/${stable.version}/`)) {
+      !String(stable.official_artifact_path ?? '').startsWith(`official/${name}/${stable.version}/`) ||
+      !/^[a-f0-9]{64}$/u.test(String(stable.artifact_sha256 ?? ''))) {
     errors.push(`${name}: stable catalog metadata must remain separate from development source`);
+  } else {
+    const artifact = path.join(source.pluginRoot, '..', '..', stable.official_artifact_path);
+    if (!(await fileExists(artifact))) {
+      errors.push(`${name}: stable catalog artifact is missing`);
+    } else if (sha256Hex(await readFile(artifact)) !== stable.artifact_sha256) {
+      errors.push(`${name}: stable catalog artifact hash is invalid`);
+    }
   }
   const surfaces = Array.isArray(manifest.surfaces) ? manifest.surfaces : [];
   if (surfaces.length === 0) {

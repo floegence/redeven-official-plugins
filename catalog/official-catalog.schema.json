@@ -52,11 +52,12 @@
           "distribution": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["release_channel", "artifact_name", "official_artifact_path"],
+            "required": ["release_channel", "artifact_name", "official_artifact_path", "artifact_sha256"],
             "properties": {
               "release_channel": { "const": "github_release_and_redeven_cdn" },
               "artifact_name": { "type": "string", "pattern": "\\.redevplugin$" },
-              "official_artifact_path": { "type": "string", "pattern": "^official/.+\\.redevplugin$" }
+              "official_artifact_path": { "type": "string", "pattern": "^official/.+\\.redevplugin$" },
+              "artifact_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
             }
           }
         }
