@@ -9,7 +9,7 @@ import {
   validatePluginSource,
 } from './lib/officialPlugins.mjs';
 
-const redevpluginVersion = 'v0.1.1';
+const redevpluginVersion = 'v0.6.20';
 const repoRoot = repoRootFrom(import.meta.url);
 const pluginName = String(process.argv[2] ?? '').trim();
 
@@ -31,7 +31,7 @@ const unsignedPackage = path.join(outDir, `${pluginName}-${version}.unsigned.red
 const signedPackage = path.join(outDir, `${pluginName}-${version}.redevplugin`);
 await mkdir(outDir, { recursive: true });
 
-await runReDevPlugin(['package', source.pluginRoot, unsignedPackage]);
+await runReDevPlugin(['package', path.join(source.pluginRoot, 'dist'), unsignedPackage]);
 
 let packageFile = unsignedPackage;
 const signingKey = String(process.env.REDEVEN_OFFICIAL_PLUGIN_SIGNING_KEY ?? '').trim();

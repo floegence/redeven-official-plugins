@@ -1,0 +1,17 @@
+{
+  "schema_version": "redeven.official_plugin_source_release.v1",
+  "channel": "development",
+  "source_version": "4.0.0",
+  "installable": false,
+  "package_assets": {
+    "ui/assets/containers-plugin.png": "assets/containers-plugin.png"
+  },
+  "stable_catalog": {
+    "version": "1.0.0",
+    "min_redeven_version": "0.1.0",
+    "min_redevplugin_version": "0.1.1",
+    "default_surface_id": "containers.activity",
+    "artifact_name": "containers-1.0.0.redevplugin",
+    "official_artifact_path": "official/containers/1.0.0/containers-1.0.0.redevplugin"
+  }
+}

@@ -4,11 +4,12 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test tests/*.test.mjs && npm --prefix plugins/containers test",
     "check": "node scripts/check_official_plugins.mjs",
     "catalog:verify": "node scripts/generate_official_catalog.mjs --verify",
     "catalog:write": "node scripts/generate_official_catalog.mjs --write",
-    "package:containers": "node scripts/build_official_plugin.mjs containers",
+    "build:containers": "npm --prefix plugins/containers run build",
+    "package:containers": "npm run build:containers && node scripts/build_official_plugin.mjs containers",
     "verify": "npm test && npm run check && npm run catalog:verify"
   },
   "devDependencies": {}

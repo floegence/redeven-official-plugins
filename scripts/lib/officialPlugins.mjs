@@ -44,7 +44,9 @@ export async function loadPluginSource(repoRoot, name) {
   const pluginRoot = path.join(repoRoot, 'plugins', name);
   const manifestPath = path.join(pluginRoot, 'manifest.json');
   const manifest = await readJSON(manifestPath);
-  return { name, pluginRoot, manifestPath, manifest };
+  const releasePath = path.join(pluginRoot, 'release.json');
+  const release = await readJSON(releasePath);
+  return { name, pluginRoot, manifestPath, manifest, releasePath, release };
 }
 
 export async function loadAllPluginSources(repoRoot) {
@@ -54,24 +56,24 @@ export async function loadAllPluginSources(repoRoot) {
 
 export function catalogItemForPlugin(source) {
   const plugin = source.manifest.plugin ?? {};
-  const surface = (source.manifest.surfaces ?? [])[0] ?? {};
+  const stable = source.release.stable_catalog;
   const shortName = source.name;
   return {
     plugin_id: plugin.plugin_id,
     display_name: plugin.display_name,
     description: descriptionForPlugin(shortName),
     publisher_id: source.manifest.publisher?.publisher_id,
-    latest_version: plugin.version,
-    stable_version: plugin.version,
-    min_redeven_version: minRedevenVersionForPlugin(shortName),
-    min_redevplugin_version: minReDevPluginVersionForPlugin(shortName),
+    latest_version: stable.version,
+    stable_version: stable.version,
+    min_redeven_version: stable.min_redeven_version,
+    min_redevplugin_version: stable.min_redevplugin_version,
     rollout_state: 'stable',
-    default_surface_id: surface.surface_id,
+    default_surface_id: stable.default_surface_id,
     icon_fallback: iconFallbackForPlugin(shortName),
     distribution: {
       release_channel: 'github_release_and_redeven_cdn',
-      artifact_name: `${shortName}-${plugin.version}.redevplugin`,
-      official_artifact_path: `official/${shortName}/${plugin.version}/${shortName}-${plugin.version}.redevplugin`,
+      artifact_name: stable.artifact_name,
+      official_artifact_path: stable.official_artifact_path,
     },
   };
 }
@@ -99,8 +101,8 @@ export function sha256Hex(data) {
 export async function validatePluginSource(source) {
   const errors = [];
   const { manifest, pluginRoot, name } = source;
-  if (manifest.schema_version !== 'redevplugin.manifest.v1') {
-    errors.push(`${name}: manifest schema_version must be redevplugin.manifest.v1`);
+  if (manifest.schema_version !== 'redevplugin.manifest.v7') {
+    errors.push(`${name}: manifest schema_version must be redevplugin.manifest.v7`);
   }
   if (manifest.publisher?.publisher_id !== officialPublisherID) {
     errors.push(`${name}: publisher_id must be ${officialPublisherID}`);
@@ -108,6 +110,17 @@ export async function validatePluginSource(source) {
   const pluginID = String(manifest.plugin?.plugin_id ?? '');
   if (!pluginID.startsWith(`${officialPublisherID}.`)) {
     errors.push(`${name}: plugin_id must use the ${officialPublisherID} namespace`);
+  }
+  if (source.release?.schema_version !== 'redeven.official_plugin_source_release.v1' ||
+      source.release?.channel !== 'development' || source.release?.installable !== false ||
+      source.release?.source_version !== manifest.plugin?.version) {
+    errors.push(`${name}: development source release metadata is invalid`);
+  }
+  const stable = source.release?.stable_catalog;
+  if (!stable || stable.version === manifest.plugin?.version ||
+      !String(stable.artifact_name ?? '').endsWith('.redevplugin') ||
+      !String(stable.official_artifact_path ?? '').startsWith(`official/${name}/${stable.version}/`)) {
+    errors.push(`${name}: stable catalog metadata must remain separate from development source`);
   }
   const surfaces = Array.isArray(manifest.surfaces) ? manifest.surfaces : [];
   if (surfaces.length === 0) {
@@ -121,6 +134,13 @@ export async function validatePluginSource(source) {
     }
     if (!(await fileExists(path.join(pluginRoot, entry)))) {
       errors.push(`${name}: surfaces[${index}].entry ${entry} is missing`);
+    }
+    const icon = String(surface.icon ?? '');
+    const iconSource = String(source.release?.package_assets?.[icon] ?? icon);
+    if (!icon || icon.startsWith('/') || icon.includes('..') ||
+        iconSource.startsWith('/') || iconSource.includes('..') ||
+        !(await fileExists(path.join(pluginRoot, iconSource)))) {
+      errors.push(`${name}: surfaces[${index}].icon must be a package-local file`);
     }
   }
   const bindings = Array.isArray(manifest.capability_bindings) ? manifest.capability_bindings : [];
@@ -138,14 +158,6 @@ function descriptionForPlugin(name) {
     return "Manage Docker and Podman resources through Redeven's official container capability.";
   }
   return 'Redeven official plugin.';
-}
-
-function minRedevenVersionForPlugin(_name) {
-  return '0.1.0';
-}
-
-function minReDevPluginVersionForPlugin(_name) {
-  return '0.1.1';
 }
 
 function iconFallbackForPlugin(name) {

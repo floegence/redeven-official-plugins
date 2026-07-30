@@ -1,28 +1,26 @@
 # Containers
 
-`com.redeven.official.containers` is the first Redeven official plugin. It uses
-the Redeven-owned `redeven.capability.container_resources` capability binding,
-so Docker and Podman access remains a host capability adapter rather than a
-plugin runtime mechanism.
+Containers is Redeven's official Docker and Podman management plugin. The
+plugin owns its UI source, localized copy, icon, and package manifest in this
+repository. Redeven supplies the versioned host capability implementation at
+runtime; the plugin calls that capability only through the released
+ReDevPlugin bridge.
 
-The UI entry is `ui/index.html`. Runtime calls are made through the ReDevPlugin
-sandbox bridge after Redeven installs, enables, and opens the plugin through the
-embedded ReDevPlugin Host.
+## Development
 
-The plugin deliberately treats Docker and Podman as separate engines. Every
-container action is keyed by `(engine, container_id)`, and the UI exposes an
-engine selector before listing, inspecting, starting, stopping, restarting,
-removing containers, reading log tails, or pulling images.
+Install dependencies, run the focused tests, and build the package root:
 
-Declared host capability methods:
+```bash
+npm ci
+npm test
+npm run build
+```
 
-- `containers.status`
-- `containers.list`
-- `containers.inspect`
-- `containers.start.preflight`
-- `containers.start`
-- `containers.stop`
-- `containers.restart`
-- `containers.remove`
-- `containers.logs.tail`
-- `images.pull`
+The generated `dist/` directory is local build output. Redeven development
+builds must fetch an immutable commit from this repository before building the
+plugin; they must never import a sibling checkout or a copy stored in Redeven.
+
+Version `4.0.0` is currently a development source version. It is not an
+official stable installable release until the deterministic package is signed
+with the authorized Redeven official signing identity and its release metadata
+is published.
