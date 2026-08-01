@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import {
   buildCatalogSeed,
   loadAllPluginSources,
@@ -35,19 +35,25 @@ describe('official plugin repository contract', () => {
     assert.equal(joinedSources.includes('/Users/'), false);
   });
 
-  it('keeps development source separate from the signed stable catalog', async () => {
+  it('keeps the release train and current catalog aligned at Containers 4.0.0', async () => {
     const [containers] = await loadAllPluginSources(repoRoot);
-    assert.equal(containers.release.channel, 'development');
+    assert.equal(containers.release.channel, 'stable');
     assert.equal(containers.release.source_version, '4.0.0');
-    assert.equal(containers.release.installable, false);
-    assert.equal(containers.release.stable_catalog.version, '2.0.0');
+    assert.equal(containers.release.release_train_tag, 'v4.0.0');
+    assert.equal(containers.release.stable_catalog.version, '4.0.0');
 
     const catalog = buildCatalogSeed([containers]);
-    assert.equal(catalog.plugins[0].latest_version, '2.0.0');
-    assert.equal(catalog.plugins[0].stable_version, '2.0.0');
+    assert.equal(catalog.plugins[0].latest_version, '4.0.0');
+    assert.equal(catalog.plugins[0].stable_version, '4.0.0');
     assert.equal(catalog.plugins[0].default_surface_id, 'containers.dashboard');
-    assert.equal(catalog.plugins[0].distribution.official_artifact_path, 'official/containers/2.0.0/containers-2.0.0.redevplugin');
-    assert.equal(catalog.plugins[0].distribution.artifact_sha256, '6535a574a8a2ab6e8901509934634c2772d2f0cf52088e34530de4df589c1d9b');
+    assert.deepEqual(catalog.plugins[0].distribution, {
+      provider: 'github_release',
+      repository: 'floegence/redeven-official-plugins',
+      tag: 'v4.0.0',
+      artifact_name: 'containers-4.0.0.redevplugin',
+      release_ref_asset_name: 'containers-4.0.0.release-ref.json',
+      trust_root_asset_name: 'root.public.json',
+    });
   });
 
   it('generates the committed catalog deterministically', async () => {
@@ -58,15 +64,43 @@ describe('official plugin repository contract', () => {
   });
 
   it('uses released ReDevPlugin dependencies without sibling wiring', async () => {
-    const [rootPackage, pluginPackage, buildScript, readme] = await Promise.all([
+    const [rootPackage, pluginPackage, buildScript, readme, agents] = await Promise.all([
       readFile(path.join(repoRoot, 'package.json'), 'utf8'),
       readFile(path.join(repoRoot, 'plugins', 'containers', 'package.json'), 'utf8'),
       readFile(path.join(repoRoot, 'scripts', 'build_official_plugin.mjs'), 'utf8'),
       readFile(path.join(repoRoot, 'plugins', 'containers', 'README.md'), 'utf8'),
+      readFile(path.join(repoRoot, 'AGENTS.md'), 'utf8'),
     ]);
     assert.equal(buildScript.includes('redevplugin@${redevpluginVersion}'), true);
-    assert.equal(buildScript.includes("const redevpluginVersion = 'v0.6.20'"), true);
+    assert.equal(buildScript.includes("const redevpluginVersion = 'v0.6.21'"), true);
     assert.doesNotMatch(`${rootPackage}\n${pluginPackage}`, /"(?:file|link|workspace|portal):/u);
     assert.doesNotMatch(readme, /Install from URL|Install from file|marketplace/iu);
+    assert.doesNotMatch(`${buildScript}\n${readme}\n${agents}`, /REDEVEN_OFFICIAL_PLUGIN_SIGNING_KEY/u);
+  });
+
+  it('keeps packages out of git and uses neutral external signer exchange', async () => {
+    const [packageScript, releaseScript, publisherConfig, capabilityPin, buildScript, releaseWorkflow, responses, tracked] = await Promise.all([
+      readFile(path.join(repoRoot, 'scripts', 'build_official_plugin.mjs'), 'utf8'),
+      readFile(path.join(repoRoot, 'scripts', 'release_official_plugin.mjs'), 'utf8'),
+      readJSON(path.join(repoRoot, 'releases', 'containers', '4.0.0', 'publisher-config.json')),
+      readJSON(path.join(repoRoot, 'plugins', 'containers', 'host-capability.pin.json')),
+      readFile(path.join(repoRoot, 'plugins', 'containers', 'build.mjs'), 'utf8'),
+      readFile(path.join(repoRoot, '.github', 'workflows', 'release.yml'), 'utf8'),
+      readdir(path.join(repoRoot, 'releases', 'containers', '4.0.0', 'responses')),
+      import('node:child_process').then(({ execFileSync }) => execFileSync('git', ['ls-files'], { cwd: repoRoot, encoding: 'utf8' })),
+    ]);
+    assert.doesNotMatch(tracked, /\.redevplugin$/mu);
+    assert.doesNotMatch(packageScript, /private_key_file|SIGNING_KEY|secret/iu);
+    assert.match(releaseScript, /apply-signature/u);
+    assert.match(releaseScript, /release', 'verify/u);
+    assert.equal(publisherConfig.schema_version, 'redevplugin.release_publisher_config.v1');
+    assert.equal(publisherConfig.min_redevplugin_version, '0.6.21');
+    assert.equal(publisherConfig.host_requirements[0].required_capability_contracts[0].contract.artifact_sha256, capabilityPin.artifact_sha256);
+    assert.equal(capabilityPin.contract_id, 'redeven.container_resources.v4');
+    assert.match(buildScript, /capabilityMethods\.length !== 52/u);
+    assert.equal(responses.filter((name) => name.endsWith('.response.json')).length, 15);
+    assert.match(releaseWorkflow, /remote_main.*GITHUB_SHA/su);
+    assert.match(releaseWorkflow, /immutable-releases/u);
+    assert.match(releaseWorkflow, /npm run release:verify/u);
   });
 });

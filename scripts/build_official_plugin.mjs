@@ -9,7 +9,7 @@ import {
   validatePluginSource,
 } from './lib/officialPlugins.mjs';
 
-const redevpluginVersion = 'v0.6.20';
+const redevpluginVersion = 'v0.6.21';
 const repoRoot = repoRootFrom(import.meta.url);
 const pluginName = String(process.argv[2] ?? '').trim();
 
@@ -28,28 +28,19 @@ if (errors.length > 0) {
 const version = source.manifest.plugin.version;
 const outDir = path.join(repoRoot, 'dist', pluginName, version);
 const unsignedPackage = path.join(outDir, `${pluginName}-${version}.unsigned.redevplugin`);
-const signedPackage = path.join(outDir, `${pluginName}-${version}.redevplugin`);
 await mkdir(outDir, { recursive: true });
 
 await runReDevPlugin(['package', path.join(source.pluginRoot, 'dist'), unsignedPackage]);
+await runReDevPlugin(['validate', unsignedPackage]);
 
-let packageFile = unsignedPackage;
-const signingKey = String(process.env.REDEVEN_OFFICIAL_PLUGIN_SIGNING_KEY ?? '').trim();
-if (signingKey) {
-  await runReDevPlugin(['sign', unsignedPackage, signingKey, signedPackage]);
-  packageFile = signedPackage;
-}
-
-await runReDevPlugin(['validate', packageFile]);
-
-const data = await readFile(packageFile);
+const data = await readFile(unsignedPackage);
 const metadata = {
   schema_version: 'redeven.official_plugin_artifact.v1',
   plugin_id: source.manifest.plugin.plugin_id,
   version,
-  package_file: path.relative(repoRoot, packageFile),
+  package_file: path.relative(repoRoot, unsignedPackage),
   package_sha256: `sha256:${sha256Hex(data)}`,
-  signed: Boolean(signingKey),
+  signed: false,
 };
 await writeFile(path.join(outDir, `${pluginName}-${version}.metadata.json`), stableJSONString(metadata));
 console.log(stableJSONString(metadata).trimEnd());
@@ -64,7 +55,14 @@ function runReDevPlugin(args) {
     const child = spawn(command, finalArgs, {
       cwd: repoRoot,
       stdio: 'inherit',
-      env: { ...process.env, GOWORK: 'off' },
+      env: {
+        ...process.env,
+        GOWORK: 'off',
+        GOTOOLCHAIN: 'go1.26.5+auto',
+        GOPROXY: 'https://proxy.golang.org,direct',
+        GOPRIVATE: '',
+        GONOSUMDB: '',
+      },
     });
     child.on('error', reject);
     child.on('exit', (code) => {

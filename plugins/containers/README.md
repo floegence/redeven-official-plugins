@@ -20,7 +20,7 @@ The generated `dist/` directory is local build output. Redeven development
 builds must fetch an immutable commit from this repository before building the
 plugin; they must never import a sibling checkout or a copy stored in Redeven.
 
-Version `4.0.0` is currently a development source version. It is not an
-official stable installable release until the deterministic package is signed
-with the authorized Redeven official signing identity and its release metadata
-is published.
+Version `4.0.0` is the stable release-train version. Its installable package,
+signed release reference, and public trust documents are published together as
+immutable assets on the matching GitHub Release after the released ReDevPlugin
+publisher verifies the complete external-signature exchange.

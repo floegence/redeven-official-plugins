@@ -37,14 +37,16 @@ npm run check
 npm run catalog:verify
 ```
 
-To build the Containers package with the released ReDevPlugin CLI:
+To build the deterministic unsigned Containers package with the released
+ReDevPlugin CLI:
 
 ```bash
 npm run package:containers
 ```
 
-The package script writes release output under `dist/`. When
-`REDEVEN_OFFICIAL_PLUGIN_SIGNING_KEY` points at an Ed25519 ReDevPlugin private
-key file, it also writes a signed package and verifies it. Release automation is
-responsible for uploading the signed package, checksum, signature metadata, and
-notices to GitHub Releases and the Redeven plugin CDN.
+The package script writes untracked output under `dist/`. The release commands
+use ReDevPlugin's neutral external-signer exchange: `release:prepare` writes
+public signing requests, `release:apply` accepts public responses, and
+`release:finalize` plus `release:verify` produce and verify the complete GitHub
+Release asset set. This repository never reads or stores private signing
+material, and plugin package bytes are kept in GitHub Releases rather than git.

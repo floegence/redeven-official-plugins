@@ -52,12 +52,14 @@
           "distribution": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["release_channel", "artifact_name", "official_artifact_path", "artifact_sha256"],
+            "required": ["provider", "repository", "tag", "artifact_name", "release_ref_asset_name", "trust_root_asset_name"],
             "properties": {
-              "release_channel": { "const": "github_release_and_redeven_cdn" },
+              "provider": { "const": "github_release" },
+              "repository": { "const": "floegence/redeven-official-plugins" },
+              "tag": { "type": "string", "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
               "artifact_name": { "type": "string", "pattern": "\\.redevplugin$" },
-              "official_artifact_path": { "type": "string", "pattern": "^official/.+\\.redevplugin$" },
-              "artifact_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              "release_ref_asset_name": { "type": "string", "pattern": "\\.release-ref\\.json$" },
+              "trust_root_asset_name": { "const": "root.public.json" }
             }
           }
         }

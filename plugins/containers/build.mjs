@@ -1,5 +1,5 @@
 import { build } from 'esbuild';
-import { cpSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
@@ -10,7 +10,20 @@ const dist = join(root, 'dist');
 
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(join(dist, 'ui', 'assets'), { recursive: true });
-cpSync(join(root, 'manifest.json'), join(dist, 'manifest.json'));
+const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
+const capabilityPin = JSON.parse(readFileSync(join(root, 'host-capability.pin.json'), 'utf8'));
+const generatedClient = readFileSync(join(root, 'src', 'generated', 'redeven.container_resources.v4.client.ts'), 'utf8');
+const capabilityMethods = [...generatedClient.matchAll(/^  method: "([a-z0-9.]+)",$/gmu)]
+  .map((match) => match[1]);
+if (capabilityMethods.length !== 52 || new Set(capabilityMethods).size !== capabilityMethods.length) {
+  throw new Error('generated Containers capability method projection is invalid');
+}
+manifest.capability_bindings = [{ binding_id: 'containers-v4', contract: capabilityPin }];
+manifest.methods = capabilityMethods.map((method) => ({
+  method,
+  route: { kind: 'capability', binding_id: 'containers-v4', target_method: method },
+}));
+writeFileSync(join(dist, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 cpSync(join(root, 'ui', 'index.html'), join(dist, 'ui', 'index.html'));
 cpSync(join(root, 'ui', 'assets', 'styles.css'), join(dist, 'ui', 'assets', 'styles.css'));
 cpSync(

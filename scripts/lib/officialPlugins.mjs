@@ -71,10 +71,12 @@ export function catalogItemForPlugin(source) {
     default_surface_id: stable.default_surface_id,
     icon_fallback: iconFallbackForPlugin(shortName),
     distribution: {
-      release_channel: 'github_release_and_redeven_cdn',
+      provider: 'github_release',
+      repository: stable.repository,
+      tag: source.release.release_train_tag,
       artifact_name: stable.artifact_name,
-      official_artifact_path: stable.official_artifact_path,
-      artifact_sha256: stable.artifact_sha256,
+      release_ref_asset_name: stable.release_ref_asset_name,
+      trust_root_asset_name: stable.trust_root_asset_name,
     },
   };
 }
@@ -113,23 +115,18 @@ export async function validatePluginSource(source) {
     errors.push(`${name}: plugin_id must use the ${officialPublisherID} namespace`);
   }
   if (source.release?.schema_version !== 'redeven.official_plugin_source_release.v1' ||
-      source.release?.channel !== 'development' || source.release?.installable !== false ||
-      source.release?.source_version !== manifest.plugin?.version) {
-    errors.push(`${name}: development source release metadata is invalid`);
+      source.release?.channel !== 'stable' || source.release?.source_version !== manifest.plugin?.version ||
+      source.release?.release_train_tag !== `v${manifest.plugin?.version}`) {
+    errors.push(`${name}: stable release train metadata is invalid`);
   }
   const stable = source.release?.stable_catalog;
-  if (!stable || stable.version === manifest.plugin?.version ||
+  if (!stable || stable.version !== manifest.plugin?.version ||
+      stable.repository !== 'floegence/redeven-official-plugins' ||
       !String(stable.artifact_name ?? '').endsWith('.redevplugin') ||
-      !String(stable.official_artifact_path ?? '').startsWith(`official/${name}/${stable.version}/`) ||
-      !/^[a-f0-9]{64}$/u.test(String(stable.artifact_sha256 ?? ''))) {
-    errors.push(`${name}: stable catalog metadata must remain separate from development source`);
-  } else {
-    const artifact = path.join(source.pluginRoot, '..', '..', stable.official_artifact_path);
-    if (!(await fileExists(artifact))) {
-      errors.push(`${name}: stable catalog artifact is missing`);
-    } else if (sha256Hex(await readFile(artifact)) !== stable.artifact_sha256) {
-      errors.push(`${name}: stable catalog artifact hash is invalid`);
-    }
+      stable.artifact_name !== `${name}-${stable.version}.redevplugin` ||
+      stable.release_ref_asset_name !== `${name}-${stable.version}.release-ref.json` ||
+      stable.trust_root_asset_name !== 'root.public.json') {
+    errors.push(`${name}: GitHub release catalog metadata is invalid`);
   }
   const surfaces = Array.isArray(manifest.surfaces) ? manifest.surfaces : [];
   if (surfaces.length === 0) {

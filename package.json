@@ -10,6 +10,10 @@
     "catalog:write": "node scripts/generate_official_catalog.mjs --write",
     "build:containers": "npm --prefix plugins/containers run build",
     "package:containers": "npm run build:containers && node scripts/build_official_plugin.mjs containers",
+    "release:prepare": "node scripts/release_official_plugin.mjs prepare",
+    "release:apply": "node scripts/release_official_plugin.mjs apply",
+    "release:finalize": "node scripts/release_official_plugin.mjs finalize",
+    "release:verify": "node scripts/release_official_plugin.mjs verify",
     "verify": "npm test && npm run check && npm run catalog:verify"
   },
   "devDependencies": {}

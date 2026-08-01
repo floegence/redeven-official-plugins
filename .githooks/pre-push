@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR=$(git rev-parse --show-toplevel)
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ "$remote_ref" != "refs/heads/main" ]]; then
+    continue
+  fi
+  test "$local_ref" = "refs/heads/main"
+  test "$(git -C "$ROOT_DIR" branch --show-current)" = main
+  test "$local_sha" = "$(git -C "$ROOT_DIR" rev-parse HEAD)"
+  if [[ "$remote_sha" != "0000000000000000000000000000000000000000" ]]; then
+    git -C "$ROOT_DIR" merge-base --is-ancestor "$remote_sha" "$local_sha"
+  fi
+  "$ROOT_DIR/scripts/check_final_integration.sh"
+done
