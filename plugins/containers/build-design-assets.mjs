@@ -1,6 +1,6 @@
+import { createHash } from 'node:crypto';
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import sharp from 'sharp';
 
 const APPICA_VERSION = '1.0.0';
 const LUCIDE_VERSION = '1.27.0';
@@ -27,21 +27,37 @@ export async function generateDesignAssets(root, dist) {
 
   const lucideRoot = join(root, 'node_modules', 'lucide-static');
   assertPackageVersion(lucideRoot, 'lucide-static', LUCIDE_VERSION);
-  const rules = await Promise.all(ICONS.map(async (name) => {
+  const iconManifest = JSON.parse(readFileSync(join(root, 'assets', 'icons', 'manifest.json'), 'utf8'));
+  const rules = ICONS.map((name) => {
     const source = readFileSync(join(lucideRoot, 'icons', name + '.svg'), 'utf8');
     if (!source.includes('<svg') || !source.includes('</svg>')) {
       throw new Error('Lucide SVG icon is invalid: ' + name);
     }
-    const svg = source
-      .replace(/\r?\n|\t/gu, ' ')
-      .replace(/\s{2,}/gu, ' ')
-      .replaceAll('currentColor', '#000000')
-      .trim();
-    await sharp(Buffer.from(svg)).resize(48, 48).png({ compressionLevel: 9, palette: true }).toFile(join(iconAssetsRoot, name + '.png'));
+    const entry = iconManifest.icons?.[name];
+    if (!entry || entry.source_sha256 !== sha256(normalizeLucideSVG(source))) {
+      throw new Error('Lucide SVG icon digest does not match the committed asset: ' + name);
+    }
+    const committed = join(root, 'assets', 'icons', name + '.png');
+    if (entry.png_sha256 !== sha256(readFileSync(committed))) {
+      throw new Error('Committed Lucide PNG digest does not match the manifest: ' + name);
+    }
+    cpSync(committed, join(iconAssetsRoot, name + '.png'));
     return '.lucide-' + name + '::before { --lucide-icon: url("icons/' + name + '.png"); }';
-  }));
+  });
   cpSync(join(lucideRoot, 'LICENSE'), join(licensesRoot, 'lucide-ISC-MIT.txt'));
   writeFileSync(join(dist, 'ui', 'assets', 'lucide-icons.css'), lucideCSS(rules));
+}
+
+function normalizeLucideSVG(source) {
+  return source
+    .replace(/\r?\n|\t/gu, ' ')
+    .replace(/\s{2,}/gu, ' ')
+    .replaceAll('currentColor', '#000000')
+    .trim();
+}
+
+function sha256(value) {
+  return createHash('sha256').update(value).digest('hex');
 }
 
 function assertPackageVersion(root, name, expected) {
