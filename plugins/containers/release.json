@@ -1,19 +1,19 @@
 {
   "schema_version": "redeven.official_plugin_source_release.v1",
   "channel": "stable",
-  "source_version": "4.0.0",
-  "release_train_tag": "v4.0.0",
+  "source_version": "4.0.1",
+  "release_train_tag": "v4.0.1",
   "package_assets": {
     "ui/assets/containers-plugin.png": "assets/containers-plugin.png"
   },
   "stable_catalog": {
-    "version": "4.0.0",
+    "version": "4.0.1",
     "min_redeven_version": "1.0.0",
-    "min_redevplugin_version": "0.6.22",
+    "min_redevplugin_version": "0.6.23",
     "default_surface_id": "containers.dashboard",
     "repository": "floegence/redeven-official-plugins",
-    "artifact_name": "containers-4.0.0.redevplugin",
-    "release_ref_asset_name": "containers-4.0.0.release-ref.json",
+    "artifact_name": "containers-4.0.1.redevplugin",
+    "release_ref_asset_name": "containers-4.0.1.release-ref.json",
     "trust_root_asset_name": "root.public.json"
   }
 }

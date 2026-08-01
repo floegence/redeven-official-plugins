@@ -18,7 +18,7 @@ describe('official plugin repository contract', () => {
     const [containers] = await loadAllPluginSources(repoRoot);
     assert.equal(containers.manifest.schema_version, 'redevplugin.manifest.v7');
     assert.equal(containers.manifest.plugin.plugin_id, 'com.redeven.official.containers');
-    assert.equal(containers.manifest.plugin.version, '4.0.0');
+    assert.equal(containers.manifest.plugin.version, '4.0.1');
     assert.equal(containers.manifest.surfaces[0].icon, 'ui/assets/containers-plugin.png');
     assert.equal(containers.release.package_assets['ui/assets/containers-plugin.png'], 'assets/containers-plugin.png');
     assert.deepEqual(await validatePluginSource(containers), []);
@@ -35,23 +35,23 @@ describe('official plugin repository contract', () => {
     assert.equal(joinedSources.includes('/Users/'), false);
   });
 
-  it('keeps the release train and current catalog aligned at Containers 4.0.0', async () => {
+  it('keeps the release train and current catalog aligned at Containers 4.0.1', async () => {
     const [containers] = await loadAllPluginSources(repoRoot);
     assert.equal(containers.release.channel, 'stable');
-    assert.equal(containers.release.source_version, '4.0.0');
-    assert.equal(containers.release.release_train_tag, 'v4.0.0');
-    assert.equal(containers.release.stable_catalog.version, '4.0.0');
+    assert.equal(containers.release.source_version, '4.0.1');
+    assert.equal(containers.release.release_train_tag, 'v4.0.1');
+    assert.equal(containers.release.stable_catalog.version, '4.0.1');
 
     const catalog = buildCatalogSeed([containers]);
-    assert.equal(catalog.plugins[0].latest_version, '4.0.0');
-    assert.equal(catalog.plugins[0].stable_version, '4.0.0');
+    assert.equal(catalog.plugins[0].latest_version, '4.0.1');
+    assert.equal(catalog.plugins[0].stable_version, '4.0.1');
     assert.equal(catalog.plugins[0].default_surface_id, 'containers.dashboard');
     assert.deepEqual(catalog.plugins[0].distribution, {
       provider: 'github_release',
       repository: 'floegence/redeven-official-plugins',
-      tag: 'v4.0.0',
-      artifact_name: 'containers-4.0.0.redevplugin',
-      release_ref_asset_name: 'containers-4.0.0.release-ref.json',
+      tag: 'v4.0.1',
+      artifact_name: 'containers-4.0.1.redevplugin',
+      release_ref_asset_name: 'containers-4.0.1.release-ref.json',
       trust_root_asset_name: 'root.public.json',
     });
   });
@@ -72,21 +72,24 @@ describe('official plugin repository contract', () => {
       readFile(path.join(repoRoot, 'AGENTS.md'), 'utf8'),
     ]);
     assert.equal(buildScript.includes('redevplugin@${redevpluginVersion}'), true);
-    assert.equal(buildScript.includes("const redevpluginVersion = 'v0.6.22'"), true);
+    assert.equal(buildScript.includes("const redevpluginVersion = 'v0.6.23'"), true);
     assert.doesNotMatch(`${rootPackage}\n${pluginPackage}`, /"(?:file|link|workspace|portal):/u);
     assert.doesNotMatch(readme, /Install from URL|Install from file|marketplace/iu);
     assert.doesNotMatch(`${buildScript}\n${readme}\n${agents}`, /REDEVEN_OFFICIAL_PLUGIN_SIGNING_KEY/u);
   });
 
   it('keeps packages out of git and uses neutral external signer exchange', async () => {
-    const [packageScript, releaseScript, publisherConfig, capabilityPin, buildScript, releaseWorkflow, responses, tracked] = await Promise.all([
+    const [rootPackage, packageScript, releaseScript, publisherConfig, capabilityPin, capabilitySource, capabilityStageScript, buildScript, releaseWorkflow, responses, tracked] = await Promise.all([
+      readFile(path.join(repoRoot, 'package.json'), 'utf8'),
       readFile(path.join(repoRoot, 'scripts', 'build_official_plugin.mjs'), 'utf8'),
       readFile(path.join(repoRoot, 'scripts', 'release_official_plugin.mjs'), 'utf8'),
-      readJSON(path.join(repoRoot, 'releases', 'containers', '4.0.0', 'publisher-config.json')),
+      readJSON(path.join(repoRoot, 'releases', 'containers', '4.0.1', 'publisher-config.json')),
       readJSON(path.join(repoRoot, 'plugins', 'containers', 'host-capability.pin.json')),
+      readJSON(path.join(repoRoot, 'releases', 'containers', '4.0.1', 'capability-source.json')),
+      readFile(path.join(repoRoot, 'scripts', 'stage_release_capability.mjs'), 'utf8'),
       readFile(path.join(repoRoot, 'plugins', 'containers', 'build.mjs'), 'utf8'),
       readFile(path.join(repoRoot, '.github', 'workflows', 'release.yml'), 'utf8'),
-      readdir(path.join(repoRoot, 'releases', 'containers', '4.0.0', 'responses')),
+      readdir(path.join(repoRoot, 'releases', 'containers', '4.0.1', 'responses')),
       import('node:child_process').then(({ execFileSync }) => execFileSync('git', ['ls-files'], { cwd: repoRoot, encoding: 'utf8' })),
     ]);
     assert.doesNotMatch(tracked, /\.redevplugin$/mu);
@@ -94,15 +97,24 @@ describe('official plugin repository contract', () => {
     assert.match(releaseScript, /apply-signature/u);
     assert.match(releaseScript, /release', 'verify/u);
     assert.equal(publisherConfig.schema_version, 'redevplugin.release_publisher_config.v1');
-    assert.equal(publisherConfig.min_redevplugin_version, '0.6.22');
+    assert.equal(publisherConfig.min_redevplugin_version, '0.6.23');
     assert.equal(publisherConfig.host_requirements[0].required_capability_contracts[0].contract.artifact_sha256, capabilityPin.artifact_sha256);
     assert.equal(capabilityPin.contract_id, 'redeven.container_resources.v4');
+    assert.equal(capabilityPin.manifest_sha256, 'a7892eadf3e7e3e1015d8fa9aab5bbefedc362bb1f99444b4230ce8093644c8d');
+    assert.equal(capabilitySource.schema_version, 'redeven.official_host_capability_source.v1');
+    assert.equal(capabilitySource.source.repository, 'floegence/redeven');
+    assert.equal(capabilitySource.source.commit, 'e2de4631ad1e42129fb479b5b678f9787d7056af');
+    assert.equal(capabilitySource.files.length, 8);
+    assert.match(capabilityStageScript, /host-capability', 'verify/u);
+    assert.match(capabilityStageScript, /raw\.githubusercontent\.com/u);
+    assert.match(rootPackage, /"release:stage-capability": "node scripts\/stage_release_capability\.mjs"/u);
     assert.match(buildScript, /capabilityMethods\.length !== 52/u);
-    assert.equal(responses.filter((name) => name.endsWith('.response.json')).length, 25);
+    assert.equal(responses.filter((name) => name.endsWith('.response.json')).length, 15);
     assert.match(releaseWorkflow, /remote_main.*GITHUB_SHA/su);
     assert.doesNotMatch(releaseWorkflow, /repos\/\$GITHUB_REPOSITORY\/immutable-releases/u);
     assert.match(releaseWorkflow, /gh release create/u);
     assert.match(releaseWorkflow, /diff -qr/u);
     assert.match(releaseWorkflow, /npm run release:verify/u);
+    assert.match(releaseWorkflow, /npm run release:stage-capability/u);
   });
 });

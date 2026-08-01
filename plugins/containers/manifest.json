@@ -7,9 +7,9 @@
   "plugin": {
     "plugin_id": "com.redeven.official.containers",
     "display_name": "Containers",
-    "version": "4.0.0",
+    "version": "4.0.1",
     "api_version": "plugin-v1",
-    "min_runtime_version": "0.6.22",
+    "min_runtime_version": "0.6.23",
     "ui_protocol_version": "plugin-ui-v7"
   },
   "surfaces": [

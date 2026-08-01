@@ -61,10 +61,14 @@ jobs:
           npm run release:apply -- containers "releases/containers/$version/responses"
           npm run release:finalize -- containers
           npm run release:verify -- containers
+          npm run release:stage-capability -- containers
           output="dist/release/containers/$version/output"
-          test "$(find "$output" -type f | wc -l | tr -d ' ')" -gt 10
+          test "$(find "$output" -maxdepth 1 -type f | wc -l | tr -d ' ')" = 51
           test -f "$output/containers-$version.redevplugin"
           test -f "$output/containers-$version.release-ref.json"
+          test -f "$output/containers-$version.capability-bundle.json"
+          test -f "$output/containers-$version.host-capability.pin.json"
+          test -f "$output/containers-$version.host-capability.public.json"
           test -f "$output/root.public.json"
       - name: Publish immutable GitHub Release
         env:

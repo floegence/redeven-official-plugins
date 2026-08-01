@@ -11,19 +11,19 @@
       "display_name": "Containers",
       "description": "Manage Docker and Podman resources through Redeven's official container capability.",
       "publisher_id": "com.redeven.official",
-      "latest_version": "4.0.0",
-      "stable_version": "4.0.0",
+      "latest_version": "4.0.1",
+      "stable_version": "4.0.1",
       "min_redeven_version": "1.0.0",
-      "min_redevplugin_version": "0.6.22",
+      "min_redevplugin_version": "0.6.23",
       "rollout_state": "stable",
       "default_surface_id": "containers.dashboard",
       "icon_fallback": "containers",
       "distribution": {
         "provider": "github_release",
         "repository": "floegence/redeven-official-plugins",
-        "tag": "v4.0.0",
-        "artifact_name": "containers-4.0.0.redevplugin",
-        "release_ref_asset_name": "containers-4.0.0.release-ref.json",
+        "tag": "v4.0.1",
+        "artifact_name": "containers-4.0.1.redevplugin",
+        "release_ref_asset_name": "containers-4.0.1.release-ref.json",
         "trust_root_asset_name": "root.public.json"
       }
     }
