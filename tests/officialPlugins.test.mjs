@@ -72,7 +72,7 @@ describe('official plugin repository contract', () => {
       readFile(path.join(repoRoot, 'AGENTS.md'), 'utf8'),
     ]);
     assert.equal(buildScript.includes('redevplugin@${redevpluginVersion}'), true);
-    assert.equal(buildScript.includes("const redevpluginVersion = 'v0.6.21'"), true);
+    assert.equal(buildScript.includes("const redevpluginVersion = 'v0.6.22'"), true);
     assert.doesNotMatch(`${rootPackage}\n${pluginPackage}`, /"(?:file|link|workspace|portal):/u);
     assert.doesNotMatch(readme, /Install from URL|Install from file|marketplace/iu);
     assert.doesNotMatch(`${buildScript}\n${readme}\n${agents}`, /REDEVEN_OFFICIAL_PLUGIN_SIGNING_KEY/u);
@@ -94,11 +94,11 @@ describe('official plugin repository contract', () => {
     assert.match(releaseScript, /apply-signature/u);
     assert.match(releaseScript, /release', 'verify/u);
     assert.equal(publisherConfig.schema_version, 'redevplugin.release_publisher_config.v1');
-    assert.equal(publisherConfig.min_redevplugin_version, '0.6.21');
+    assert.equal(publisherConfig.min_redevplugin_version, '0.6.22');
     assert.equal(publisherConfig.host_requirements[0].required_capability_contracts[0].contract.artifact_sha256, capabilityPin.artifact_sha256);
     assert.equal(capabilityPin.contract_id, 'redeven.container_resources.v4');
     assert.match(buildScript, /capabilityMethods\.length !== 52/u);
-    assert.equal(responses.filter((name) => name.endsWith('.response.json')).length, 15);
+    assert.equal(responses.filter((name) => name.endsWith('.response.json')).length, 25);
     assert.match(releaseWorkflow, /remote_main.*GITHUB_SHA/su);
     assert.doesNotMatch(releaseWorkflow, /repos\/\$GITHUB_REPOSITORY\/immutable-releases/u);
     assert.match(releaseWorkflow, /gh release create/u);

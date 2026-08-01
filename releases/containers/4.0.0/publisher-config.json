@@ -27,7 +27,7 @@
     "objects.githubusercontent.com",
     "release-assets.githubusercontent.com"
   ],
-  "min_redevplugin_version": "0.6.21",
+  "min_redevplugin_version": "0.6.22",
   "distribution": "registry_ref",
   "host_requirements": [
     {

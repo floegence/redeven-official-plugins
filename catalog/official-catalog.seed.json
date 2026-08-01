@@ -14,7 +14,7 @@
       "latest_version": "4.0.0",
       "stable_version": "4.0.0",
       "min_redeven_version": "1.0.0",
-      "min_redevplugin_version": "0.6.21",
+      "min_redevplugin_version": "0.6.22",
       "rollout_state": "stable",
       "default_surface_id": "containers.dashboard",
       "icon_fallback": "containers",

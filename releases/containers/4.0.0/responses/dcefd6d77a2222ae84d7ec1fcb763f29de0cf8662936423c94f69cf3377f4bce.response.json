@@ -1,0 +1,10 @@
+{
+  "algorithm" : "ed25519",
+  "key_id" : "redeven_official_ledger_2026",
+  "request_id" : "dcefd6d77a2222ae84d7ec1fcb763f29de0cf8662936423c94f69cf3377f4bce",
+  "schema_version" : "redevplugin.external_signer_response.v1",
+  "signature" : "RwYFDAxSz/9FVtykUZLIbIHR3H/F+FcccbGOXR77ptnzJfjxiron/yrNyWyoaD28k/VaZGnyMfDT/jmgburWDQ==",
+  "signing_preimage_sha256" : "e9a9e78e914ba7cf24d4fa48e717b08dd9e3fd50d691ce5d82d22aec6985988c",
+  "subject_identity_sha256" : "7b4d634d6aa1b90114e620a7fb8e203da1aea0484a651711b4a65fc410d461ef",
+  "usage" : "redevplugin.release-signing.ledger-receipt.v1"
+}
