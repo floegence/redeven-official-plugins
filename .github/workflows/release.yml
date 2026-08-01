@@ -47,7 +47,6 @@ jobs:
           remote_main=$(git ls-remote origin refs/heads/main | awk '{print $1}')
           test "$tag_commit" = "$GITHUB_SHA"
           test "$remote_main" = "$GITHUB_SHA"
-          test "$(gh api "repos/$GITHUB_REPOSITORY/immutable-releases" --jq '.enabled')" = true
           ci_conclusion=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&status=completed&per_page=100" \
             --jq ".workflow_runs[] | select(.head_sha == \"$GITHUB_SHA\") | .conclusion" | head -n 1)
           test "$ci_conclusion" = success

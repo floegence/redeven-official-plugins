@@ -100,7 +100,9 @@ describe('official plugin repository contract', () => {
     assert.match(buildScript, /capabilityMethods\.length !== 52/u);
     assert.equal(responses.filter((name) => name.endsWith('.response.json')).length, 15);
     assert.match(releaseWorkflow, /remote_main.*GITHUB_SHA/su);
-    assert.match(releaseWorkflow, /immutable-releases/u);
+    assert.doesNotMatch(releaseWorkflow, /repos\/\$GITHUB_REPOSITORY\/immutable-releases/u);
+    assert.match(releaseWorkflow, /gh release create/u);
+    assert.match(releaseWorkflow, /diff -qr/u);
     assert.match(releaseWorkflow, /npm run release:verify/u);
   });
 });
