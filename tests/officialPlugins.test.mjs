@@ -35,6 +35,37 @@ describe('official plugin repository contract', () => {
     assert.ok(containers.manifest.presentation.description.length > 0);
     assert.ok(containers.manifest.presentation.highlights.length > 0);
     assert.ok(containers.manifest.presentation.keywords.length > 0);
+    const defaultPresentation = {
+      locale: containers.manifest.presentation.default_locale,
+      name: containers.manifest.plugin.display_name,
+      publisher_name: containers.manifest.publisher.display_name,
+      summary: containers.manifest.presentation.summary,
+      description: containers.manifest.presentation.description,
+      highlights: containers.manifest.presentation.highlights,
+      keywords: containers.manifest.presentation.keywords,
+      surfaces: containers.manifest.surfaces.map(({ surface_id, label }) => ({ surface_id, label })),
+      settings: containers.manifest.settings?.fields ?? [],
+    };
+    const allPresentations = [defaultPresentation, ...containers.manifest.presentation.localizations];
+    for (const presentation of allPresentations) {
+      assert.ok((presentation.name ?? presentation.plugin_name).length > 0);
+      assert.ok(presentation.summary.length > 0);
+      assert.ok(presentation.description.length >= 1 && presentation.description.length <= 12);
+      assert.ok(presentation.highlights.length <= 8);
+      assert.ok(presentation.keywords.length >= 1 && presentation.keywords.length <= 12);
+      assert.ok(presentation.publisher_name.length > 0);
+      assert.equal(presentation.surfaces.length, defaultPresentation.surfaces.length);
+      assert.equal(presentation.settings.length, defaultPresentation.settings.length);
+      for (const surface of presentation.surfaces) assert.ok(surface.surface_id && surface.label);
+      for (const setting of presentation.settings) {
+        assert.ok(setting.key && setting.label);
+        assert.ok(Array.isArray(setting.options));
+        for (const option of setting.options) assert.ok(option.value && option.label);
+      }
+      for (const text of [presentation.name ?? presentation.plugin_name, presentation.publisher_name, presentation.summary, ...presentation.description, ...presentation.highlights, ...presentation.keywords]) {
+        assert.ok(text.trim().length > 0);
+      }
+    }
     for (const localization of containers.manifest.presentation.localizations) {
       assert.equal(localization.surfaces.length, containers.manifest.surfaces.length);
       assert.deepEqual(localization.settings, []);
