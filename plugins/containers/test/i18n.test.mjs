@@ -32,6 +32,21 @@ test("ships complete independent dictionaries with matching placeholders", () =>
     "ru-RU",
   ]);
   const canonical = i18n.CONTAINERS_COPY["en-US"];
+  assert.deepEqual(
+    {
+      healthy: canonical.healthHealthy,
+      unhealthy: canonical.healthUnhealthy,
+      starting: canonical.healthStarting,
+      unknown: canonical.healthUnknown,
+    },
+    {
+      healthy: "Healthy",
+      unhealthy: "Unhealthy",
+      starting: "Starting",
+      unknown: "No health check",
+    },
+    "en-US health labels must remain English",
+  );
   const keys = Object.keys(canonical).sort();
 
   for (const locale of locales) {
