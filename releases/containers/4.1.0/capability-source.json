@@ -1,0 +1,58 @@
+{
+  "schema_version": "redeven.official_host_capability_source.v1",
+  "source": {
+    "repository": "floegence/redeven",
+    "commit": "e2de4631ad1e42129fb479b5b678f9787d7056af",
+    "root": "spec/redevplugin/official-containers-capability-v4/bundle"
+  },
+  "files": [
+    {
+      "path": "capabilities/redeven.container_resources.v4/v4.0.0/redeven.container_resources.v4.client.ts",
+      "asset_name": "containers-4.1.0.capability.client.ts",
+      "sha256": "361c2d4a3e8ac0468f497ead83983a0a300b091ef70cae57dbe68d18eff0c6ba",
+      "size": 138440
+    },
+    {
+      "path": "capabilities/redeven.container_resources.v4/v4.0.0/redeven.container_resources.v4.compatibility.json",
+      "asset_name": "containers-4.1.0.capability.compatibility.json",
+      "sha256": "2546591afdc288c8ff266042c3fffc3f30999c6c8080e343b706a766bf84b494",
+      "size": 261
+    },
+    {
+      "path": "capabilities/redeven.container_resources.v4/v4.0.0/redeven.container_resources.v4.manifest.json",
+      "asset_name": "containers-4.1.0.capability.manifest.json",
+      "sha256": "a7892eadf3e7e3e1015d8fa9aab5bbefedc362bb1f99444b4230ce8093644c8d",
+      "size": 1505
+    },
+    {
+      "path": "capabilities/redeven.container_resources.v4/v4.0.0/redeven.container_resources.v4.notices.json",
+      "asset_name": "containers-4.1.0.capability.notices.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "size": 3
+    },
+    {
+      "path": "capabilities/redeven.container_resources.v4/v4.0.0/redeven.container_resources.v4.schema.json",
+      "asset_name": "containers-4.1.0.capability.schema.json",
+      "sha256": "0137cd99569a48d3ef4061b19b2fda021ed02cf268094b79c29a40f74bce0b92",
+      "size": 120049
+    },
+    {
+      "path": "capabilities/redeven.container_resources.v4/v4.0.0/redeven.container_resources.v4.sig",
+      "asset_name": "containers-4.1.0.capability.sig",
+      "sha256": "70d5af3516533ed77ceb5d91b79feb96468af72601732ec8f1c44b42d1391da8",
+      "size": 320
+    },
+    {
+      "path": "host-capability.pin.json",
+      "asset_name": "containers-4.1.0.host-capability.pin.json",
+      "sha256": "8321aac2a98397ca0adc006499e319bffbc6bc4929cbb93984ca7e044de1c862",
+      "size": 1502
+    },
+    {
+      "path": "host-capability.public.json",
+      "asset_name": "containers-4.1.0.host-capability.public.json",
+      "sha256": "3d22902d040cb7cd19e7db97cc0a861c56538c8884486f71e74ddbc3f4473684",
+      "size": 278
+    }
+  ]
+}

@@ -57,27 +57,59 @@ export async function loadAllPluginSources(repoRoot) {
 export function catalogItemForPlugin(source) {
   const plugin = source.manifest.plugin ?? {};
   const stable = source.release.stable_catalog;
-  const shortName = source.name;
   return {
     plugin_id: plugin.plugin_id,
-    display_name: plugin.display_name,
-    description: descriptionForPlugin(shortName),
     publisher_id: source.manifest.publisher?.publisher_id,
-    latest_version: stable.version,
-    stable_version: stable.version,
-    min_redeven_version: stable.min_redeven_version,
-    min_redevplugin_version: stable.min_redevplugin_version,
-    rollout_state: 'stable',
-    default_surface_id: stable.default_surface_id,
-    icon_fallback: iconFallbackForPlugin(shortName),
-    distribution: {
-      provider: 'github_release',
-      repository: stable.repository,
-      tag: source.release.release_train_tag,
-      artifact_name: stable.artifact_name,
-      release_ref_asset_name: stable.release_ref_asset_name,
-      trust_root_asset_name: stable.trust_root_asset_name,
+    presentation: presentationCatalogForManifest(source.manifest),
+    categories: [source.name],
+    channels: [source.release.channel],
+    latest: {
+      version: stable.version,
+      min_redeven_version: stable.min_redeven_version,
+      min_redevplugin_version: stable.min_redevplugin_version,
+      rollout_state: 'stable',
+      default_surface_id: stable.default_surface_id,
+      distribution: {
+        provider: 'github_release',
+        repository: stable.repository,
+        tag: source.release.release_train_tag,
+        artifact_name: stable.artifact_name,
+        release_ref_asset_name: stable.release_ref_asset_name,
+        trust_root_asset_name: stable.trust_root_asset_name,
+      },
     },
+  };
+}
+
+function presentationCatalogForManifest(manifest) {
+  const presentation = manifest.presentation;
+  const defaultLocale = {
+    locale: presentation.default_locale,
+    name: manifest.plugin.display_name,
+    ...(manifest.publisher.display_name ? { publisher_name: manifest.publisher.display_name } : {}),
+    summary: presentation.summary,
+    description: presentation.description,
+    highlights: presentation.highlights,
+    keywords: presentation.keywords,
+    surfaces: manifest.surfaces.map(({ surface_id, label }) => ({ surface_id, label })),
+    settings: (manifest.settings?.fields ?? []).map(({ key, label, options = [] }) => ({ key, label, options })),
+  };
+  return {
+    default_locale: presentation.default_locale,
+    locales: [
+      defaultLocale,
+      ...presentation.localizations.map((localization) => ({
+        locale: localization.locale,
+        name: localization.plugin_name,
+        ...(localization.publisher_name ? { publisher_name: localization.publisher_name } : {}),
+        summary: localization.summary,
+        description: localization.description,
+        highlights: localization.highlights,
+        keywords: localization.keywords,
+        surfaces: localization.surfaces,
+        settings: localization.settings,
+      })),
+    ],
   };
 }
 
@@ -104,8 +136,8 @@ export function sha256Hex(data) {
 export async function validatePluginSource(source) {
   const errors = [];
   const { manifest, pluginRoot, name } = source;
-  if (manifest.schema_version !== 'redevplugin.manifest.v7') {
-    errors.push(`${name}: manifest schema_version must be redevplugin.manifest.v7`);
+  if (manifest.schema_version !== 'redevplugin.manifest.v8') {
+    errors.push(`${name}: manifest schema_version must be redevplugin.manifest.v8`);
   }
   if (manifest.publisher?.publisher_id !== officialPublisherID) {
     errors.push(`${name}: publisher_id must be ${officialPublisherID}`);
@@ -113,6 +145,18 @@ export async function validatePluginSource(source) {
   const pluginID = String(manifest.plugin?.plugin_id ?? '');
   if (!pluginID.startsWith(`${officialPublisherID}.`)) {
     errors.push(`${name}: plugin_id must use the ${officialPublisherID} namespace`);
+  }
+  const presentation = manifest.presentation;
+  if (!presentation || typeof presentation.default_locale !== 'string' ||
+      typeof presentation.summary !== 'string' || !Array.isArray(presentation.description) ||
+      !Array.isArray(presentation.highlights) || !Array.isArray(presentation.keywords) ||
+      !Array.isArray(presentation.localizations)) {
+    errors.push(`${name}: manifest v8 presentation is incomplete`);
+  } else {
+    const locales = [presentation.default_locale, ...presentation.localizations.map((entry) => entry.locale)];
+    if (new Set(locales).size !== locales.length) {
+      errors.push(`${name}: presentation locales must be unique`);
+    }
   }
   if (source.release?.schema_version !== 'redeven.official_plugin_source_release.v1' ||
       source.release?.channel !== 'stable' || source.release?.source_version !== manifest.plugin?.version ||
@@ -157,16 +201,4 @@ export async function validatePluginSource(source) {
     }
   }
   return errors;
-}
-
-function descriptionForPlugin(name) {
-  if (name === 'containers') {
-    return "Manage Docker and Podman resources through Redeven's official container capability.";
-  }
-  return 'Redeven official plugin.';
-}
-
-function iconFallbackForPlugin(name) {
-  if (name === 'containers') return 'containers';
-  return 'generic';
 }

@@ -1,5 +1,5 @@
 {
-  "schema_version": "redevplugin.manifest.v7",
+  "schema_version": "redevplugin.manifest.v8",
   "publisher": {
     "publisher_id": "com.redeven.official",
     "display_name": "Redeven Official"
@@ -7,10 +7,182 @@
   "plugin": {
     "plugin_id": "com.redeven.official.containers",
     "display_name": "Containers",
-    "version": "4.0.1",
+    "version": "4.1.0",
     "api_version": "plugin-v1",
-    "min_runtime_version": "0.6.23",
+    "min_runtime_version": "0.7.0",
     "ui_protocol_version": "plugin-ui-v7"
+  },
+  "presentation": {
+    "default_locale": "en-US",
+    "summary": "Manage Docker and Podman containers, images, volumes, logs, and statistics in one focused workspace.",
+    "description": [
+      "Containers brings Docker and Podman resources into Redeven so you can inspect and manage container workloads without leaving your environment.",
+      "Browse containers, images, and volumes; pull images, edit tags, inspect logs and statistics, and clean up unused resources with clear operation feedback.",
+      "Actions that can remove data or affect a running workload are identified for review and remain subject to the host permission and dangerous-operation policy."
+    ],
+    "highlights": [
+      "Manage Docker and Podman containers, images, and volumes.",
+      "Inspect logs, resource statistics, image tags, and runtime status.",
+      "Pull images and perform cleanup with explicit operation feedback.",
+      "Respect host permissions and dangerous-operation review boundaries."
+    ],
+    "keywords": [
+      "containers",
+      "Docker",
+      "Podman",
+      "images",
+      "volumes",
+      "logs",
+      "statistics",
+      "cleanup"
+    ],
+    "localizations": [
+      {
+        "locale": "zh-CN",
+        "plugin_name": "容器",
+        "publisher_name": "Redeven 官方",
+        "summary": "在一个专注的工作区中管理 Docker 和 Podman 容器、镜像、卷、日志与统计信息。",
+        "description": [
+          "Containers 将 Docker 和 Podman 资源带入 Redeven，让你无需离开当前环境即可查看和管理容器工作负载。",
+          "浏览容器、镜像和卷，拉取镜像、编辑标签、查看日志与统计信息，并在清晰的操作反馈下清理未使用资源。",
+          "可能删除数据或影响运行中工作负载的操作会明确标记以供审查，并继续受宿主权限和危险操作策略约束。"
+        ],
+        "highlights": [
+          "管理 Docker 和 Podman 容器、镜像与卷。",
+          "查看日志、资源统计、镜像标签和运行状态。",
+          "拉取镜像并在明确的操作反馈下执行清理。",
+          "遵循宿主权限与危险操作审查边界。"
+        ],
+        "keywords": ["容器", "Docker", "Podman", "镜像", "卷", "日志", "统计", "清理"],
+        "surfaces": [{"surface_id": "containers.dashboard", "label": "容器"}],
+        "settings": []
+      },
+      {
+        "locale": "zh-TW",
+        "plugin_name": "容器",
+        "publisher_name": "Redeven 官方",
+        "summary": "在單一專注工作區中管理 Docker 與 Podman 容器、映像、磁碟區、日誌及統計資料。",
+        "description": [
+          "Containers 將 Docker 與 Podman 資源帶入 Redeven，讓你不必離開目前環境即可檢視及管理容器工作負載。",
+          "瀏覽容器、映像及磁碟區，拉取映像、編輯標籤、檢視日誌與統計資料，並在清楚的操作回饋下清理未使用資源。",
+          "可能刪除資料或影響執行中工作負載的操作會清楚標示供審查，並繼續受宿主權限及危險操作政策約束。"
+        ],
+        "highlights": [
+          "管理 Docker 與 Podman 容器、映像及磁碟區。",
+          "檢視日誌、資源統計、映像標籤與執行狀態。",
+          "拉取映像並在清楚的操作回饋下執行清理。",
+          "遵循宿主權限與危險操作審查邊界。"
+        ],
+        "keywords": ["容器", "Docker", "Podman", "映像", "磁碟區", "日誌", "統計", "清理"],
+        "surfaces": [{"surface_id": "containers.dashboard", "label": "容器"}],
+        "settings": []
+      },
+      {
+        "locale": "ja-JP",
+        "plugin_name": "コンテナ",
+        "publisher_name": "Redeven 公式",
+        "summary": "Docker と Podman のコンテナ、イメージ、ボリューム、ログ、統計を一つのワークスペースで管理します。",
+        "description": [
+          "Containers は Docker と Podman のリソースを Redeven に統合し、環境を離れずにコンテナワークロードを確認・管理できるようにします。",
+          "コンテナ、イメージ、ボリュームを参照し、イメージの取得、タグの編集、ログと統計の確認、未使用リソースのクリーンアップを実行できます。",
+          "データを削除したり実行中のワークロードに影響したりする操作は確認対象として明示され、ホストの権限と危険操作ポリシーに従います。"
+        ],
+        "highlights": ["Docker と Podman のコンテナ、イメージ、ボリュームを管理。", "ログ、リソース統計、イメージタグ、実行状態を確認。", "明確な操作結果を確認しながらイメージ取得とクリーンアップを実行。", "ホストの権限と危険操作の審査境界を尊重。"],
+        "keywords": ["コンテナ", "Docker", "Podman", "イメージ", "ボリューム", "ログ", "統計", "クリーンアップ"],
+        "surfaces": [{"surface_id": "containers.dashboard", "label": "コンテナ"}],
+        "settings": []
+      },
+      {
+        "locale": "ko-KR",
+        "plugin_name": "컨테이너",
+        "publisher_name": "Redeven 공식",
+        "summary": "하나의 집중 작업 공간에서 Docker와 Podman 컨테이너, 이미지, 볼륨, 로그와 통계를 관리합니다.",
+        "description": [
+          "Containers는 Docker와 Podman 리소스를 Redeven에 통합하여 환경을 떠나지 않고 컨테이너 워크로드를 확인하고 관리할 수 있게 합니다.",
+          "컨테이너, 이미지와 볼륨을 탐색하고 이미지를 가져오며 태그를 편집하고 로그와 통계를 확인하고 사용하지 않는 리소스를 정리할 수 있습니다.",
+          "데이터를 삭제하거나 실행 중인 워크로드에 영향을 줄 수 있는 작업은 검토 대상으로 표시되며 호스트 권한과 위험 작업 정책의 적용을 받습니다."
+        ],
+        "highlights": ["Docker와 Podman 컨테이너, 이미지와 볼륨을 관리합니다.", "로그, 리소스 통계, 이미지 태그와 실행 상태를 확인합니다.", "명확한 작업 피드백과 함께 이미지 가져오기와 정리를 수행합니다.", "호스트 권한과 위험 작업 검토 경계를 준수합니다."],
+        "keywords": ["컨테이너", "Docker", "Podman", "이미지", "볼륨", "로그", "통계", "정리"],
+        "surfaces": [{"surface_id": "containers.dashboard", "label": "컨테이너"}],
+        "settings": []
+      },
+      {
+        "locale": "de-DE",
+        "plugin_name": "Container",
+        "publisher_name": "Redeven Offiziell",
+        "summary": "Verwalte Docker- und Podman-Container, Images, Volumes, Protokolle und Statistiken in einem fokussierten Arbeitsbereich.",
+        "description": [
+          "Containers bringt Docker- und Podman-Ressourcen in Redeven zusammen, damit du Container-Workloads in deiner Umgebung prüfen und verwalten kannst.",
+          "Durchsuche Container, Images und Volumes, rufe Images ab, bearbeite Tags, prüfe Protokolle und Statistiken und bereinige ungenutzte Ressourcen mit klarem Feedback.",
+          "Aktionen, die Daten löschen oder laufende Workloads beeinflussen können, werden zur Prüfung markiert und bleiben an Host-Berechtigungen und die Richtlinie für gefährliche Aktionen gebunden."
+        ],
+        "highlights": ["Docker- und Podman-Container, Images und Volumes verwalten.", "Protokolle, Ressourcenstatistiken, Image-Tags und Laufzeitstatus prüfen.", "Images abrufen und Bereinigungen mit eindeutigem Aktionsfeedback ausführen.", "Berechtigungen des Hosts und Grenzen für die Prüfung gefährlicher Aktionen beachten."],
+        "keywords": ["Container", "Docker", "Podman", "Images", "Volumes", "Protokolle", "Statistiken", "Bereinigung"],
+        "surfaces": [{"surface_id": "containers.dashboard", "label": "Container"}],
+        "settings": []
+      },
+      {
+        "locale": "fr-FR",
+        "plugin_name": "Conteneurs",
+        "publisher_name": "Redeven officiel",
+        "summary": "Gérez les conteneurs, images, volumes, journaux et statistiques Docker et Podman dans un espace de travail dédié.",
+        "description": [
+          "Containers réunit les ressources Docker et Podman dans Redeven afin d'inspecter et de gérer les charges de conteneurs sans quitter votre environnement.",
+          "Parcourez les conteneurs, images et volumes, récupérez des images, modifiez les tags, consultez les journaux et statistiques, puis nettoyez les ressources inutilisées avec un retour clair.",
+          "Les actions pouvant supprimer des données ou affecter une charge active sont signalées pour examen et restent soumises aux autorisations de l'hôte et à la politique des actions dangereuses."
+        ],
+        "highlights": ["Gérer les conteneurs, images et volumes Docker et Podman.", "Consulter les journaux, statistiques de ressources, tags et états d'exécution.", "Récupérer des images et effectuer le nettoyage avec un retour explicite.", "Respecter les autorisations de l'hôte et les limites d'examen des actions dangereuses."],
+        "keywords": ["conteneurs", "Docker", "Podman", "images", "volumes", "journaux", "statistiques", "nettoyage"],
+        "surfaces": [{"surface_id": "containers.dashboard", "label": "Conteneurs"}],
+        "settings": []
+      },
+      {
+        "locale": "es-ES",
+        "plugin_name": "Contenedores",
+        "publisher_name": "Redeven oficial",
+        "summary": "Gestiona contenedores, imágenes, volúmenes, registros y estadísticas de Docker y Podman en un espacio de trabajo enfocado.",
+        "description": [
+          "Containers reúne los recursos de Docker y Podman en Redeven para inspeccionar y gestionar cargas de contenedores sin salir de tu entorno.",
+          "Explora contenedores, imágenes y volúmenes, descarga imágenes, edita etiquetas, consulta registros y estadísticas y limpia recursos sin usar con información clara.",
+          "Las acciones que pueden eliminar datos o afectar una carga en ejecución se identifican para su revisión y siguen sujetas a los permisos del host y a la política de acciones peligrosas."
+        ],
+        "highlights": ["Gestiona contenedores, imágenes y volúmenes de Docker y Podman.", "Consulta registros, estadísticas de recursos, etiquetas y estado de ejecución.", "Descarga imágenes y realiza limpiezas con información explícita de cada operación.", "Respeta los permisos del host y los límites de revisión de acciones peligrosas."],
+        "keywords": ["contenedores", "Docker", "Podman", "imágenes", "volúmenes", "registros", "estadísticas", "limpieza"],
+        "surfaces": [{"surface_id": "containers.dashboard", "label": "Contenedores"}],
+        "settings": []
+      },
+      {
+        "locale": "pt-BR",
+        "plugin_name": "Contêineres",
+        "publisher_name": "Redeven oficial",
+        "summary": "Gerencie contêineres, imagens, volumes, logs e estatísticas do Docker e Podman em um espaço de trabalho focado.",
+        "description": [
+          "Containers reúne os recursos do Docker e do Podman no Redeven para inspecionar e gerenciar cargas de contêineres sem sair do seu ambiente.",
+          "Navegue por contêineres, imagens e volumes, baixe imagens, edite tags, consulte logs e estatísticas e limpe recursos não utilizados com feedback claro.",
+          "Ações que podem remover dados ou afetar uma carga em execução são sinalizadas para revisão e continuam sujeitas às permissões do host e à política de ações perigosas."
+        ],
+        "highlights": ["Gerencie contêineres, imagens e volumes do Docker e Podman.", "Consulte logs, estatísticas de recursos, tags de imagens e status de execução.", "Baixe imagens e faça a limpeza com feedback explícito da operação.", "Respeite as permissões do host e os limites de revisão de ações perigosas."],
+        "keywords": ["contêineres", "Docker", "Podman", "imagens", "volumes", "logs", "estatísticas", "limpeza"],
+        "surfaces": [{"surface_id": "containers.dashboard", "label": "Contêineres"}],
+        "settings": []
+      },
+      {
+        "locale": "ru-RU",
+        "plugin_name": "Контейнеры",
+        "publisher_name": "Redeven официально",
+        "summary": "Управляйте контейнерами, образами, томами, журналами и статистикой Docker и Podman в едином рабочем пространстве.",
+        "description": [
+          "Containers объединяет ресурсы Docker и Podman в Redeven, чтобы вы могли просматривать и управлять контейнерными рабочими нагрузками в своей среде.",
+          "Просматривайте контейнеры, образы и тома, загружайте образы, редактируйте теги, изучайте журналы и статистику и очищайте неиспользуемые ресурсы с понятной обратной связью.",
+          "Действия, способные удалить данные или повлиять на работающую нагрузку, отмечаются для проверки и подчиняются разрешениям хоста и политике опасных операций."
+        ],
+        "highlights": ["Управляйте контейнерами, образами и томами Docker и Podman.", "Просматривайте журналы, статистику ресурсов, теги образов и состояние работы.", "Загружайте образы и выполняйте очистку с понятным результатом операции.", "Соблюдайте разрешения хоста и границы проверки опасных операций."],
+        "keywords": ["контейнеры", "Docker", "Podman", "образы", "тома", "журналы", "статистика", "очистка"],
+        "surfaces": [{"surface_id": "containers.dashboard", "label": "Контейнеры"}],
+        "settings": []
+      }
+    ]
   },
   "surfaces": [
     {
