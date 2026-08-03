@@ -9,7 +9,7 @@
     "display_name": "Containers",
     "version": "4.1.0",
     "api_version": "plugin-v1",
-    "min_runtime_version": "0.7.0",
+    "min_runtime_version": "0.7.1",
     "ui_protocol_version": "plugin-ui-v7"
   },
   "presentation": {

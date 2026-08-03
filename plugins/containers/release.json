@@ -9,7 +9,7 @@
   "stable_catalog": {
     "version": "4.1.0",
     "min_redeven_version": "1.0.0",
-    "min_redevplugin_version": "0.7.0",
+    "min_redevplugin_version": "0.7.1",
     "default_surface_id": "containers.dashboard",
     "repository": "floegence/redeven-official-plugins",
     "artifact_name": "containers-4.1.0.redevplugin",
