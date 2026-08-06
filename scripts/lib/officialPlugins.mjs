@@ -153,6 +153,13 @@ export async function validatePluginSource(source) {
       !Array.isArray(presentation.localizations)) {
     errors.push(`${name}: manifest v8 presentation is incomplete`);
   } else {
+    const iconPath = String(presentation.icon?.path ?? '');
+    const iconSource = String(source.release?.package_assets?.[iconPath] ?? iconPath);
+    if (!iconPath || iconPath.startsWith('/') || iconPath.includes('..') ||
+        iconSource.startsWith('/') || iconSource.includes('..') ||
+        !(await fileExists(path.join(pluginRoot, iconSource)))) {
+      errors.push(`${name}: presentation.icon.path must be a package-local file`);
+    }
     const locales = [presentation.default_locale, ...presentation.localizations.map((entry) => entry.locale)];
     if (new Set(locales).size !== locales.length) {
       errors.push(`${name}: presentation locales must be unique`);
