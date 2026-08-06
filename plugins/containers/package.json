@@ -8,7 +8,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@floegence/redevplugin-ui": "0.7.9"
+    "@floegence/redevplugin-ui": "0.7.12"
   },
   "devDependencies": {
     "@appica/ui-react": "1.0.0",

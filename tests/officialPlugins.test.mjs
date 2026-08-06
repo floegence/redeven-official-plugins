@@ -19,7 +19,7 @@ describe('official plugin repository contract', () => {
     assert.equal(containers.manifest.schema_version, 'redevplugin.manifest.v8');
     assert.equal(containers.manifest.plugin.plugin_id, 'com.redeven.official.containers');
     assert.equal(containers.manifest.plugin.version, '4.2.0');
-    assert.equal(containers.manifest.plugin.min_runtime_version, '0.7.10');
+    assert.equal(containers.manifest.plugin.min_runtime_version, '0.7.12');
     assert.equal(containers.manifest.plugin.ui_protocol_version, 'plugin-ui-v7');
     assert.equal(containers.manifest.presentation.default_locale, 'en-US');
     assert.equal(containers.manifest.presentation.localizations.length, 9);
@@ -98,7 +98,7 @@ describe('official plugin repository contract', () => {
     assert.equal(containers.release.source_version, '4.2.0');
     assert.equal(containers.release.release_train_tag, 'v4.2.0');
     assert.equal(containers.release.stable_catalog.version, '4.2.0');
-    assert.equal(containers.release.stable_catalog.min_redevplugin_version, '0.7.10');
+    assert.equal(containers.release.stable_catalog.min_redevplugin_version, '0.7.12');
 
     const catalog = buildCatalogSeed([containers]);
     assert.equal(catalog.plugins[0].presentation.default_locale, 'en-US');
@@ -110,7 +110,7 @@ describe('official plugin repository contract', () => {
     assert.equal(catalog.plugins[0].presentation.locales[0].name, 'Containers');
     assert.equal(catalog.plugins[0].presentation.locales[0].description.length, 3);
     assert.equal(catalog.plugins[0].latest.version, '4.2.0');
-    assert.equal(catalog.plugins[0].latest.min_redevplugin_version, '0.7.10');
+    assert.equal(catalog.plugins[0].latest.min_redevplugin_version, '0.7.12');
     assert.equal(catalog.plugins[0].latest.default_surface_id, 'containers.dashboard');
     assert.deepEqual(catalog.plugins[0].latest.distribution, {
       provider: 'github_release',
@@ -138,7 +138,7 @@ describe('official plugin repository contract', () => {
       readFile(path.join(repoRoot, 'AGENTS.md'), 'utf8'),
     ]);
     assert.equal(buildScript.includes('redevplugin@${redevpluginVersion}'), true);
-    assert.equal(buildScript.includes("const redevpluginVersion = 'v0.7.10'"), true);
+    assert.equal(buildScript.includes("const redevpluginVersion = 'v0.7.12'"), true);
     assert.doesNotMatch(`${rootPackage}\n${pluginPackage}`, /"(?:file|link|workspace|portal):/u);
     assert.doesNotMatch(readme, /Install from URL|Install from file|marketplace/iu);
     assert.doesNotMatch(`${buildScript}\n${readme}\n${agents}`, /REDEVEN_OFFICIAL_PLUGIN_SIGNING_KEY/u);
@@ -162,7 +162,7 @@ describe('official plugin repository contract', () => {
     assert.match(releaseScript, /apply-signature/u);
     assert.match(releaseScript, /release', 'verify/u);
     assert.equal(publisherConfig.schema_version, 'redevplugin.release_publisher_config.v1');
-    assert.equal(publisherConfig.min_redevplugin_version, '0.7.10');
+    assert.equal(publisherConfig.min_redevplugin_version, '0.7.12');
     assert.equal(publisherConfig.host_requirements[0].required_capability_contracts[0].contract.artifact_sha256, capabilityPin.artifact_sha256);
     assert.equal(capabilityPin.contract_id, 'redeven.container_resources.v4');
     assert.equal(capabilityPin.manifest_sha256, 'a7892eadf3e7e3e1015d8fa9aab5bbefedc362bb1f99444b4230ce8093644c8d');
