@@ -1,0 +1,10 @@
+{
+  "algorithm" : "ed25519",
+  "key_id" : "redeven_official_root_2026",
+  "request_id" : "f8560411386b4d94ca3174cce953a91e9108938a9e35f3f1ae9699841d36b7fb",
+  "schema_version" : "redevplugin.external_signer_response.v1",
+  "signature" : "J1uyFCXBPmO2xLbrO/AVd1DQUQa+WL55oVc4Bwj/xKrftOxvbSaZ9KG3JCW8xBrvanhgGMrGgpe+8q87TwK+Dw==",
+  "signing_preimage_sha256" : "f56716408d533d7f0f4221174b974decde93b43a2fa20b5dc1bfced78fd8d173",
+  "subject_identity_sha256" : "4f7479ea02fb21318e5384720fd96e7474e7be2c55ba4863c076185edd680cee",
+  "usage" : "redevplugin.release-signing.root-delegation.v1"
+}
