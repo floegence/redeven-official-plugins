@@ -146,7 +146,7 @@ describe('official plugin repository contract', () => {
   });
 
   it('keeps packages out of git and uses neutral external signer exchange', async () => {
-    const [rootPackage, packageScript, releaseScript, publisherConfig, capabilityPin, capabilitySource, capabilityStageScript, buildScript, releaseWorkflow, tracked] = await Promise.all([
+    const [rootPackage, packageScript, releaseScript, publisherConfig, capabilityPin, capabilitySource, capabilityStageScript, publishScript, buildScript, releaseWorkflow, recoveryWorkflow, tracked] = await Promise.all([
       readFile(path.join(repoRoot, 'package.json'), 'utf8'),
       readFile(path.join(repoRoot, 'scripts', 'build_official_plugin.mjs'), 'utf8'),
       readFile(path.join(repoRoot, 'scripts', 'release_official_plugin.mjs'), 'utf8'),
@@ -154,8 +154,10 @@ describe('official plugin repository contract', () => {
       readJSON(path.join(repoRoot, 'plugins', 'containers', 'host-capability.pin.json')),
       readJSON(path.join(repoRoot, 'releases', 'containers', '4.3.0', 'capability-source.json')),
       readFile(path.join(repoRoot, 'scripts', 'stage_release_capability.mjs'), 'utf8'),
+      readFile(path.join(repoRoot, 'scripts', 'publish_official_plugin_release.sh'), 'utf8'),
       readFile(path.join(repoRoot, 'plugins', 'containers', 'build.mjs'), 'utf8'),
       readFile(path.join(repoRoot, '.github', 'workflows', 'release.yml'), 'utf8'),
+      readFile(path.join(repoRoot, '.github', 'workflows', 'recover-release.yml'), 'utf8'),
       import('node:child_process').then(({ execFileSync }) => execFileSync('git', ['ls-files'], { cwd: repoRoot, encoding: 'utf8' })),
     ]);
     assert.doesNotMatch(tracked, /\.redevplugin$/mu);
@@ -178,11 +180,20 @@ describe('official plugin repository contract', () => {
     assert.match(buildScript, /capabilityMethods\.length !== 52/u);
     assert.match(releaseWorkflow, /remote_main.*GITHUB_SHA/su);
     assert.doesNotMatch(releaseWorkflow, /repos\/\$GITHUB_REPOSITORY\/immutable-releases/u);
-    assert.match(releaseWorkflow, /gh release create/u);
-    assert.match(releaseWorkflow, /diff -qr/u);
-    assert.match(releaseWorkflow, /npm run release:verify/u);
-    assert.match(releaseWorkflow, /npm run release:stage-capability/u);
-    assert.match(releaseWorkflow, /gh release download "\$previous_tag" --dir "\$previous_output"/u);
-    assert.match(releaseWorkflow, /npm run release:prepare -- containers "\$previous_output"/u);
+    assert.match(publishScript, /gh release create/u);
+    assert.match(publishScript, /diff -qr/u);
+    assert.match(publishScript, /npm run release:verify/u);
+    assert.match(publishScript, /npm run release:stage-capability/u);
+    assert.match(publishScript, /gh release download "\$previous_tag" --dir "\$previous_output"/u);
+    assert.match(publishScript, /npm run release:prepare -- containers "\$previous_output"/u);
+    assert.doesNotMatch(`${releaseWorkflow}\n${recoveryWorkflow}\n${publishScript}`, /type f.*wc -l.*= 51/su);
+    assert.match(releaseWorkflow, /publish_official_plugin_release\.sh/u);
+    assert.match(recoveryWorkflow, /workflow_dispatch/u);
+    assert.match(recoveryWorkflow, /ref: \$\{\{ inputs\.tag \}\}/u);
+    assert.match(recoveryWorkflow, /path: release-source/u);
+    assert.match(recoveryWorkflow, /working-directory: release-source/u);
+    assert.match(recoveryWorkflow, /merge-base --is-ancestor/u);
+    assert.match(recoveryWorkflow, /head_sha.*tag_commit/su);
+    assert.match(recoveryWorkflow, /publish_official_plugin_release\.sh/u);
   });
 });
