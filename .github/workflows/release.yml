@@ -54,10 +54,16 @@ jobs:
       - run: npm --prefix plugins/containers ci
       - run: npm run verify
       - name: Build and verify signed release set
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
-          npm run release:prepare -- containers
+          previous_tag=$(jq -er '.previous_release_train_tag' plugins/containers/release.json)
+          previous_output=$(mktemp -d)
+          trap 'rm -rf "$previous_output"' EXIT
+          gh release download "$previous_tag" --dir "$previous_output"
+          npm run release:prepare -- containers "$previous_output"
           npm run release:apply -- containers "releases/containers/$version/responses"
           npm run release:finalize -- containers
           npm run release:verify -- containers
