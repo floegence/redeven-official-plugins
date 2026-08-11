@@ -18,7 +18,7 @@ describe('official plugin repository contract', () => {
     const [containers] = await loadAllPluginSources(repoRoot);
     assert.equal(containers.manifest.schema_version, 'redevplugin.manifest.v8');
     assert.equal(containers.manifest.plugin.plugin_id, 'com.redeven.official.containers');
-    assert.equal(containers.manifest.plugin.version, '4.4.0');
+    assert.equal(containers.manifest.plugin.version, '4.4.1');
     assert.equal(containers.manifest.plugin.min_runtime_version, '0.7.16');
     assert.equal(containers.manifest.plugin.ui_protocol_version, 'plugin-ui-v7');
     assert.equal(containers.manifest.presentation.default_locale, 'en-US');
@@ -92,13 +92,13 @@ describe('official plugin repository contract', () => {
     assert.equal(joinedSources.includes('/Users/'), false);
   });
 
-  it('keeps the release train and current catalog aligned at Containers 4.4.0', async () => {
+  it('keeps the release train and current catalog aligned at Containers 4.4.1', async () => {
     const [containers] = await loadAllPluginSources(repoRoot);
     assert.equal(containers.release.channel, 'stable');
-    assert.equal(containers.release.source_version, '4.4.0');
-    assert.equal(containers.release.release_train_tag, 'v4.4.0');
-    assert.equal(containers.release.previous_release_train_tag, 'v4.1.0');
-    assert.equal(containers.release.stable_catalog.version, '4.4.0');
+    assert.equal(containers.release.source_version, '4.4.1');
+    assert.equal(containers.release.release_train_tag, 'v4.4.1');
+    assert.equal(containers.release.previous_release_train_tag, 'v4.4.0');
+    assert.equal(containers.release.stable_catalog.version, '4.4.1');
     assert.equal(containers.release.stable_catalog.min_redevplugin_version, '0.7.16');
 
     const catalog = buildCatalogSeed([containers]);
@@ -110,15 +110,15 @@ describe('official plugin repository contract', () => {
     );
     assert.equal(catalog.plugins[0].presentation.locales[0].name, 'Containers');
     assert.equal(catalog.plugins[0].presentation.locales[0].description.length, 3);
-    assert.equal(catalog.plugins[0].latest.version, '4.4.0');
+    assert.equal(catalog.plugins[0].latest.version, '4.4.1');
     assert.equal(catalog.plugins[0].latest.min_redevplugin_version, '0.7.16');
     assert.equal(catalog.plugins[0].latest.default_surface_id, 'containers.dashboard');
     assert.deepEqual(catalog.plugins[0].latest.distribution, {
       provider: 'github_release',
       repository: 'floegence/redeven-official-plugins',
-      tag: 'v4.4.0',
-      artifact_name: 'containers-4.4.0.redevplugin',
-      release_ref_asset_name: 'containers-4.4.0.release-ref.json',
+      tag: 'v4.4.1',
+      artifact_name: 'containers-4.4.1.redevplugin',
+      release_ref_asset_name: 'containers-4.4.1.release-ref.json',
       trust_root_asset_name: 'root.public.json',
     });
   });
@@ -154,9 +154,9 @@ describe('official plugin repository contract', () => {
       readFile(path.join(repoRoot, 'package.json'), 'utf8'),
       readFile(path.join(repoRoot, 'scripts', 'build_official_plugin.mjs'), 'utf8'),
       readFile(path.join(repoRoot, 'scripts', 'release_official_plugin.mjs'), 'utf8'),
-      readJSON(path.join(repoRoot, 'releases', 'containers', '4.4.0', 'publisher-config.json')),
+      readJSON(path.join(repoRoot, 'releases', 'containers', '4.4.1', 'publisher-config.json')),
       readJSON(path.join(repoRoot, 'plugins', 'containers', 'host-capability.pin.json')),
-      readJSON(path.join(repoRoot, 'releases', 'containers', '4.4.0', 'capability-source.json')),
+      readJSON(path.join(repoRoot, 'releases', 'containers', '4.4.1', 'capability-source.json')),
       readFile(path.join(repoRoot, 'scripts', 'stage_release_capability.mjs'), 'utf8'),
       readFile(path.join(repoRoot, 'scripts', 'publish_official_plugin_release.sh'), 'utf8'),
       readFile(path.join(repoRoot, 'plugins', 'containers', 'build.mjs'), 'utf8'),
