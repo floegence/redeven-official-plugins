@@ -79,6 +79,28 @@ test('defaults a blank volume driver to local without overriding an explicit dri
   assert.equal(requests[1].driver, 'nfs');
 });
 
+test('omits empty volume options from preflight and execution requests', { concurrency: false }, async (t) => {
+  const preflightRequests = [];
+  const volumeOperation = pendingOperation('create-volume-operation');
+  const fixture = await loadFixture({
+    createVolumePreflight: async (request) => {
+      preflightRequests.push(request);
+      return plan('volumes.create', 'sha256:create-volume');
+    },
+    createVolume: async () => volumeOperation.handle,
+  });
+  t.after(() => fixture.dispose());
+
+  fixture.action('open-create-volume');
+  fixture.action('submit-create-volume', { form_data: { name: 'codex-acceptance-volume', driver: 'local' } });
+  await eventually(() => assert.equal(preflightRequests.length, 1));
+  assert.equal(Object.hasOwn(preflightRequests[0], 'options'), false);
+
+  fixture.action('confirm-plan');
+  await eventually(() => assert.equal(fixture.calls.createVolume.length, 1));
+  assert.equal(Object.hasOwn(fixture.calls.createVolume[0], 'options'), false);
+});
+
 test('renders separate tagged references that share one Docker image id', { concurrency: false }, async (t) => {
   const sharedID = 'sha256:shared-image';
   const fixture = await loadFixture({
@@ -732,7 +754,7 @@ async function loadFixture(overrides = {}, options = {}) {
   const renderErrors = [];
   let surfaceContext = defaultContext();
   let currentPullOperation = overrides.pullOperation;
-  const calls = { status: [], endpointStatus: [], endpoints: [], listImages: [], listVolumes: [], create: [], pruneImages: [], pruneVolumes: [] };
+  const calls = { status: [], endpointStatus: [], endpoints: [], listImages: [], listVolumes: [], create: [], createVolume: [], pruneImages: [], pruneVolumes: [] };
   const bridge = {
     ready: async () => undefined,
     context: () => surfaceContext,
@@ -774,7 +796,11 @@ async function loadFixture(overrides = {}, options = {}) {
     createVolumePreflight: async (request) => overrides.createVolumePreflight ? overrides.createVolumePreflight(request) : plan('volumes.create', 'sha256:create-volume'),
     removeVolumePreflight: async () => plan('volumes.remove', 'sha256:remove-volume'),
     start: unexpected('start'), stop: unexpected('stop'), restart: unexpected('restart'), pause: unexpected('pause'), unpause: unexpected('unpause'), kill: unexpected('kill'), remove: unexpected('remove'),
-    createVolume: unexpected('createVolume'), removeVolume: unexpected('removeVolume'), tagImage: unexpected('tagImage'), removeImage: unexpected('removeImage'),
+    createVolume: async (request) => {
+      calls.createVolume.push(request);
+      return overrides.createVolume ? overrides.createVolume(request) : unexpected('createVolume')();
+    },
+    removeVolume: unexpected('removeVolume'), tagImage: unexpected('tagImage'), removeImage: unexpected('removeImage'),
     inspect: async () => ({ engine: 'docker', container: container('container-a') }),
     statsSnapshot: async () => ({ engine: 'docker', stats: { container_id: 'container-a', cpu_percent: 4, memory_bytes: 1000, memory_limit: 2000, network_rx_bytes: 10, network_tx_bytes: 20 } }),
     statsWatch: overrides.statsWatch ?? unexpected('statsWatch'),

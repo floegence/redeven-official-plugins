@@ -401,7 +401,13 @@ async function submitCreateVolume(event: PluginUIActionEvent): Promise<void> {
   let options: Array<{ key: string; value: string }> | undefined;
   try { options = parseOptionRows(event.form_data ?? {}); }
   catch { return dialogError(msg('invalidVolumeOptions')); }
-  await loadPlan(msg('reviewVolumeCreation'), { kind: 'create-volume', name, driver, options }, () => client.createVolumePreflight({ engine: state.engine, endpoint_id: state.endpointID, name, driver, options }));
+  await loadPlan(msg('reviewVolumeCreation'), { kind: 'create-volume', name, driver, options }, () => client.createVolumePreflight({
+    engine: state.engine,
+    endpoint_id: state.endpointID,
+    name,
+    driver,
+    ...(options ? { options } : {}),
+  }));
 }
 
 async function submitCreatePod(event: PluginUIActionEvent): Promise<void> {
@@ -512,7 +518,13 @@ async function confirmPlan(): Promise<void> {
         break;
       case 'create-volume': {
         const existed = volumeExists(intent.name);
-        await runOperation(`volume:${engine}:${endpointID}:${intent.name}`, msg('createVolume'), literal(intent.name), () => client.createVolume({ engine, endpoint_id: endpointID, name: intent.name, driver: intent.driver || undefined, options: intent.options }), (status) => reconcileVolumePresence(intent.name, true, existed, status), engine, endpointID);
+        await runOperation(`volume:${engine}:${endpointID}:${intent.name}`, msg('createVolume'), literal(intent.name), () => client.createVolume({
+          engine,
+          endpoint_id: endpointID,
+          name: intent.name,
+          driver: intent.driver,
+          ...(intent.options ? { options: intent.options } : {}),
+        }), (status) => reconcileVolumePresence(intent.name, true, existed, status), engine, endpointID);
         break;
       }
       case 'remove-volume':
