@@ -361,7 +361,7 @@
         "stable"
       ],
       "latest": {
-        "version": "4.4.1",
+        "version": "4.4.2",
         "min_redeven_version": "1.0.0",
         "min_redevplugin_version": "0.7.16",
         "rollout_state": "stable",
@@ -369,9 +369,9 @@
         "distribution": {
           "provider": "github_release",
           "repository": "floegence/redeven-official-plugins",
-          "tag": "v4.4.1",
-          "artifact_name": "containers-4.4.1.redevplugin",
-          "release_ref_asset_name": "containers-4.4.1.release-ref.json",
+          "tag": "v4.4.2",
+          "artifact_name": "containers-4.4.2.redevplugin",
+          "release_ref_asset_name": "containers-4.4.2.release-ref.json",
           "trust_root_asset_name": "root.public.json"
         }
       }
