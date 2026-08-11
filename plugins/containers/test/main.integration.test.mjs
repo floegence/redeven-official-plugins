@@ -642,6 +642,35 @@ test('renders released operation progress without resizing resource rows', { con
   await eventually(() => assert.equal(active.cancelCalls(), 1));
 });
 
+test('keeps operation observation within the released SDK timeout contract', { concurrency: false }, async (t) => {
+  const target = 'ghcr.io/example/bounded:latest';
+  let waitOptions;
+  const operation = {
+    operation_id: 'bounded-operation', data: {},
+    snapshot: async () => ({ operation_id: 'bounded-operation', status: 'running', cancelable: true, created_at: '', updated_at: '', retry_after_ms: 500 }),
+    wait: async (options) => {
+      waitOptions = options;
+      if (options.timeoutMs > 600_000) throw new Error('Plugin operation wait timeout must be at most 10 minutes');
+      return { status: 'completed', snapshot: { operation_id: 'bounded-operation', status: 'completed' } };
+    },
+    cancel: async () => undefined,
+  };
+  const fixture = await loadFixture({
+    pullOperation: operation,
+    listImages: async ({ engine, call }) => ({
+      engine,
+      images: call === 1 ? [image()] : [image(), { ...image('sha256:bounded'), reference: target }],
+    }),
+  });
+  t.after(() => fixture.dispose());
+  fixture.action('select-view', { value: 'images' });
+  fixture.action('open-pull-image');
+  fixture.action('submit-pull-image', { form_data: { image_ref: target } });
+  await eventually(() => assert.ok(waitOptions));
+  assert.equal(waitOptions.timeoutMs, 600_000);
+  await eventually(() => assert.equal(findNode(fixture.tree(), (node) => node.attributes?.class === 'operations'), undefined));
+});
+
 test('aborts local observation without canceling Host work on surface disposal', { concurrency: false }, async () => {
   let waitSignal;
   let snapshotSignal;

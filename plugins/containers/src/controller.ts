@@ -868,7 +868,7 @@ async function observeOperation(record: OperationRecord, operation: AnyOperation
   };
   void poll();
   try {
-    const result = await operation.wait({ signal: observation.signal, timeoutMs: 660_000, pollIntervalMs: 500 });
+    const result = await operation.wait({ signal: observation.signal, timeoutMs: 600_000, pollIntervalMs: 500 });
     terminal = true;
     observation.abort();
     const current = state.operations.get(record.key);
