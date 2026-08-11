@@ -396,12 +396,12 @@ async function submitTagImage(event: PluginUIActionEvent): Promise<void> {
 
 async function submitCreateVolume(event: PluginUIActionEvent): Promise<void> {
   const name = clean(event.form_data?.name);
-  const driver = clean(event.form_data?.driver);
+  const driver = clean(event.form_data?.driver) || 'local';
   if (!name) return dialogError(msg('volumeNameRequired'));
   let options: Array<{ key: string; value: string }> | undefined;
   try { options = parseOptionRows(event.form_data ?? {}); }
   catch { return dialogError(msg('invalidVolumeOptions')); }
-  await loadPlan(msg('reviewVolumeCreation'), { kind: 'create-volume', name, driver, options }, () => client.createVolumePreflight({ engine: state.engine, endpoint_id: state.endpointID, name, driver: driver || undefined, options }));
+  await loadPlan(msg('reviewVolumeCreation'), { kind: 'create-volume', name, driver, options }, () => client.createVolumePreflight({ engine: state.engine, endpoint_id: state.endpointID, name, driver, options }));
 }
 
 async function submitCreatePod(event: PluginUIActionEvent): Promise<void> {
@@ -1263,7 +1263,7 @@ function createContainerForm(error?: Message): PluginUIVNode {
 }
 
 function createVolumeForm(error?: Message): PluginUIVNode {
-  return el('create-volume-form', 'form', { class: 'form', 'data-redevplugin-action': 'submit-create-volume', autocomplete: 'off' }, [field('create-volume-name', c('volumeName'), 'name', 'app-data'), field('create-volume-driver', c('driver'), 'driver', 'local'), repeatableSection('create-volume-options', c('driverOptions'), 'volume-options', optionRows()), formFooter('create-volume', c('reviewCreation'), error)]);
+  return el('create-volume-form', 'form', { class: 'form', 'data-redevplugin-action': 'submit-create-volume', autocomplete: 'off' }, [field('create-volume-name', c('volumeName'), 'name', 'app-data'), field('create-volume-driver', c('driver'), 'driver', 'local', false, 'local'), repeatableSection('create-volume-options', c('driverOptions'), 'volume-options', optionRows()), formFooter('create-volume', c('reviewCreation'), error)]);
 }
 
 function createPodForm(error?: Message): PluginUIVNode {
@@ -1318,7 +1318,7 @@ function simpleForm(key: string, actionName: string, fields: Array<{ name: strin
 }
 
 function formFooter(formKey: string, label: string, error?: Message): PluginUIVNode { const key = `${formKey}-footer`; return el(key, 'div', { class: 'form-footer' }, [error ? el(`${key}-error`, 'p', { class: 'form-error', role: 'alert' }, [txt(`${key}-error-text`, messageText(error))]) : empty(`${key}-error-empty`), el(`${key}-actions`, 'div', { class: 'dialog-actions' }, [button(`${key}-cancel`, c('cancel'), 'close-dialog', '', 'secondary-button'), el(`${key}-submit`, 'button', { type: 'submit', class: 'primary-button' }, [txt(`${key}-submit-text`, label)])])]); }
-function field(key: string, labelText: string, name: string, placeholder: string, required = false): PluginUIVNode { return el(`${key}-label`, 'label', { class: 'field' }, [el(`${key}-copy`, 'span', {}, [txt(`${key}-copy-text`, labelText)]), el(key, 'input', { type: 'text', name, placeholder, required, autocomplete: 'off' })]); }
+function field(key: string, labelText: string, name: string, placeholder: string, required = false, value?: string): PluginUIVNode { return el(`${key}-label`, 'label', { class: 'field' }, [el(`${key}-copy`, 'span', {}, [txt(`${key}-copy-text`, labelText)]), el(key, 'input', { type: 'text', name, placeholder, required, autocomplete: 'off', ...(value === undefined ? {} : { value }) })]); }
 function numberField(key: string, labelText: string, name: string, placeholder: string, step: string): PluginUIVNode { return el(`${key}-label`, 'label', { class: 'field' }, [el(`${key}-copy`, 'span', {}, [txt(`${key}-copy-text`, labelText)]), el(key, 'input', { type: 'number', name, placeholder, step, min: '0', autocomplete: 'off' })]); }
 function textareaField(key: string, labelText: string, name: string, placeholder: string, rows: number): PluginUIVNode { return el(`${key}-label`, 'label', { class: 'field' }, [el(`${key}-copy`, 'span', {}, [txt(`${key}-copy-text`, labelText)]), el(key, 'textarea', { name, placeholder, rows })]); }
 function formDisclosure(key: string, label: string, children: PluginUIVNode[]): PluginUIVNode { return el(key, 'details', { class: 'form-disclosure' }, [el(`${key}-summary`, 'summary', {}, [txt(`${key}-summary-text`, label)]), el(`${key}-fields`, 'div', { class: 'disclosure-fields' }, children)]); }

@@ -58,6 +58,27 @@ test('switches across Containers, Images, and Volumes with local search', { conc
   assert.deepEqual(fixture.calls.listVolumes, ['docker']);
 });
 
+test('defaults a blank volume driver to local without overriding an explicit driver', { concurrency: false }, async (t) => {
+  const requests = [];
+  const fixture = await loadFixture({
+    createVolumePreflight: async (request) => {
+      requests.push(request);
+      return plan('volumes.create', `sha256:create-volume-${requests.length}`);
+    },
+  });
+  t.after(() => fixture.dispose());
+
+  fixture.action('open-create-volume');
+  fixture.action('submit-create-volume', { form_data: { name: 'codex-acceptance-volume', driver: '   ' } });
+  await eventually(() => assert.equal(requests.length, 1));
+  assert.equal(requests[0].driver, 'local');
+
+  fixture.action('open-create-volume');
+  fixture.action('submit-create-volume', { form_data: { name: 'codex-acceptance-nfs', driver: 'nfs' } });
+  await eventually(() => assert.equal(requests.length, 2));
+  assert.equal(requests[1].driver, 'nfs');
+});
+
 test('renders separate tagged references that share one Docker image id', { concurrency: false }, async (t) => {
   const sharedID = 'sha256:shared-image';
   const fixture = await loadFixture({
@@ -750,7 +771,7 @@ async function loadFixture(overrides = {}, options = {}) {
     pullImage: async () => currentPullOperation ?? pendingOperation('default-pull').handle,
     startPreflight: async () => overrides.startPlan ?? plan('containers.start', 'sha256:start'),
     removePreflight: async () => plan('containers.remove', 'sha256:remove'),
-    createVolumePreflight: async () => plan('volumes.create', 'sha256:create-volume'),
+    createVolumePreflight: async (request) => overrides.createVolumePreflight ? overrides.createVolumePreflight(request) : plan('volumes.create', 'sha256:create-volume'),
     removeVolumePreflight: async () => plan('volumes.remove', 'sha256:remove-volume'),
     start: unexpected('start'), stop: unexpected('stop'), restart: unexpected('restart'), pause: unexpected('pause'), unpause: unexpected('unpause'), kill: unexpected('kill'), remove: unexpected('remove'),
     createVolume: unexpected('createVolume'), removeVolume: unexpected('removeVolume'), tagImage: unexpected('tagImage'), removeImage: unexpected('removeImage'),
