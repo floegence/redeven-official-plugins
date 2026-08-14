@@ -9,7 +9,7 @@ import {
   validatePluginSource,
 } from './lib/officialPlugins.mjs';
 
-const redevpluginVersion = 'v0.7.16';
+const redevpluginVersion = 'v1.1.2';
 const repoRoot = repoRootFrom(import.meta.url);
 const pluginName = String(process.argv[2] ?? '').trim();
 
@@ -58,7 +58,7 @@ function runReDevPlugin(args) {
       env: {
         ...process.env,
         GOWORK: 'off',
-        GOTOOLCHAIN: 'go1.26.5+auto',
+        GOTOOLCHAIN: 'go1.26.6+auto',
         GOPROXY: 'https://proxy.golang.org,direct',
         GOPRIVATE: '',
         GONOSUMDB: '',

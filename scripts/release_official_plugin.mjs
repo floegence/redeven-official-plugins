@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { loadPluginSource, repoRootFrom } from './lib/officialPlugins.mjs';
 
-const redevpluginVersion = 'v0.7.16';
+const redevpluginVersion = 'v1.1.2';
 const repoRoot = repoRootFrom(import.meta.url);
 const action = String(process.argv[2] ?? '').trim();
 const pluginName = String(process.argv[3] ?? '').trim();
@@ -23,14 +23,9 @@ const output = path.join(workRoot, 'output');
 const unsignedPackage = path.join(repoRoot, 'dist', pluginName, version, `${pluginName}-${version}.unsigned.redevplugin`);
 
 if (action === 'prepare') {
-  const previousOutput = path.resolve(String(process.argv[4] ?? '').trim());
-  if (!String(process.argv[4] ?? '').trim()) {
-    console.error('prepare requires the verified previous release output directory');
-    process.exit(2);
-  }
   await run('npm', ['run', `build:${pluginName}`]);
   await runNodeScript('scripts/build_official_plugin.mjs', pluginName);
-  await runReDevPlugin(['release', 'prepare', configFile, unsignedPackage, workspace, '--previous', previousOutput]);
+  await runReDevPlugin(['release', 'prepare', configFile, unsignedPackage, workspace]);
 } else if (action === 'apply') {
   const responsePath = String(process.argv[4] ?? '').trim();
   if (!responsePath) {
@@ -114,7 +109,7 @@ function runReDevPlugin(args) {
     ? run(explicit, args)
     : run('go', ['run', `github.com/floegence/redevplugin/cmd/redevplugin@${redevpluginVersion}`, ...args], {
       GOWORK: 'off',
-      GOTOOLCHAIN: 'go1.26.5+auto',
+      GOTOOLCHAIN: 'go1.26.6+auto',
       GOPROXY: 'https://proxy.golang.org,direct',
       GOPRIVATE: '',
       GONOSUMDB: '',

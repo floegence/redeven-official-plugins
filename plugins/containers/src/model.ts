@@ -1,6 +1,6 @@
 import type {
-  PluginOperation,
-  PluginOperationProgress,
+  PluginExecution,
+  PluginExecutionProgress,
   PluginStream,
   PluginSurfaceContext,
   PluginUIVNode,
@@ -27,7 +27,7 @@ export type Volume = VolumesResponse['volumes'][number];
 export type Endpoint = EndpointsListResponse['endpoints'][number];
 export type ComposeProject = ComposeProjectsListResponse['projects'][number];
 export type Pod = PodsListResponse['pods'][number];
-export type AnyOperation = PluginOperation<object>;
+export type AnyOperation = PluginExecution<object>;
 export type AnyStream = PluginStream<object, object>;
 export type Message = { key: CopyKey; params?: Record<string, string | number | Message> } | { literal: string };
 export type Plan = {
@@ -79,7 +79,7 @@ export type OperationRecord = {
   target: Message;
   operationID: string;
   status: Message;
-  progress?: PluginOperationProgress;
+  progress?: PluginExecutionProgress;
   error?: Message;
   handle?: AnyOperation;
   reconcile?: (terminalStatus?: string) => Promise<ReconcileResult>;

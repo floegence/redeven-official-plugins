@@ -14,7 +14,6 @@
     "release:apply": "node scripts/release_official_plugin.mjs apply",
     "release:finalize": "node scripts/release_official_plugin.mjs finalize",
     "release:verify": "node scripts/release_official_plugin.mjs verify",
-    "release:stage-capability": "node scripts/stage_release_capability.mjs",
     "verify": "npm test && npm run check && npm run catalog:verify"
   },
   "devDependencies": {}

@@ -815,7 +815,7 @@ async function runOperation(key: string, label: Message, target: Message, submit
     const operation = await submit();
     const record = state.operations.get(key);
     if (!record || disposed) return;
-    record.operationID = operation.operation_id;
+    record.operationID = operation.execution_id;
     record.status = msg('running');
     record.handle = operation;
     await renderSafely();

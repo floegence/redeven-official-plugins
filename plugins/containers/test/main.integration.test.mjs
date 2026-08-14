@@ -689,12 +689,12 @@ test('keeps operation observation within the released SDK timeout contract', { c
   const target = 'ghcr.io/example/bounded:latest';
   let waitOptions;
   const operation = {
-    operation_id: 'bounded-operation', data: {},
-    snapshot: async () => ({ operation_id: 'bounded-operation', status: 'running', cancelable: true, created_at: '', updated_at: '', retry_after_ms: 500 }),
+    execution_id: 'bounded-operation', data: {},
+    snapshot: async () => ({ execution_id: 'bounded-operation', status: 'running', cancelable: true, created_at: '', updated_at: '', retry_after_ms: 500 }),
     wait: async (options) => {
       waitOptions = options;
       if (options.timeoutMs > 600_000) throw new Error('Plugin operation wait timeout must be at most 10 minutes');
-      return { status: 'completed', snapshot: { operation_id: 'bounded-operation', status: 'completed' } };
+      return { status: 'completed', snapshot: { execution_id: 'bounded-operation', status: 'completed' } };
     },
     cancel: async () => undefined,
   };
@@ -719,10 +719,10 @@ test('aborts local observation without canceling Host work on surface disposal',
   let snapshotSignal;
   let cancelCalls = 0;
   const operation = {
-    operation_id: 'dispose-operation', data: {},
+    execution_id: 'dispose-operation', data: {},
     snapshot: async ({ signal }) => {
       snapshotSignal = signal;
-      return { operation_id: 'dispose-operation', status: 'running', cancelable: true, created_at: '', updated_at: '', retry_after_ms: 500 };
+      return { execution_id: 'dispose-operation', status: 'running', cancelable: true, created_at: '', updated_at: '', retry_after_ms: 500 };
     },
     wait: async ({ signal }) => {
       waitSignal = signal;
@@ -835,10 +835,10 @@ function pendingOperation(operationID, phase = 'Pulling layers') {
   let cancelCalls = 0;
   return {
     handle: {
-      operation_id: operationID,
+      execution_id: operationID,
       data: {},
-      snapshot: async () => ({ operation_id: operationID, status: 'running', cancelable: true, created_at: '', updated_at: '', retry_after_ms: 500, progress: { revision: 1, phase, completed_units: 2, total_units: 5, unit: 'layers' } }),
-      wait: async () => new Promise((resolve) => setTimeout(() => resolve({ status: 'completed', snapshot: { operation_id: operationID, status: 'completed' } }), 300)),
+      snapshot: async () => ({ execution_id: operationID, status: 'running', cancelable: true, created_at: '', updated_at: '', retry_after_ms: 500, progress: { revision: 1, phase, completed_units: 2, total_units: 5, unit: 'layers' } }),
+      wait: async () => new Promise((resolve) => setTimeout(() => resolve({ status: 'completed', snapshot: { execution_id: operationID, status: 'completed' } }), 300)),
       cancel: async () => { cancelCalls += 1; },
     },
     cancelCalls: () => cancelCalls,
@@ -847,10 +847,10 @@ function pendingOperation(operationID, phase = 'Pulling layers') {
 
 function terminalOperation(status) {
   return {
-    operation_id: `terminal-${status}`,
+    execution_id: `terminal-${status}`,
     data: {},
-    snapshot: async () => ({ operation_id: `terminal-${status}`, status, cancelable: false, created_at: '', updated_at: '', retry_after_ms: 0 }),
-    wait: async () => ({ status, snapshot: { operation_id: `terminal-${status}`, status } }),
+    snapshot: async () => ({ execution_id: `terminal-${status}`, status, cancelable: false, created_at: '', updated_at: '', retry_after_ms: 0 }),
+    wait: async () => ({ status, snapshot: { execution_id: `terminal-${status}`, status } }),
     cancel: async () => undefined,
   };
 }

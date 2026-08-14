@@ -7,7 +7,7 @@ import {
   type PluginBridgeClient,
   type PluginBridgeError,
   type PluginBridgeRequestOptions,
-  type PluginOperation,
+  type PluginExecution,
   type PluginStream,
 } from "@floegence/redevplugin-ui/plugin";
 
@@ -1984,7 +1984,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async start(request: ContainersStartRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<ContainersStartResponse>> {
+  async start(request: ContainersStartRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<ContainersStartResponse>> {
     return callCapabilityOperation<ContainersStartRequest, ContainersStartResponse>(
       this.#bridge,
       startContract,
@@ -1993,7 +1993,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async stop(request: ContainersStopRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<ContainersStopResponse>> {
+  async stop(request: ContainersStopRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<ContainersStopResponse>> {
     return callCapabilityOperation<ContainersStopRequest, ContainersStopResponse>(
       this.#bridge,
       stopContract,
@@ -2002,7 +2002,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async restart(request: ContainersRestartRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<ContainersRestartResponse>> {
+  async restart(request: ContainersRestartRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<ContainersRestartResponse>> {
     return callCapabilityOperation<ContainersRestartRequest, ContainersRestartResponse>(
       this.#bridge,
       restartContract,
@@ -2011,7 +2011,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async remove(request: ContainersRemoveRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<ContainersRemoveResponse>> {
+  async remove(request: ContainersRemoveRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<ContainersRemoveResponse>> {
     return callCapabilityOperation<ContainersRemoveRequest, ContainersRemoveResponse>(
       this.#bridge,
       removeContract,
@@ -2029,7 +2029,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async pullImage(request: ImagesPullRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<ImagesPullResponse>> {
+  async pullImage(request: ImagesPullRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<ImagesPullResponse>> {
     return callCapabilityOperation<ImagesPullRequest, ImagesPullResponse>(
       this.#bridge,
       pullImageContract,
@@ -2065,7 +2065,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async create(request: CreateRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<CreateResponse>> {
+  async create(request: CreateRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<CreateResponse>> {
     return callCapabilityOperation<CreateRequest, CreateResponse>(
       this.#bridge,
       createContract,
@@ -2074,7 +2074,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async pause(request: PauseRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<PauseResponse>> {
+  async pause(request: PauseRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<PauseResponse>> {
     return callCapabilityOperation<PauseRequest, PauseResponse>(
       this.#bridge,
       pauseContract,
@@ -2083,7 +2083,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async unpause(request: UnpauseRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<UnpauseResponse>> {
+  async unpause(request: UnpauseRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<UnpauseResponse>> {
     return callCapabilityOperation<UnpauseRequest, UnpauseResponse>(
       this.#bridge,
       unpauseContract,
@@ -2092,7 +2092,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async kill(request: KillRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<KillResponse>> {
+  async kill(request: KillRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<KillResponse>> {
     return callCapabilityOperation<KillRequest, KillResponse>(
       this.#bridge,
       killContract,
@@ -2137,7 +2137,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async tagImage(request: ImageTagRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<ImageTagResponse>> {
+  async tagImage(request: ImageTagRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<ImageTagResponse>> {
     return callCapabilityOperation<ImageTagRequest, ImageTagResponse>(
       this.#bridge,
       tagImageContract,
@@ -2155,7 +2155,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async removeImage(request: ImageRemoveRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<ImageRemoveResponse>> {
+  async removeImage(request: ImageRemoveRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<ImageRemoveResponse>> {
     return callCapabilityOperation<ImageRemoveRequest, ImageRemoveResponse>(
       this.#bridge,
       removeImageContract,
@@ -2173,7 +2173,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async pruneImages(request: ImagePruneRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<ImagePruneResponse>> {
+  async pruneImages(request: ImagePruneRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<ImagePruneResponse>> {
     return callCapabilityOperation<ImagePruneRequest, ImagePruneResponse>(
       this.#bridge,
       pruneImagesContract,
@@ -2209,7 +2209,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async createVolume(request: VolumeCreateRequestV3, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<VolumeCreateResponse>> {
+  async createVolume(request: VolumeCreateRequestV3, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<VolumeCreateResponse>> {
     return callCapabilityOperation<VolumeCreateRequestV3, VolumeCreateResponse>(
       this.#bridge,
       createVolumeContract,
@@ -2227,7 +2227,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async removeVolume(request: VolumeRemoveRequestV3, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<VolumeRemoveResponse>> {
+  async removeVolume(request: VolumeRemoveRequestV3, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<VolumeRemoveResponse>> {
     return callCapabilityOperation<VolumeRemoveRequestV3, VolumeRemoveResponse>(
       this.#bridge,
       removeVolumeContract,
@@ -2245,7 +2245,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async pruneVolumes(request: VolumePruneRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<VolumePruneResponse>> {
+  async pruneVolumes(request: VolumePruneRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<VolumePruneResponse>> {
     return callCapabilityOperation<VolumePruneRequest, VolumePruneResponse>(
       this.#bridge,
       pruneVolumesContract,
@@ -2335,7 +2335,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async startComposeProject(request: ComposeProjectsStartRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<ComposeProjectsStartResponse>> {
+  async startComposeProject(request: ComposeProjectsStartRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<ComposeProjectsStartResponse>> {
     return callCapabilityOperation<ComposeProjectsStartRequest, ComposeProjectsStartResponse>(
       this.#bridge,
       startComposeProjectContract,
@@ -2344,7 +2344,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async stopComposeProject(request: ComposeProjectsStopRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<ComposeProjectsStopResponse>> {
+  async stopComposeProject(request: ComposeProjectsStopRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<ComposeProjectsStopResponse>> {
     return callCapabilityOperation<ComposeProjectsStopRequest, ComposeProjectsStopResponse>(
       this.#bridge,
       stopComposeProjectContract,
@@ -2353,7 +2353,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async restartComposeProject(request: ComposeProjectsRestartRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<ComposeProjectsRestartResponse>> {
+  async restartComposeProject(request: ComposeProjectsRestartRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<ComposeProjectsRestartResponse>> {
     return callCapabilityOperation<ComposeProjectsRestartRequest, ComposeProjectsRestartResponse>(
       this.#bridge,
       restartComposeProjectContract,
@@ -2362,7 +2362,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async downComposeProject(request: ComposeProjectsDownRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<ComposeProjectsDownResponse>> {
+  async downComposeProject(request: ComposeProjectsDownRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<ComposeProjectsDownResponse>> {
     return callCapabilityOperation<ComposeProjectsDownRequest, ComposeProjectsDownResponse>(
       this.#bridge,
       downComposeProjectContract,
@@ -2371,7 +2371,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async createPod(request: PodsCreateRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<PodsCreateResponse>> {
+  async createPod(request: PodsCreateRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<PodsCreateResponse>> {
     return callCapabilityOperation<PodsCreateRequest, PodsCreateResponse>(
       this.#bridge,
       createPodContract,
@@ -2380,7 +2380,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async startPod(request: PodsStartRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<PodsStartResponse>> {
+  async startPod(request: PodsStartRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<PodsStartResponse>> {
     return callCapabilityOperation<PodsStartRequest, PodsStartResponse>(
       this.#bridge,
       startPodContract,
@@ -2389,7 +2389,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async stopPod(request: PodsStopRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<PodsStopResponse>> {
+  async stopPod(request: PodsStopRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<PodsStopResponse>> {
     return callCapabilityOperation<PodsStopRequest, PodsStopResponse>(
       this.#bridge,
       stopPodContract,
@@ -2398,7 +2398,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async restartPod(request: PodsRestartRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<PodsRestartResponse>> {
+  async restartPod(request: PodsRestartRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<PodsRestartResponse>> {
     return callCapabilityOperation<PodsRestartRequest, PodsRestartResponse>(
       this.#bridge,
       restartPodContract,
@@ -2407,7 +2407,7 @@ export class RedevenContainerResourcesV4Client {
     );
   }
 
-  async removePod(request: PodsRemoveRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginOperation<PodsRemoveResponse>> {
+  async removePod(request: PodsRemoveRequest, options: PluginBridgeRequestOptions = {}): Promise<PluginExecution<PodsRemoveResponse>> {
     return callCapabilityOperation<PodsRemoveRequest, PodsRemoveResponse>(
       this.#bridge,
       removePodContract,
