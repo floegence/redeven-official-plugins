@@ -120,17 +120,14 @@ immutable GitHub Releases, not git.
 
 ## Presentation Authority
 
-- Official plugin author copy lives only in the signed current manifest. The
-  repository accepts `redevplugin.manifest.v8` and requires its complete
-  presentation catalog; do not maintain a second plugin name, summary, long
-  description, highlight, keyword, Surface label, Setting label, or option label
-  in catalog declarations, migration SQL, host code, or release automation.
+- Official plugin package identity and presentation evidence live only in the
+  signed current manifest. The repository accepts `redevplugin.manifest.v9`;
+  do not maintain a second plugin name, Surface label, Setting label, or option
+  label in catalog declarations, migration SQL, host code, or release
+  automation.
 - Generated catalog seeds may project presentation fields from the manifest,
   but they must remain deterministic derivatives and must never become an
   independent editorial source.
-- Every shipped localization is complete and independent. Do not inherit
-  Simplified Chinese into Traditional Chinese or synthesize missing author copy
-  in Redeven or the plugin market.
-- The current pre-release baseline intentionally has no admission or packaging
-  path for manifest v5-v7. Historical contracts remain available only from
+- The current baseline intentionally has no admission or packaging path for
+  legacy manifest versions. Historical contracts remain available only from
   historical Git tags.

@@ -83,33 +83,21 @@ export function catalogItemForPlugin(source) {
 
 function presentationCatalogForManifest(manifest) {
   const presentation = manifest.presentation;
+  const defaultLocaleTag = presentation.locales.default;
   const defaultLocale = {
-    locale: presentation.default_locale,
+    locale: defaultLocaleTag,
     name: manifest.plugin.display_name,
     ...(manifest.publisher.display_name ? { publisher_name: manifest.publisher.display_name } : {}),
-    summary: presentation.summary,
-    description: presentation.description,
-    highlights: presentation.highlights,
-    keywords: presentation.keywords,
+    summary: manifest.plugin.display_name,
+    description: [manifest.plugin.display_name],
+    highlights: [],
+    keywords: [manifest.plugin.display_name],
     surfaces: manifest.surfaces.map(({ surface_id, label }) => ({ surface_id, label })),
     settings: (manifest.settings?.fields ?? []).map(({ key, label, options = [] }) => ({ key, label, options })),
   };
   return {
-    default_locale: presentation.default_locale,
-    locales: [
-      defaultLocale,
-      ...presentation.localizations.map((localization) => ({
-        locale: localization.locale,
-        name: localization.plugin_name,
-        ...(localization.publisher_name ? { publisher_name: localization.publisher_name } : {}),
-        summary: localization.summary,
-        description: localization.description,
-        highlights: localization.highlights,
-        keywords: localization.keywords,
-        surfaces: localization.surfaces,
-        settings: localization.settings,
-      })),
-    ],
+    default_locale: defaultLocaleTag,
+    locales: [defaultLocale],
   };
 }
 
@@ -136,8 +124,8 @@ export function sha256Hex(data) {
 export async function validatePluginSource(source) {
   const errors = [];
   const { manifest, pluginRoot, name } = source;
-  if (manifest.schema_version !== 'redevplugin.manifest.v8') {
-    errors.push(`${name}: manifest schema_version must be redevplugin.manifest.v8`);
+  if (manifest.schema_version !== 'redevplugin.manifest.v9') {
+    errors.push(`${name}: manifest schema_version must be redevplugin.manifest.v9`);
   }
   if (manifest.publisher?.publisher_id !== officialPublisherID) {
     errors.push(`${name}: publisher_id must be ${officialPublisherID}`);
@@ -147,11 +135,8 @@ export async function validatePluginSource(source) {
     errors.push(`${name}: plugin_id must use the ${officialPublisherID} namespace`);
   }
   const presentation = manifest.presentation;
-  if (!presentation || typeof presentation.default_locale !== 'string' ||
-      typeof presentation.summary !== 'string' || !Array.isArray(presentation.description) ||
-      !Array.isArray(presentation.highlights) || !Array.isArray(presentation.keywords) ||
-      !Array.isArray(presentation.localizations)) {
-    errors.push(`${name}: manifest v8 presentation is incomplete`);
+  if (!presentation || typeof presentation.locales?.default !== 'string') {
+    errors.push(`${name}: manifest v9 presentation locale is incomplete`);
   } else {
     const iconPath = String(presentation.icon?.path ?? '');
     const iconSource = String(source.release?.package_assets?.[iconPath] ?? iconPath);
@@ -159,10 +144,6 @@ export async function validatePluginSource(source) {
         iconSource.startsWith('/') || iconSource.includes('..') ||
         !(await fileExists(path.join(pluginRoot, iconSource)))) {
       errors.push(`${name}: presentation.icon.path must be a package-local file`);
-    }
-    const locales = [presentation.default_locale, ...presentation.localizations.map((entry) => entry.locale)];
-    if (new Set(locales).size !== locales.length) {
-      errors.push(`${name}: presentation locales must be unique`);
     }
   }
   if (source.release?.schema_version !== 'redeven.official_plugin_source_release.v1' ||

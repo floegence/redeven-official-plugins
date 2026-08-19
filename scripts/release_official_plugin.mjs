@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { loadPluginSource, repoRootFrom } from './lib/officialPlugins.mjs';
 
-const redevpluginVersion = 'v1.1.2';
+const redevpluginVersion = 'v3.0.2';
 const repoRoot = repoRootFrom(import.meta.url);
 const action = String(process.argv[2] ?? '').trim();
 const pluginName = String(process.argv[3] ?? '').trim();
@@ -107,7 +107,7 @@ function runReDevPlugin(args) {
   const explicit = String(process.env.REDEVPLUGIN_CLI ?? '').trim();
   return explicit
     ? run(explicit, args)
-    : run('go', ['run', `github.com/floegence/redevplugin/cmd/redevplugin@${redevpluginVersion}`, ...args], {
+    : run('go', ['run', `github.com/floegence/redevplugin/v3/cmd/redevplugin@${redevpluginVersion}`, ...args], {
       GOWORK: 'off',
       GOTOOLCHAIN: 'go1.26.6+auto',
       GOPROXY: 'https://proxy.golang.org,direct',

@@ -9,7 +9,7 @@ import {
   validatePluginSource,
 } from './lib/officialPlugins.mjs';
 
-const redevpluginVersion = 'v1.1.2';
+const redevpluginVersion = 'v3.0.2';
 const repoRoot = repoRootFrom(import.meta.url);
 const pluginName = String(process.argv[2] ?? '').trim();
 
@@ -50,7 +50,7 @@ function runReDevPlugin(args) {
   const command = explicit || 'go';
   const finalArgs = explicit
     ? args
-    : ['run', `github.com/floegence/redevplugin/cmd/redevplugin@${redevpluginVersion}`, ...args];
+    : ['run', `github.com/floegence/redevplugin/v3/cmd/redevplugin@${redevpluginVersion}`, ...args];
   return new Promise((resolve, reject) => {
     const child = spawn(command, finalArgs, {
       cwd: repoRoot,
