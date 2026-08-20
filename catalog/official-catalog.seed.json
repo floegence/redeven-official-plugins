@@ -43,7 +43,7 @@
       "latest": {
         "version": "4.4.5",
         "min_redeven_version": "1.0.0",
-        "min_redevplugin_version": "3.0.2",
+        "min_redevplugin_version": "3.0.5",
         "rollout_state": "stable",
         "default_surface_id": "containers.dashboard",
         "distribution": {

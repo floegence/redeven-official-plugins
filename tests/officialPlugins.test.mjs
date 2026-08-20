@@ -50,7 +50,7 @@ describe('official plugin repository contract', () => {
     assert.equal(containers.release.release_train_tag, 'v4.4.5');
     assert.equal(containers.release.previous_release_train_tag, 'v4.4.4');
     assert.equal(containers.release.stable_catalog.version, '4.4.5');
-    assert.equal(containers.release.stable_catalog.min_redevplugin_version, '3.0.2');
+    assert.equal(containers.release.stable_catalog.min_redevplugin_version, '3.0.5');
 
     const catalog = buildCatalogSeed([containers]);
     assert.equal(catalog.plugins[0].presentation.default_locale, 'en-US');
@@ -58,7 +58,7 @@ describe('official plugin repository contract', () => {
     assert.deepEqual(catalog.plugins[0].presentation.locales.map((entry) => entry.locale), ['en-US']);
     assert.equal(catalog.plugins[0].presentation.locales[0].name, 'Containers');
     assert.equal(catalog.plugins[0].latest.version, '4.4.5');
-    assert.equal(catalog.plugins[0].latest.min_redevplugin_version, '3.0.2');
+    assert.equal(catalog.plugins[0].latest.min_redevplugin_version, '3.0.5');
     assert.equal(catalog.plugins[0].latest.default_surface_id, 'containers.dashboard');
     assert.deepEqual(catalog.plugins[0].latest.distribution, {
       provider: 'github_release',
@@ -89,7 +89,7 @@ describe('official plugin repository contract', () => {
     assert.equal(buildScript.includes('redevplugin@${redevpluginVersion}'), true);
     assert.match(buildScript, /redevplugin\/v3\/cmd\/redevplugin/u);
     for (const script of [buildScript, releaseScript]) {
-      assert.equal(script.includes("const redevpluginVersion = 'v3.0.2'"), true);
+      assert.equal(script.includes("const redevpluginVersion = 'v3.0.5'"), true);
       assert.match(script, /redevplugin\/v3\/cmd\/redevplugin/u);
       assert.match(script, /GOTOOLCHAIN: 'go1\.26\.6\+auto'/u);
     }
@@ -117,12 +117,22 @@ describe('official plugin repository contract', () => {
     assert.match(releaseScript, /release', 'verify/u);
     assert.doesNotMatch(releaseScript, /--previous|previousOutput/u);
     assert.equal(publisherConfig.schema_version, 'redevplugin.release_publisher_config.v1');
-    assert.equal(publisherConfig.min_redevplugin_version, '3.0.2');
+    assert.deepEqual(Object.keys(publisherConfig).sort(), [
+      'allowed_artifact_hosts',
+      'channel',
+      'distribution',
+      'expires_at',
+      'generated_at',
+      'root',
+      'schema_version',
+      'signing',
+      'source_class',
+      'source_id',
+      'source_type',
+    ]);
+    assert.equal(Object.hasOwn(publisherConfig, 'min_redevplugin_version'), false);
+    assert.equal(Object.hasOwn(publisherConfig, 'host_requirements'), false);
     assert.equal(Object.hasOwn(publisherConfig, 'signing_ledger'), false);
-    assert.deepEqual(
-      publisherConfig.host_requirements[0].required_capability_contracts[0].contract,
-      capabilityPin,
-    );
     assert.deepEqual(Object.keys(capabilityPin).sort(), [
       'artifact_sha256',
       'contract_id',

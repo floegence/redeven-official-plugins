@@ -21,24 +21,5 @@
     "objects.githubusercontent.com",
     "release-assets.githubusercontent.com"
   ],
-  "min_redevplugin_version": "3.0.2",
-  "distribution": "registry_ref",
-  "host_requirements": [
-    {
-      "host_id": "redeven",
-      "min_host_version": "1.0.0",
-      "required_capability_contracts": [
-        {
-          "capability_id": "redeven.capability.container_resources",
-          "capability_version": "3.0.0",
-          "contract": {
-            "publisher_id": "com.redeven.official",
-            "contract_id": "redeven.container_resources.v4",
-            "contract_version": "4.0.0",
-            "artifact_sha256": "0137cd99569a48d3ef4061b19b2fda021ed02cf268094b79c29a40f74bce0b92"
-          }
-        }
-      ]
-    }
-  ]
+  "distribution": "registry_ref"
 }
