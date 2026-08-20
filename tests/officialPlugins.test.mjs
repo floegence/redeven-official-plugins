@@ -45,6 +45,7 @@ describe('official plugin repository contract', () => {
 
   it('keeps the release train and current catalog aligned at Containers 4.4.7', async () => {
     const [containers] = await loadAllPluginSources(repoRoot);
+    const readme = await readFile(path.join(containers.pluginRoot, 'README.md'), 'utf8');
     assert.equal(containers.release.channel, 'stable');
     assert.equal(containers.release.source_version, '4.4.7');
     assert.equal(containers.release.release_train_tag, 'v4.4.7');
@@ -68,6 +69,10 @@ describe('official plugin repository contract', () => {
       release_ref_asset_name: 'containers-4.4.7.release-ref.json',
       trust_root_asset_name: 'root.public.json',
     });
+    assert.equal(
+      readme.includes(`Version \`${containers.manifest.plugin.version}\` is the stable release-train version.`),
+      true,
+    );
   });
 
   it('generates the committed catalog deterministically', async () => {
