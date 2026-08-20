@@ -18,7 +18,7 @@ describe('official plugin repository contract', () => {
     const [containers] = await loadAllPluginSources(repoRoot);
     assert.equal(containers.manifest.schema_version, 'redevplugin.manifest.v9');
     assert.equal(containers.manifest.plugin.plugin_id, 'com.redeven.official.containers');
-    assert.equal(containers.manifest.plugin.version, '4.4.5');
+    assert.equal(containers.manifest.plugin.version, '4.4.6');
     assert.equal(containers.manifest.api.major, 1);
     assert.deepEqual(containers.manifest.permissions, []);
     assert.deepEqual(containers.manifest.workers, []);
@@ -43,13 +43,13 @@ describe('official plugin repository contract', () => {
     assert.match(joinedSources, /execution_id/u);
   });
 
-  it('keeps the release train and current catalog aligned at Containers 4.4.5', async () => {
+  it('keeps the release train and current catalog aligned at Containers 4.4.6', async () => {
     const [containers] = await loadAllPluginSources(repoRoot);
     assert.equal(containers.release.channel, 'stable');
-    assert.equal(containers.release.source_version, '4.4.5');
-    assert.equal(containers.release.release_train_tag, 'v4.4.5');
-    assert.equal(containers.release.previous_release_train_tag, 'v4.4.4');
-    assert.equal(containers.release.stable_catalog.version, '4.4.5');
+    assert.equal(containers.release.source_version, '4.4.6');
+    assert.equal(containers.release.release_train_tag, 'v4.4.6');
+    assert.equal(containers.release.previous_release_train_tag, 'v4.4.5');
+    assert.equal(containers.release.stable_catalog.version, '4.4.6');
     assert.equal(containers.release.stable_catalog.min_redevplugin_version, '3.0.5');
 
     const catalog = buildCatalogSeed([containers]);
@@ -57,15 +57,15 @@ describe('official plugin repository contract', () => {
     assert.equal(catalog.plugins[0].presentation.locales.length, 1);
     assert.deepEqual(catalog.plugins[0].presentation.locales.map((entry) => entry.locale), ['en-US']);
     assert.equal(catalog.plugins[0].presentation.locales[0].name, 'Containers');
-    assert.equal(catalog.plugins[0].latest.version, '4.4.5');
+    assert.equal(catalog.plugins[0].latest.version, '4.4.6');
     assert.equal(catalog.plugins[0].latest.min_redevplugin_version, '3.0.5');
     assert.equal(catalog.plugins[0].latest.default_surface_id, 'containers.dashboard');
     assert.deepEqual(catalog.plugins[0].latest.distribution, {
       provider: 'github_release',
       repository: 'floegence/redeven-official-plugins',
-      tag: 'v4.4.5',
-      artifact_name: 'containers-4.4.5.redevplugin',
-      release_ref_asset_name: 'containers-4.4.5.release-ref.json',
+      tag: 'v4.4.6',
+      artifact_name: 'containers-4.4.6.redevplugin',
+      release_ref_asset_name: 'containers-4.4.6.release-ref.json',
       trust_root_asset_name: 'root.public.json',
     });
   });
