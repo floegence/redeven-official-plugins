@@ -13,8 +13,8 @@
   },
   "signing": {
     "algorithm": "ed25519",
-    "key_id": "redeven_official_signing_2026",
-    "public_key": "CjQqXNS/mR2MgLwWPhTLee6G5ay1XQ4J/bIgw2djtQY="
+    "key_id": "redeven_official_signing_2026_08",
+    "public_key": "61UT2XQhVjySn8RPTU8TJHvgPvMVTnhywCipDWT2SB8="
   },
   "allowed_artifact_hosts": [
     "github.com",
