@@ -9,7 +9,7 @@ import {
   validatePluginSource,
 } from './lib/officialPlugins.mjs';
 
-const redevpluginVersion = 'v3.0.14';
+const redevpluginVersion = 'v3.0.5';
 const repoRoot = repoRootFrom(import.meta.url);
 const pluginName = String(process.argv[2] ?? '').trim();
 

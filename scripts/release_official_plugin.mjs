@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { loadPluginSource, repoRootFrom } from './lib/officialPlugins.mjs';
 
-const redevpluginVersion = 'v3.0.14';
+const redevpluginVersion = 'v3.0.5';
 const repoRoot = repoRootFrom(import.meta.url);
 const action = String(process.argv[2] ?? '').trim();
 const pluginName = String(process.argv[3] ?? '').trim();
