@@ -1,6 +1,6 @@
 {
   "name": "@redeven/official-containers-plugin",
-  "version": "4.4.7",
+  "version": "4.4.8",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@floegence/redevplugin-ui": "3.0.5"
+    "@floegence/redevplugin-ui": "3.0.14"
   },
   "devDependencies": {
     "@appica/ui-react": "1.0.0",
