@@ -18,6 +18,18 @@ import type {
 import type { CopyKey } from './i18n';
 
 export type Engine = 'docker' | 'podman';
+export type EngineAvailabilityIssue =
+  | 'cli_unavailable'
+  | 'daemon_stopped'
+  | 'unreachable'
+  | 'permission_denied'
+  | 'timeout'
+  | 'unavailable'
+  | 'unknown';
+export type EngineAvailability =
+  | { state: 'checking' }
+  | { state: 'ready'; version: string }
+  | { state: 'blocked'; issue: EngineAvailabilityIssue };
 export type View = 'overview' | 'containers' | 'images' | 'volumes' | 'projects' | 'pods';
 export type ResourceFilter = 'all' | 'running' | 'paused' | 'stopped' | 'in-use' | 'unused';
 export type SortKey = 'name' | 'created' | 'state' | 'size' | 'usage';
@@ -95,14 +107,12 @@ export type ContainersAppState = {
   filters: Record<View, ResourceFilter>;
   sorts: Record<View, SortKey>;
   refinements: Map<string, ResourceRefinement>;
-  available: boolean;
-  version: string;
+  engineAvailability: EngineAvailability;
   loading: boolean;
   updating: boolean;
   loaded: boolean;
   dataEngine: Engine;
   dataEndpointID: string;
-  error?: Message;
   viewErrors: Partial<Record<View, Message>>;
   partialFailures: Record<'images' | 'volumes', number>;
   inventoryFresh: Record<View, boolean>;
@@ -136,8 +146,7 @@ export function createInitialContainersState(): ContainersAppState {
     filters: { overview: 'all', containers: 'all', images: 'all', volumes: 'all', projects: 'all', pods: 'all' },
     sorts: { overview: 'name', containers: 'state', images: 'name', volumes: 'name', projects: 'state', pods: 'state' },
     refinements: new Map(),
-    available: false,
-    version: '',
+    engineAvailability: { state: 'checking' },
     loading: true,
     updating: false,
     loaded: false,

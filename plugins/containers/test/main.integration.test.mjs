@@ -24,7 +24,12 @@ const bundle = await build({
           export class RedevenContainerResourcesV4Client {
             constructor() { return globalThis.__containersFixture.client; }
           }
-          export function isRedevenContainerResourcesV4BusinessError() { return false; }
+          export function isRedevenContainerResourcesV4BusinessError(error) {
+            return error?.code === 'PLUGIN_CAPABILITY_ERROR'
+              && error?.details?.capability_id === 'redeven.capability.container_resources'
+              && error?.details?.capability_version === '3.0.0'
+              && typeof error?.details?.business_error_code === 'string';
+          }
         `,
         loader: 'js',
       }));
@@ -369,6 +374,48 @@ test('renders a dedicated recovery workspace when the selected engine is unavail
   assert.ok(findNode(root, (node) => node.attributes?.['data-redevplugin-action'] === 'refresh-resources'));
   assert.equal(findNode(root, (node) => node.key === 'overview-metrics'), undefined);
   assert.equal(findNode(root, (node) => node.attributes?.['data-redevplugin-action'] === 'open-create-container'), undefined);
+});
+
+test('maps each typed engine failure to one recovery state', { concurrency: false }, async (t) => {
+  const cases = [
+    ['CONTAINER_CLI_UNAVAILABLE', /CLI is not installed/u],
+    ['CONTAINER_DAEMON_STOPPED', /service is not running/u],
+    ['CONTAINER_ENGINE_UNREACHABLE', /service cannot be reached/u],
+    ['CONTAINER_PERMISSION_DENIED', /Access to Docker was denied/u],
+    ['CONTAINER_OPERATION_TIMEOUT', /operation timed out/u],
+    ['CONTAINER_ENGINE_UNAVAILABLE', /Docker is unavailable/u],
+  ];
+  for (const [code, expected] of cases) {
+    const fixture = await loadFixture({ status: async () => { throw capabilityBusinessError(code); } }, { expectAvailable: false });
+    t.after(() => fixture.dispose());
+    assert.match(fixture.text(), expected);
+    assert.ok(findNode(fixture.tree(), (node) => node.attributes?.class === 'engine-unavailable-workspace'));
+    assert.equal(findNode(fixture.tree(), (node) => node.attributes?.['data-redevplugin-action'] === 'open-create-container'), undefined);
+  }
+});
+
+test('shows the Docker permission recovery order and clears it after a successful refresh', { concurrency: false }, async (t) => {
+  const fixture = await loadFixture({
+    status: async ({ engine, call }) => {
+      if (call === 1) throw capabilityBusinessError('CONTAINER_PERMISSION_DENIED');
+      return { engine, available: true, engine_version: 'recovered' };
+    },
+  }, { expectAvailable: false });
+  t.after(() => fixture.dispose());
+
+  assert.match(fixture.text(), /current Redeven runtime user access to Docker/u);
+  assert.match(fixture.text(), /reconnect this environment/u);
+  assert.match(fixture.text(), /Refresh resources/u);
+  const steps = findNode(fixture.tree(), (node) => node.attributes?.class === 'engine-unavailable-steps');
+  assert.equal(steps.children.length, 3);
+
+  fixture.action('refresh-resources');
+  await eventually(() => {
+    assert.match(fixture.text(), /Operational summary for Docker/u);
+    assert.match(fixture.text(), /recovered/u);
+    assert.doesNotMatch(fixture.text(), /reconnect this environment/u);
+    assert.ok(findNode(fixture.tree(), (node) => node.attributes?.['data-redevplugin-action'] === 'open-create-container'));
+  });
 });
 
 test('previews authoritative prune plans without injecting display digests into execution params', { concurrency: false }, async (t) => {
@@ -856,6 +903,7 @@ function terminalOperation(status) {
 }
 
 function plan(method, digest) { return { method, plan_digest: digest, request: { engine: 'docker', endpoint_id: 'endpoint-docker-default' }, risk_level: 'critical', risk_flags: [{ id: 'container_privileged', severity: 'critical', title: 'Privileged container', detail: 'The container can receive broad host-level privileges.' }], requires_admin: true, summary: ['The Host computed this exact resource plan.'] }; }
+function capabilityBusinessError(code) { return { code: 'PLUGIN_CAPABILITY_ERROR', details: { capability_id: 'redeven.capability.container_resources', capability_version: '3.0.0', business_error_code: code } }; }
 function knownRiskFlags() {
   return [
     ['container_privileged', 'Privileged container'], ['host_network', 'Host network namespace'], ['host_pid_namespace', 'Host PID namespace'],

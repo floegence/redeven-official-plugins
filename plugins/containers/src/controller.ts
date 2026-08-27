@@ -32,6 +32,7 @@ import {
   type DirectMethod,
   type Endpoint,
   type Engine,
+  type EngineAvailabilityIssue,
   type FormRowKind,
   type Image,
   type InspectorTab,
@@ -133,7 +134,6 @@ async function selectView(event: PluginUIActionEvent): Promise<void> {
   saveRefinement();
   state.view = nextView;
   restoreRefinement();
-  state.error = undefined;
   await renderSafely();
 }
 
@@ -146,7 +146,7 @@ async function selectEngine(event: PluginUIActionEvent): Promise<void> {
   state.endpoints = [];
   state.view = 'overview';
   restoreRefinement();
-  state.error = undefined;
+  state.engineAvailability = { state: 'checking' };
   state.dialog = { kind: 'none' };
   state.loaded = false;
   state.dataEngine = event.value;
@@ -225,7 +225,7 @@ async function refresh(discoverEndpoints = true): Promise<boolean> {
   const hadInventory = state.loaded && state.dataEngine === engine && state.dataEndpointID === state.endpointID;
   state.loading = !hadInventory;
   state.updating = hadInventory;
-  state.error = undefined;
+  if (state.loading) state.engineAvailability = { state: 'checking' };
   state.viewErrors = {};
   await renderSafely();
   try {
@@ -245,11 +245,14 @@ async function refresh(discoverEndpoints = true): Promise<boolean> {
     const statusResult = await client.endpointStatus({ engine, endpoint_id: endpointID });
     if (generation !== refreshGeneration) return false;
     const status = statusResult.endpoint;
-    state.available = status.available;
-    state.version = status.engine_version ?? '';
     state.endpoints = state.endpoints.map((item) => item.endpoint_id === endpointID ? status : item);
     fresh.overview = true;
-    if (!status.available) { state.inventoryFresh = fresh; return false; }
+    if (!status.available) {
+      state.engineAvailability = { state: 'blocked', issue: 'unavailable' };
+      state.inventoryFresh = fresh;
+      return false;
+    }
+    state.engineAvailability = { state: 'ready', version: status.engine_version ?? '' };
     const [containersResult, imagesResult, volumesResult, engineSpecificResult] = await Promise.allSettled([
       client.list({ engine, endpoint_id: endpointID, all: true }),
       client.listImages({ engine, endpoint_id: endpointID }),
@@ -318,10 +321,8 @@ async function refresh(discoverEndpoints = true): Promise<boolean> {
   } catch (error) {
     if (generation === refreshGeneration) {
       state.inventoryFresh = fresh;
-      state.available = false;
-      state.version = '';
+      state.engineAvailability = { state: 'blocked', issue: engineAvailabilityIssue(error) };
       state.endpoints = state.endpoints.map((item) => item.endpoint_id === state.endpointID ? { ...item, available: false, engine_version: undefined } : item);
-      state.error = readableError(error, msg('loadFailed', { resource: viewMessage(state.view) }));
     }
     return false;
   } finally {
@@ -1015,7 +1016,7 @@ function dialogError(message: Message): void { if (state.dialog.kind !== 'none' 
 function render(): Promise<void> {
   if (disposed) return Promise.resolve();
   const context = state.context;
-  const unavailable = !state.loading && !state.available;
+  const unavailable = state.engineAvailability.state === 'blocked';
   return bridge.render(el('containers-root', 'main', {
     class: 'containers-app', lang: context?.locale.language_tag ?? 'en-US', dir: context?.locale.direction ?? 'ltr',
   }, [el('application-shell', 'div', { class: `application-shell${unavailable ? ' unavailable-shell' : ''}` }, [unavailable ? empty('resource-navigation-empty') : resourceNavigation(), el('application-frame', 'div', { class: 'application-frame' }, [appHeader(), resourceContent()])]), operationsBar(), dialog()]));
@@ -1024,13 +1025,16 @@ function render(): Promise<void> {
 function appHeader(): PluginUIVNode {
   const endpoint = selectedEndpoint();
   const hasMultipleTargets = state.endpoints.length > 1;
+  const ready = engineReady();
+  const checking = state.engineAvailability.state === 'checking';
+  const version = state.engineAvailability.state === 'ready' ? state.engineAvailability.version : '';
   return el('context-bar', 'header', { class: `context-bar${hasMultipleTargets ? ' has-target-picker' : ''}` }, [
     el('mobile-brand', 'div', { class: 'mobile-brand' }, [brandIcon('mobile-brand-mark'), el('mobile-brand-title', 'strong', {}, [txt('mobile-brand-title-text', c('appTitle'))])]),
     el('engine-switch', 'div', { class: 'engine-switch', role: 'group', 'aria-label': c('containerEngine') }, (['docker', 'podman'] as Engine[]).map((engine) => button(`engine-${engine}`, title(engine), 'select-engine', engine, state.engine === engine ? `engine-option active ${engine}` : `engine-option ${engine}`, state.loading, { 'aria-pressed': state.engine === engine }))),
     hasMultipleTargets
       ? el('endpoint-context', 'label', { class: 'endpoint-context' }, [el('endpoint-label', 'span', {}, [txt('endpoint-label-text', c('runtimeTarget'))]), el('endpoint-select', 'select', { name: 'endpoint', 'data-redevplugin-action': 'select-endpoint', disabled: state.loading }, state.endpoints.map((item) => el(`endpoint-${item.endpoint_id}`, 'option', { value: item.endpoint_id, selected: item.endpoint_id === state.endpointID }, [txt(`endpoint-${item.endpoint_id}-text`, item.display_name)])))])
       : empty('endpoint-context-empty'),
-    el('endpoint-status', 'div', { class: `endpoint-status ${state.available ? 'online' : 'offline'}`, role: 'status', title: endpoint?.display_name ?? '' }, [el('endpoint-status-dot', 'span', { class: 'status-dot', 'aria-hidden': true }), el('endpoint-status-copy', 'span', {}, [txt('endpoint-status-copy-text', state.available ? c('connected') : c('disconnected'))]), !hasMultipleTargets && endpoint?.display_name ? el('endpoint-identity', 'span', { class: 'endpoint-identity' }, [txt('endpoint-identity-text', endpoint.display_name)]) : empty('endpoint-identity-empty'), state.version ? el('endpoint-version', 'code', {}, [txt('endpoint-version-text', state.version)]) : empty('endpoint-version-empty'), state.engine === 'podman' && endpoint?.rootless !== undefined ? el('endpoint-mode', 'span', { class: 'endpoint-mode' }, [txt('endpoint-mode-text', c(endpoint.rootless ? 'rootless' : 'rootful'))]) : empty('endpoint-mode-empty')]),
+    el('endpoint-status', 'div', { class: `endpoint-status ${ready ? 'online' : checking ? 'checking' : 'offline'}`, role: 'status', title: endpoint?.display_name ?? '' }, [el('endpoint-status-dot', 'span', { class: 'status-dot', 'aria-hidden': true }), el('endpoint-status-copy', 'span', {}, [txt('endpoint-status-copy-text', checking ? c('checkingConnection') : ready ? c('connected') : c('disconnected'))]), !hasMultipleTargets && endpoint?.display_name ? el('endpoint-identity', 'span', { class: 'endpoint-identity' }, [txt('endpoint-identity-text', endpoint.display_name)]) : empty('endpoint-identity-empty'), version ? el('endpoint-version', 'code', {}, [txt('endpoint-version-text', version)]) : empty('endpoint-version-empty'), state.engine === 'podman' && endpoint?.rootless !== undefined ? el('endpoint-mode', 'span', { class: 'endpoint-mode' }, [txt('endpoint-mode-text', c(endpoint.rootless ? 'rootless' : 'rootful'))]) : empty('endpoint-mode-empty')]),
     button('refresh', state.updating ? c('refreshing') : c('refresh'), 'refresh-resources', '', 'refresh-button lucide-icon lucide-refresh-cw', state.loading || state.updating, { 'aria-label': c('refreshResources'), title: c('refreshResources') }),
   ]);
 }
@@ -1062,10 +1066,9 @@ function operationsBar(): PluginUIVNode {
 }
 
 function resourceContent(): PluginUIVNode {
-  if (!state.loading && !state.available) return engineUnavailableWorkspace();
+  if (state.engineAvailability.state === 'blocked') return engineUnavailableWorkspace();
   const notices = inventoryNotices();
   return el('workspace', 'section', { class: `workspace workspace-${state.view}` }, [
-    state.error ? el('workspace-error', 'div', { class: 'workspace-alert danger', role: 'alert' }, [txt('workspace-error-text', messageText(state.error))]) : empty('workspace-error-empty'),
     state.notice ? el('workspace-notice', 'div', { class: 'workspace-alert', role: 'status' }, [txt('workspace-notice-text', messageText(state.notice))]) : empty('workspace-notice-empty'),
     state.view === 'overview' ? overviewWorkspace() : resourceWorkspace(notices),
   ]);
@@ -1073,7 +1076,14 @@ function resourceContent(): PluginUIVNode {
 
 function engineUnavailableWorkspace(): PluginUIVNode {
   const endpoint = selectedEndpoint();
-  const reason = state.error ? messageText(state.error) : c('unavailableSentence', { engine: title(state.engine) });
+  const issue = state.engineAvailability.state === 'blocked' ? state.engineAvailability.issue : 'unknown';
+  const recoverySteps = issue === 'permission_denied'
+    ? [
+        c(state.engine === 'docker' ? 'permissionRecoveryDockerAccess' : 'permissionRecoveryPodmanAccess'),
+        c('permissionRecoveryReconnect'),
+        c('permissionRecoveryRefresh'),
+      ]
+    : [];
   return el('engine-unavailable-workspace', 'section', { class: 'engine-unavailable-workspace', role: 'alert' }, [
     el('engine-unavailable-content', 'div', { class: 'engine-unavailable-content' }, [
       el('engine-unavailable-identity', 'div', { class: 'engine-unavailable-identity' }, [
@@ -1082,7 +1092,10 @@ function engineUnavailableWorkspace(): PluginUIVNode {
       ]),
       el('engine-unavailable-copy', 'div', { class: 'engine-unavailable-copy' }, [
         el('engine-unavailable-title', 'h1', {}, [txt('engine-unavailable-title-text', c('unavailable', { engine: title(state.engine) }))]),
-        el('engine-unavailable-reason', 'p', {}, [txt('engine-unavailable-reason-text', reason)]),
+        el('engine-unavailable-reason', 'p', {}, [txt('engine-unavailable-reason-text', messageText(engineAvailabilityMessage(issue)))]),
+        recoverySteps.length
+          ? el('engine-unavailable-steps', 'ol', { class: 'engine-unavailable-steps' }, recoverySteps.map((step, index) => el(`engine-unavailable-step-${index + 1}`, 'li', {}, [txt(`engine-unavailable-step-${index + 1}-text`, step)])))
+          : empty('engine-unavailable-steps-empty'),
         el('engine-unavailable-facts', 'dl', { class: 'engine-unavailable-facts' }, [
           el('engine-unavailable-engine-label', 'dt', {}, [txt('engine-unavailable-engine-label-text', c('containerEngine'))]),
           el('engine-unavailable-engine-value', 'dd', {}, [txt('engine-unavailable-engine-value-text', title(state.engine))]),
@@ -1118,7 +1131,7 @@ function resourceWorkspace(notices: PluginUIVNode[]): PluginUIVNode {
     workspaceHeading(viewLabel(state.view), resourceCount(), primaryActions()),
     el('resource-toolbar', 'div', { class: 'resource-toolbar' }, [el('search-label', 'label', { class: 'search' }, [icon('search-icon', 'search', 'search-icon'), el('search-label-copy', 'span', { class: 'sr-only' }, [txt('search-label-text', searchLabel(state.view))]), el('search-input', 'input', { type: 'search', value: state.query, placeholder: searchLabel(state.view), autocomplete: 'off', 'data-redevplugin-action': 'filter-resources' })]), resourceRefinements()]),
     ...notices,
-    state.loading ? resourceSkeleton() : !state.available ? stateMessage(c('unavailableSentence', { engine: title(state.engine) }), true) : resourceList(),
+    state.loading ? resourceSkeleton() : !engineReady() ? stateMessage(c('unavailableSentence', { engine: title(state.engine) }), true) : resourceList(),
   ]);
 }
 
@@ -1127,7 +1140,7 @@ function workspaceHeading(titleText: string, subtitle: string, actions: PluginUI
 }
 
 function overviewActions(): PluginUIVNode {
-  return el('overview-actions', 'div', { class: 'toolbar-actions' }, [button('overview-create-container', c('createContainer'), 'open-create-container', '', actionButtonClass('primary-button', 'plus'), !state.available), button('overview-pull-image', c('pullImage'), 'open-pull-image', '', actionButtonClass('secondary-button', 'download'), !state.available), state.engine === 'podman' ? button('overview-create-pod', c('createPod'), 'open-create-pod', '', actionButtonClass('secondary-button', 'package-plus'), !state.available) : empty('overview-create-pod-empty')]);
+  return el('overview-actions', 'div', { class: 'toolbar-actions' }, [button('overview-create-container', c('createContainer'), 'open-create-container', '', actionButtonClass('primary-button', 'plus'), !engineReady()), button('overview-pull-image', c('pullImage'), 'open-pull-image', '', actionButtonClass('secondary-button', 'download'), !engineReady()), state.engine === 'podman' ? button('overview-create-pod', c('createPod'), 'open-create-pod', '', actionButtonClass('secondary-button', 'package-plus'), !engineReady()) : empty('overview-create-pod-empty')]);
 }
 
 function overviewMetric(key: string, label: string, value: number, view: View): PluginUIVNode {
@@ -1158,10 +1171,10 @@ function resourceSkeleton(): PluginUIVNode {
 }
 
 function primaryActions(): PluginUIVNode {
-  if (state.view === 'containers') return button('create-container', c('createContainer'), 'open-create-container', '', actionButtonClass('primary-button', 'plus'), !state.available);
-  if (state.view === 'images') return el('image-actions', 'div', { class: 'toolbar-actions' }, [button('pull-image', c('pullImage'), 'open-pull-image', '', actionButtonClass('primary-button', 'download'), !state.available), button('prune-images', c('prune'), 'prune-images', '', actionButtonClass('secondary-button', 'trash-2'), destructiveDisabled('images'))]);
-  if (state.view === 'volumes') return el('volume-actions', 'div', { class: 'toolbar-actions' }, [button('create-volume', c('createVolume'), 'open-create-volume', '', actionButtonClass('primary-button', 'plus'), !state.available), button('prune-volumes', c('prune'), 'prune-volumes', '', actionButtonClass('secondary-button', 'trash-2'), destructiveDisabled('volumes'))]);
-  if (state.view === 'pods') return button('create-pod', c('createPod'), 'open-create-pod', '', actionButtonClass('primary-button', 'package-plus'), !state.available);
+  if (state.view === 'containers') return button('create-container', c('createContainer'), 'open-create-container', '', actionButtonClass('primary-button', 'plus'), !engineReady());
+  if (state.view === 'images') return el('image-actions', 'div', { class: 'toolbar-actions' }, [button('pull-image', c('pullImage'), 'open-pull-image', '', actionButtonClass('primary-button', 'download'), !engineReady()), button('prune-images', c('prune'), 'prune-images', '', actionButtonClass('secondary-button', 'trash-2'), destructiveDisabled('images'))]);
+  if (state.view === 'volumes') return el('volume-actions', 'div', { class: 'toolbar-actions' }, [button('create-volume', c('createVolume'), 'open-create-volume', '', actionButtonClass('primary-button', 'plus'), !engineReady()), button('prune-volumes', c('prune'), 'prune-volumes', '', actionButtonClass('secondary-button', 'trash-2'), destructiveDisabled('volumes'))]);
+  if (state.view === 'pods') return button('create-pod', c('createPod'), 'open-create-pod', '', actionButtonClass('primary-button', 'package-plus'), !engineReady());
   return empty('primary-actions-empty');
 }
 
@@ -1352,7 +1365,7 @@ function filteredPods(): Pod[] { return projection.pods(); }
 function resourceCount(): string { return c('resourceCount', { count: projection.count(state.view), resource: viewLabel(state.view), engine: title(state.engine) }); }
 function hasRefinements(view: View): boolean { return projection.hasRefinements(view); }
 function destructiveDisabled(view: Exclude<View, 'overview'>): boolean { return projection.destructiveDisabled(view); }
-function mutationDisabled(view: Exclude<View, 'overview'>): boolean { return !state.available || !state.inventoryFresh[view] || Boolean(state.viewErrors[view]); }
+function mutationDisabled(view: Exclude<View, 'overview'>): boolean { return !engineReady() || !state.inventoryFresh[view] || Boolean(state.viewErrors[view]); }
 function filterOptions(view: View): Array<{ value: ResourceFilter; label: string }> { return projection.filterOptions(view); }
 function sortOptions(view: View): Array<{ value: SortKey; label: string }> { return projection.sortOptions(view); }
 function availableViews(): View[] { return projection.availableViews(); }
@@ -1403,7 +1416,42 @@ async function allSettledWithLimit<T, R>(items: T[], limit: number, worker: (ite
   await Promise.all(Array.from({ length: Math.min(Math.max(1, limit), items.length) }, run));
   return results;
 }
-function readableError(error: unknown, fallback: Message): Message { if (isRedevenContainerResourcesV4BusinessError(error)) { const code = error.details.business_error_code; if (code === 'CONTAINER_CLI_UNAVAILABLE') return msg('engineCliMissing', { engine: title(state.engine) }); if (code === 'CONTAINER_DAEMON_STOPPED') return msg('daemonStopped', { engine: title(state.engine) }); if (code === 'CONTAINER_ENGINE_UNREACHABLE') return msg('engineUnreachable', { engine: title(state.engine) }); if (code === 'CONTAINER_PERMISSION_DENIED') return msg('permissionDenied', { engine: title(state.engine) }); if (code === 'CONTAINER_OPERATION_TIMEOUT') return msg('operationTimedOut', { engine: title(state.engine) }); if (code === 'CONTAINER_REFERENCE_STATE_INCOMPLETE') return msg('referenceStateIncomplete'); if (code === 'CONTAINER_ENGINE_UNAVAILABLE') return msg('unavailableSentence', { engine: title(state.engine) }); if (code === 'CONTAINER_NOT_FOUND') return msg('containerMissing'); if (code === 'CONTAINER_RUNNING') return msg('containerRunning'); if (code === 'CONTAINER_IMAGE_NOT_FOUND') return msg('imageMissing'); if (code === 'CONTAINER_IMAGE_IN_USE') return msg('imageInUse'); if (code === 'CONTAINER_VOLUME_IN_USE') return msg('volumeInUse'); if (code === 'CONTAINER_PLAN_STALE') return msg('planStale'); if (code === 'CONTAINER_RESOURCE_UNSUPPORTED') return msg('unsupportedOperation'); } return fallback; }
+function engineReady(): boolean { return state.engineAvailability.state === 'ready'; }
+function engineAvailabilityIssue(error: unknown): EngineAvailabilityIssue {
+  if (!isRedevenContainerResourcesV4BusinessError(error)) return 'unknown';
+  switch (error.details.business_error_code) {
+    case 'CONTAINER_CLI_UNAVAILABLE': return 'cli_unavailable';
+    case 'CONTAINER_DAEMON_STOPPED': return 'daemon_stopped';
+    case 'CONTAINER_ENGINE_UNREACHABLE': return 'unreachable';
+    case 'CONTAINER_PERMISSION_DENIED': return 'permission_denied';
+    case 'CONTAINER_OPERATION_TIMEOUT': return 'timeout';
+    case 'CONTAINER_ENGINE_UNAVAILABLE': return 'unavailable';
+    default: return 'unknown';
+  }
+}
+function engineAvailabilityMessage(issue: EngineAvailabilityIssue): Message {
+  if (issue === 'cli_unavailable') return msg('engineCliMissing', { engine: title(state.engine) });
+  if (issue === 'daemon_stopped') return msg('daemonStopped', { engine: title(state.engine) });
+  if (issue === 'unreachable') return msg('engineUnreachable', { engine: title(state.engine) });
+  if (issue === 'permission_denied') return msg('permissionDenied', { engine: title(state.engine) });
+  if (issue === 'timeout') return msg('operationTimedOut', { engine: title(state.engine) });
+  return msg('unavailableSentence', { engine: title(state.engine) });
+}
+function readableError(error: unknown, fallback: Message): Message {
+  if (!isRedevenContainerResourcesV4BusinessError(error)) return fallback;
+  const issue = engineAvailabilityIssue(error);
+  if (issue !== 'unknown') return engineAvailabilityMessage(issue);
+  const code = error.details.business_error_code;
+  if (code === 'CONTAINER_REFERENCE_STATE_INCOMPLETE') return msg('referenceStateIncomplete');
+  if (code === 'CONTAINER_NOT_FOUND') return msg('containerMissing');
+  if (code === 'CONTAINER_RUNNING') return msg('containerRunning');
+  if (code === 'CONTAINER_IMAGE_NOT_FOUND') return msg('imageMissing');
+  if (code === 'CONTAINER_IMAGE_IN_USE') return msg('imageInUse');
+  if (code === 'CONTAINER_VOLUME_IN_USE') return msg('volumeInUse');
+  if (code === 'CONTAINER_PLAN_STALE') return msg('planStale');
+  if (code === 'CONTAINER_RESOURCE_UNSUPPORTED') return msg('unsupportedOperation');
+  return fallback;
+}
 function currentLanguageTag(): string { return state.context?.locale.language_tag ?? 'en-US'; }
 function currentLocale() { return resolveContainersLocale(currentLanguageTag()); }
 function c(key: CopyKey, params?: CopyParams): string { return containersCopy(currentLocale(), key, params); }

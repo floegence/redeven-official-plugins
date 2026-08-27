@@ -111,7 +111,7 @@ export class ResourceProjection {
 
   destructiveDisabled(view: Exclude<View, 'overview'>): boolean {
     const partial = view === 'images' || view === 'volumes' ? this.state.partialFailures[view] > 0 : false;
-    return !this.state.available || !this.state.inventoryFresh[view] || Boolean(this.state.viewErrors[view]) || partial;
+    return this.state.engineAvailability.state !== 'ready' || !this.state.inventoryFresh[view] || Boolean(this.state.viewErrors[view]) || partial;
   }
 
   filterOptions(view: View): Array<{ value: ResourceFilter; label: string }> {
