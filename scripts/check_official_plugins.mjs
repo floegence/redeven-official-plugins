@@ -13,10 +13,6 @@ const repoRoot = repoRootFrom(import.meta.url);
 const sources = await loadAllPluginSources(repoRoot);
 const errors = [];
 
-if (sources.length === 0) {
-  errors.push('at least one official plugin source is required');
-}
-
 for (const source of sources) {
   errors.push(...await validatePluginSource(source));
 }

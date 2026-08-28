@@ -5,56 +5,5 @@
     "repository": "redeven-official-plugins",
     "source": "plugin_manifests"
   },
-  "plugins": [
-    {
-      "plugin_id": "com.redeven.official.containers",
-      "publisher_id": "com.redeven.official",
-      "presentation": {
-        "default_locale": "en-US",
-        "locales": [
-          {
-            "locale": "en-US",
-            "name": "Containers",
-            "publisher_name": "Redeven Official",
-            "summary": "Containers",
-            "description": [
-              "Containers"
-            ],
-            "highlights": [],
-            "keywords": [
-              "Containers"
-            ],
-            "surfaces": [
-              {
-                "surface_id": "containers.dashboard",
-                "label": "Containers"
-              }
-            ],
-            "settings": []
-          }
-        ]
-      },
-      "categories": [
-        "containers"
-      ],
-      "channels": [
-        "stable"
-      ],
-      "latest": {
-        "version": "4.4.10",
-        "min_redeven_version": "1.0.0",
-        "min_redevplugin_version": "3.0.5",
-        "rollout_state": "stable",
-        "default_surface_id": "containers.dashboard",
-        "distribution": {
-          "provider": "github_release",
-          "repository": "floegence/redeven-official-plugins",
-          "tag": "v4.4.10",
-          "artifact_name": "containers-4.4.10.redevplugin",
-          "release_ref_asset_name": "containers-4.4.10.release-ref.json",
-          "trust_root_asset_name": "root.public.json"
-        }
-      }
-    }
-  ]
+  "plugins": []
 }

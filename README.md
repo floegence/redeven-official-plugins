@@ -1,21 +1,22 @@
 # Redeven Official Plugins
 
-This repository contains Redeven-maintained official plugins. It is not the
+This repository is the reusable source, validation, catalog, packaging, and
+release framework for Redeven-maintained official plugins. It is not the
 ReDevPlugin platform implementation and it does not store user-local plugin
 state.
 
-The first official plugin is `plugins/containers`, which exposes Redeven's
-container resources capability through the ReDevPlugin package and lifecycle
-contract.
+There are currently no distributed official plugins. Container management is
+a native Redeven product feature, so its former plugin source and release-train
+directories are intentionally absent. Historical tags and immutable releases
+remain the audit record and are not discoverable through the current catalog.
 
 ## Repository Layout
 
 ```text
 plugins/
-  containers/
+  <plugin-name>/
     manifest.json
-    ui/
-    README.md
+    release.json
 catalog/
   official-catalog.schema.json
   official-catalog.seed.json
@@ -37,11 +38,11 @@ npm run check
 npm run catalog:verify
 ```
 
-To build the deterministic unsigned Containers package with the released
-ReDevPlugin CLI:
+When a new official plugin is added, give it a package-specific build script
+and use the generic packager with the released ReDevPlugin CLI:
 
 ```bash
-npm run package:containers
+node scripts/build_official_plugin.mjs <plugin-name>
 ```
 
 The package script writes untracked output under `dist/`. The release commands

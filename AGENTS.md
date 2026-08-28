@@ -43,8 +43,8 @@ plugin installation state.
 Bootstrap example:
 
 ```bash
-BR=feat-official-containers
-WT=../redeven-official-plugins-feat-official-containers
+BR=feat-first-official-plugin
+WT=../redeven-official-plugins-feat-first-official-plugin
 git worktree add --orphan -b "$BR" "$WT"
 
 # develop and test in "$WT"
@@ -94,14 +94,16 @@ npm run check
 npm run catalog:verify
 ```
 
-- Before publishing a plugin artifact, also run:
+- Before publishing a plugin artifact, also run its package-specific build and
+  the generic packager:
 
 ```bash
-npm run package:containers
+npm run build:<plugin-name>
+node scripts/build_official_plugin.mjs <plugin-name>
 ```
 
-`npm run package:containers` builds a deterministic unsigned `.redevplugin`
-package using the released ReDevPlugin CLI. Official publication must use the
+The generic packager builds a deterministic unsigned `.redevplugin` package
+using the released ReDevPlugin CLI. Official publication must use the
 released neutral external-signer publisher flow and verify the complete signed
 release output before uploading it. Repository code and workflows may handle
 only public keys, key IDs, signing requests, signatures, and public trust
@@ -117,6 +119,10 @@ immutable GitHub Releases, not git.
   scripts. Do not hand-edit artifact hashes.
 - Remove obsolete test fixtures, scripts, and catalog entries in the same change
   that removes the plugin behavior they described.
+- An empty `plugins/` directory and empty generated catalog are valid. Do not
+  keep retired plugin source, release-train directories, or publication
+  workflows merely to make the repository non-empty. Historical Git tags and
+  immutable releases are audit evidence, not current catalog inputs.
 
 ## Presentation Authority
 
