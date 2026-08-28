@@ -37,7 +37,15 @@ export async function fileExists(filename) {
 export async function listPluginNames(repoRoot) {
   const dir = path.join(repoRoot, 'plugins');
   const entries = await readdir(dir, { withFileTypes: true });
-  return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+  const names = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const pluginRoot = path.join(dir, entry.name);
+    const hasManifest = await fileExists(path.join(pluginRoot, 'manifest.json'));
+    const hasRelease = await fileExists(path.join(pluginRoot, 'release.json'));
+    if (hasManifest || hasRelease) names.push(entry.name);
+  }
+  return names.sort();
 }
 
 export async function loadPluginSource(repoRoot, name) {

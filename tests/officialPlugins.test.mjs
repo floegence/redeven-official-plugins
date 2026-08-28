@@ -1,7 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import os from 'node:os';
 import path from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import {
   buildCatalogSeed,
   loadAllPluginSources,
@@ -15,6 +16,15 @@ const repoRoot = repoRootFrom(import.meta.url);
 describe('official plugin repository contract', () => {
   it('supports an intentionally empty official plugin source set', async () => {
     assert.deepEqual(await loadAllPluginSources(repoRoot), []);
+  });
+
+  it('ignores build residue that has no plugin source entrypoint', async (t) => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'redeven-official-plugins-test-'));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const residue = path.join(root, 'plugins', 'retired', 'dist');
+    await mkdir(residue, { recursive: true });
+    await writeFile(path.join(residue, 'manifest.json'), '{}\n');
+    assert.deepEqual(await loadAllPluginSources(root), []);
   });
 
   it('generates the committed empty catalog deterministically', async () => {
