@@ -1,9 +1,0 @@
-{
-  "schema_version": "redevplugin.external_signer_response.v1",
-  "request_id": "af6c3dc8d7c5207d539f93b4153f4d21657d8065c26013af9e24a7e655b22e21",
-  "usage": "redevplugin.release-signing.release-metadata.v1",
-  "key_id": "redeven_official_signing_2026_08",
-  "signing_preimage_sha256": "01996883c955c18f32130ae65ae361f3b4962072a99d37c1450402657ba6b2cf",
-  "algorithm": "ed25519",
-  "signature": "yrVT37kgdFZmEETBnIZ4p27nP/ocI3A/E9OUwrOnmx4ho5uLWXHOmX71LpbIDgfLeRmqUZff1boH2gk29K5lBw=="
-}

@@ -50,10 +50,11 @@ describe('official plugin repository contract', () => {
   });
 
   it('keeps the reusable plugin packaging and release framework', async () => {
-    const [rootPackage, buildScript, releaseScript, releaseWorkflow, publishScript, readme, agents, tracked] = await Promise.all([
+    const [rootPackage, buildScript, releaseScript, canonicalBuildScript, releaseWorkflow, publishScript, readme, agents, tracked] = await Promise.all([
       readFile(path.join(repoRoot, 'package.json'), 'utf8'),
       readFile(path.join(repoRoot, 'scripts', 'build_official_plugin.mjs'), 'utf8'),
       readFile(path.join(repoRoot, 'scripts', 'release_official_plugin.mjs'), 'utf8'),
+      readFile(path.join(repoRoot, 'scripts', 'build_weather_release_wasm.sh'), 'utf8'),
       readFile(path.join(repoRoot, '.github', 'workflows', 'release.yml'), 'utf8'),
       readFile(path.join(repoRoot, 'scripts', 'publish_official_plugin_release.sh'), 'utf8'),
       readFile(path.join(repoRoot, 'README.md'), 'utf8'),
@@ -65,6 +66,9 @@ describe('official plugin repository contract', () => {
     assert.match(buildScript, /redevplugin\/v3\/cmd\/redevplugin/u);
     assert.match(releaseScript, /<plugin-name>/u);
     assert.match(releaseScript, /apply-signature/u);
+    assert.match(releaseScript, /WEATHER_RELEASE_WASM/u);
+    assert.match(canonicalBuildScript, /linux\/amd64/u);
+    assert.match(canonicalBuildScript, /rust:1\.88-bookworm@sha256:/u);
     assert.match(releaseWorkflow, /plugins\/weather/u);
     assert.match(publishScript, /release:verify/u);
     assert.match(rootPackage, /build:weather/u);

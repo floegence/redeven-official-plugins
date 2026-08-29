@@ -60,3 +60,6 @@ public signing requests, `release:apply` accepts public responses, and
 `release:finalize` plus `release:verify` produce and verify the complete GitHub
 Release asset set. This repository never reads or stores private signing
 material, and plugin package bytes are kept in GitHub Releases rather than git.
+Weather release preparation builds its WASM worker in a pinned Linux AMD64
+container at a fixed source path, so external signing and GitHub publication
+operate on byte-identical package input across developer machines and CI.
