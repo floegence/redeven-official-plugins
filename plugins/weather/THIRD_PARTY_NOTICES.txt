@@ -1,0 +1,19 @@
+Redeven Official Weather Plugin - Third-Party Notices
+
+Open-Meteo
+Weather and geocoding data are provided by Open-Meteo.com under the Creative
+Commons Attribution 4.0 International licence (CC BY 4.0).
+https://open-meteo.com/
+https://open-meteo.com/en/licence
+https://creativecommons.org/licenses/by/4.0/
+
+clock-weather-card
+The combined clock, weather, and temperature-range experience was inspired by
+clock-weather-card by Patrick Kissling, licensed under the MIT License. This
+plugin contains original implementation and visual assets; no upstream source
+or assets are copied.
+https://github.com/pkissling/clock-weather-card
+
+Rust and JavaScript build dependencies retain their respective upstream
+licences. The released package contains compiled output only and does not
+redistribute their source distributions.

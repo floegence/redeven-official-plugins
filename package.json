@@ -4,10 +4,12 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test tests/*.test.mjs && npm --prefix plugins/weather test",
     "check": "node scripts/check_official_plugins.mjs",
     "catalog:verify": "node scripts/generate_official_catalog.mjs --verify",
     "catalog:write": "node scripts/generate_official_catalog.mjs --write",
+    "build:weather": "npm --prefix plugins/weather run build",
+    "package:weather": "npm run build:weather && node scripts/build_official_plugin.mjs weather",
     "release:prepare": "node scripts/release_official_plugin.mjs prepare",
     "release:apply": "node scripts/release_official_plugin.mjs apply",
     "release:finalize": "node scripts/release_official_plugin.mjs finalize",

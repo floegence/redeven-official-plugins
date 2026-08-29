@@ -5,10 +5,12 @@ release framework for Redeven-maintained official plugins. It is not the
 ReDevPlugin platform implementation and it does not store user-local plugin
 state.
 
-There are currently no distributed official plugins. Container management is
-a native Redeven product feature, so its former plugin source and release-train
-directories are intentionally absent. Historical tags and immutable releases
-remain the audit record and are not discoverable through the current catalog.
+The current catalog contains the official Weather plugin. It pairs a local
+clock with current conditions, seven-day temperature trends, saved places, and
+offline forecast fallback through ReDevPlugin's brokered network and storage
+contracts. Container management remains a native Redeven product feature, so
+its former plugin source and release-train directories are intentionally absent.
+Historical tags and immutable releases remain the audit record.
 
 ## Repository Layout
 
@@ -43,6 +45,13 @@ and use the generic packager with the released ReDevPlugin CLI:
 
 ```bash
 node scripts/build_official_plugin.mjs <plugin-name>
+```
+
+Weather can be built and packaged with:
+
+```bash
+npm --prefix plugins/weather ci
+npm run package:weather
 ```
 
 The package script writes untracked output under `dist/`. The release commands

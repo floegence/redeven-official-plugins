@@ -5,5 +5,56 @@
     "repository": "redeven-official-plugins",
     "source": "plugin_manifests"
   },
-  "plugins": []
+  "plugins": [
+    {
+      "plugin_id": "com.redeven.official.weather",
+      "publisher_id": "com.redeven.official",
+      "presentation": {
+        "default_locale": "en-US",
+        "locales": [
+          {
+            "locale": "en-US",
+            "name": "Weather",
+            "publisher_name": "Redeven Official",
+            "summary": "Weather",
+            "description": [
+              "Weather"
+            ],
+            "highlights": [],
+            "keywords": [
+              "Weather"
+            ],
+            "surfaces": [
+              {
+                "surface_id": "weather.dashboard",
+                "label": "Weather"
+              }
+            ],
+            "settings": []
+          }
+        ]
+      },
+      "categories": [
+        "weather"
+      ],
+      "channels": [
+        "stable"
+      ],
+      "latest": {
+        "version": "1.0.0",
+        "min_redeven_version": "1.0.0",
+        "min_redevplugin_version": "3.0.17",
+        "rollout_state": "stable",
+        "default_surface_id": "weather.dashboard",
+        "distribution": {
+          "provider": "github_release",
+          "repository": "floegence/redeven-official-plugins",
+          "tag": "v1.0.0",
+          "artifact_name": "weather-1.0.0.redevplugin",
+          "release_ref_asset_name": "weather-1.0.0.release-ref.json",
+          "trust_root_asset_name": "root.public.json"
+        }
+      }
+    }
+  ]
 }
