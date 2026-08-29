@@ -50,12 +50,13 @@ describe('official plugin repository contract', () => {
   });
 
   it('keeps the reusable plugin packaging and release framework', async () => {
-    const [rootPackage, buildScript, releaseScript, canonicalBuildScript, releaseWorkflow, publishScript, readme, agents, tracked] = await Promise.all([
+    const [rootPackage, buildScript, releaseScript, canonicalBuildScript, releaseWorkflow, recoveryWorkflow, publishScript, readme, agents, tracked] = await Promise.all([
       readFile(path.join(repoRoot, 'package.json'), 'utf8'),
       readFile(path.join(repoRoot, 'scripts', 'build_official_plugin.mjs'), 'utf8'),
       readFile(path.join(repoRoot, 'scripts', 'release_official_plugin.mjs'), 'utf8'),
       readFile(path.join(repoRoot, 'scripts', 'build_weather_release_wasm.sh'), 'utf8'),
       readFile(path.join(repoRoot, '.github', 'workflows', 'release.yml'), 'utf8'),
+      readFile(path.join(repoRoot, '.github', 'workflows', 'recover-release.yml'), 'utf8'),
       readFile(path.join(repoRoot, 'scripts', 'publish_official_plugin_release.sh'), 'utf8'),
       readFile(path.join(repoRoot, 'README.md'), 'utf8'),
       readFile(path.join(repoRoot, 'AGENTS.md'), 'utf8'),
@@ -70,6 +71,8 @@ describe('official plugin repository contract', () => {
     assert.match(canonicalBuildScript, /linux\/amd64/u);
     assert.match(canonicalBuildScript, /rust:1\.88-bookworm@sha256:/u);
     assert.match(releaseWorkflow, /plugins\/weather/u);
+    assert.match(recoveryWorkflow, /unchanged package source/u);
+    assert.match(recoveryWorkflow, /git diff --quiet/u);
     assert.match(publishScript, /release:verify/u);
     assert.match(rootPackage, /build:weather/u);
     assert.match(readme, /Weather/u);
@@ -77,7 +80,6 @@ describe('official plugin repository contract', () => {
     assert.doesNotMatch(`${rootPackage}\n${buildScript}\n${releaseScript}`, /"(?:file|link|workspace|portal):/u);
     assert.doesNotMatch(`${buildScript}\n${releaseScript}`, /private_key_file|SIGNING_KEY/iu);
     assert.doesNotMatch(tracked, /(?:plugins|releases)\/containers\//u);
-    assert.doesNotMatch(tracked, /workflows\/recover-release\.yml/u);
     assert.doesNotMatch(tracked, /\.redevplugin$/mu);
   });
 });

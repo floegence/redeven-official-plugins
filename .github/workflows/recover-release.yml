@@ -1,0 +1,87 @@
+name: Recover Official Plugin Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Immutable official plugin release tag to recover
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: official-plugins-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: production-release
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            plugins/weather/package-lock.json
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.26.6'
+          cache: false
+      - uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0
+        with:
+          toolchain: 1.88.0
+          targets: wasm32-unknown-unknown
+      - name: Verify immutable tag and unchanged package source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          version="${RELEASE_TAG#v}"
+          tag_commit=$(git rev-parse "${RELEASE_TAG}^{commit}")
+          remote_main=$(git ls-remote origin refs/heads/main | awk '{print $1}')
+          test "$GITHUB_SHA" = "$remote_main"
+          git merge-base --is-ancestor "$tag_commit" "$remote_main"
+          test "$(git show "$tag_commit:plugins/weather/manifest.json" | jq -r '.plugin.version')" = "$version"
+          test "$(git show "$tag_commit:plugins/weather/release.json" | jq -r '.release_train_tag')" = "$RELEASE_TAG"
+          test "$(jq -r '.plugin.version' plugins/weather/manifest.json)" = "$version"
+          test "$(jq -r '.release_train_tag' plugins/weather/release.json)" = "$RELEASE_TAG"
+          for package_path in \
+            plugins/weather/manifest.json \
+            plugins/weather/assets \
+            plugins/weather/ui \
+            plugins/weather/worker/Cargo.toml \
+            plugins/weather/worker/Cargo.lock \
+            plugins/weather/worker/src \
+            plugins/weather/THIRD_PARTY_NOTICES.txt; do
+            git diff --quiet "$tag_commit" "$remote_main" -- "$package_path"
+          done
+          tag_ci=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&status=completed&per_page=100" \
+            --jq ".workflow_runs[] | select(.head_sha == \"$tag_commit\") | .conclusion" | head -n 1)
+          main_ci=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&status=completed&per_page=100" \
+            --jq ".workflow_runs[] | select(.head_sha == \"$remote_main\") | .conclusion" | head -n 1)
+          test "$tag_ci" = success
+          test "$main_ci" = success
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "release already exists for $RELEASE_TAG" >&2
+            exit 1
+          fi
+      - run: npm ci
+      - run: npm --prefix plugins/weather ci
+      - run: npm run verify
+      - name: Build, verify, and publish signed release set
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/publish_official_plugin_release.sh "$RELEASE_TAG"
