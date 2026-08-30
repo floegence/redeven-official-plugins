@@ -511,7 +511,8 @@ h1 {
 
 .clock-column {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto;
+  align-content: space-between;
   min-width: 0;
   min-height: 0;
 }
@@ -543,7 +544,7 @@ h1 {
 
 .place-heading h2 {
   overflow: hidden;
-  font-size: clamp(21px, 3.5vw, 34px);
+  font-size: clamp(20px, 3vh, 32px);
   font-weight: 690;
   letter-spacing: -0.035em;
   text-overflow: ellipsis;
@@ -552,11 +553,11 @@ h1 {
 
 .local-time {
   align-self: center;
-  margin-top: 5px;
+  margin: 0;
   overflow: hidden;
-  font-size: clamp(48px, 8vh, 84px);
+  font-size: clamp(42px, 7vh, 72px);
   font-weight: 560;
-  line-height: 0.92;
+  line-height: 0.86;
   letter-spacing: -0.07em;
   font-variant-numeric: tabular-nums;
 }

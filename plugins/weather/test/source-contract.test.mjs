@@ -45,6 +45,7 @@ describe('Weather official plugin source contract', () => {
     assert.match(styles, /height:\s*100svh/u);
     assert.match(styles, /overflow:\s*hidden/u);
     assert.match(styles, /@media\s*\(max-height:\s*600px\)/u);
+    assert.match(styles, /\.clock-column\s*\{[^}]*grid-template-rows:\s*auto auto auto/su);
   });
 
   it('uses brokered network and KV storage from the WASM worker', async () => {
