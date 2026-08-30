@@ -45,7 +45,12 @@ describe('Weather official plugin source contract', () => {
     assert.match(styles, /height:\s*100svh/u);
     assert.match(styles, /overflow:\s*hidden/u);
     assert.match(styles, /@media\s*\(max-height:\s*600px\)/u);
-    assert.match(styles, /\.clock-column\s*\{[^}]*grid-template-rows:\s*repeat\(3, max-content\)/su);
+    assert.doesNotMatch(ui, /location-chooser-empty/u);
+    assert.match(ui, /state\.chooserOpen\s*\?\s*locationChooser\(t\)\s*:\s*null/u);
+    assert.match(styles, /\.weather-app\s*\{[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\) auto/su);
+    assert.match(styles, /\.clock-column\s*\{[^}]*grid-template-rows:\s*repeat\(3, max-content\)[^}]*align-content:\s*center[^}]*row-gap:/su);
+    assert.match(styles, /\.local-time\s*\{[^}]*line-height:\s*1;/su);
+    assert.doesNotMatch(styles, /align-content:\s*space-between/u);
   });
 
   it('uses brokered network and KV storage from the WASM worker', async () => {

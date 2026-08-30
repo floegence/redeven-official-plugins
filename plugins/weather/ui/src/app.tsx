@@ -314,7 +314,7 @@ function view() {
         </button>
       </header>
 
-      {state.chooserOpen ? locationChooser(t) : <span key="location-chooser-empty" />}
+      {state.chooserOpen ? locationChooser(t) : null}
 
       <div key="status-row" className={state.error ? "status-row error" : "status-row"} role="status">
         <span key="status-dot" className="status-dot" aria-hidden="true" />

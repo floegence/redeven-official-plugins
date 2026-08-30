@@ -493,7 +493,7 @@ h1 {
   grid-template-columns: minmax(0, 1.25fr) minmax(210px, 0.75fr);
   gap: clamp(16px, 3vw, 30px);
   min-height: 0;
-  padding: clamp(16px, 3vh, 28px);
+  padding: clamp(14px, 2.2vh, 22px) clamp(16px, 3vw, 28px);
   overflow: hidden;
   background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 15%, var(--surface)), var(--surface) 68%);
 }
@@ -512,7 +512,8 @@ h1 {
 .clock-column {
   display: grid;
   grid-template-rows: repeat(3, max-content);
-  align-content: space-between;
+  align-content: center;
+  row-gap: clamp(4px, 0.8vh, 8px);
   min-width: 0;
   min-height: 0;
 }
@@ -546,6 +547,7 @@ h1 {
   overflow: hidden;
   font-size: clamp(20px, 3vh, 32px);
   font-weight: 690;
+  line-height: 1.08;
   letter-spacing: -0.035em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -555,9 +557,9 @@ h1 {
   align-self: center;
   margin: 0;
   overflow: hidden;
-  font-size: clamp(42px, 7vh, 72px);
+  font-size: clamp(40px, 6vh, 60px);
   font-weight: 560;
-  line-height: 0.86;
+  line-height: 1;
   letter-spacing: -0.07em;
   font-variant-numeric: tabular-nums;
 }

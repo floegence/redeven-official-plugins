@@ -41,7 +41,7 @@
         "stable"
       ],
       "latest": {
-        "version": "1.0.5",
+        "version": "1.0.6",
         "min_redeven_version": "1.0.0",
         "min_redevplugin_version": "3.0.18",
         "rollout_state": "stable",
@@ -49,9 +49,9 @@
         "distribution": {
           "provider": "github_release",
           "repository": "floegence/redeven-official-plugins",
-          "tag": "v1.0.5",
-          "artifact_name": "weather-1.0.5.redevplugin",
-          "release_ref_asset_name": "weather-1.0.5.release-ref.json",
+          "tag": "v1.0.6",
+          "artifact_name": "weather-1.0.6.redevplugin",
+          "release_ref_asset_name": "weather-1.0.6.release-ref.json",
           "trust_root_asset_name": "root.public.json"
         }
       }
