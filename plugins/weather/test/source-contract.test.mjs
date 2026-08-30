@@ -51,6 +51,12 @@ describe('Weather official plugin source contract', () => {
     assert.match(styles, /\.clock-column\s*\{[^}]*grid-template-rows:\s*repeat\(3, max-content\)[^}]*align-content:\s*center[^}]*row-gap:/su);
     assert.match(styles, /\.local-time\s*\{[^}]*line-height:\s*1;/su);
     assert.doesNotMatch(styles, /align-content:\s*space-between/u);
+    const currentSummary = styles.match(/\.current-column\s*\{(?<rules>[^}]*)\}/u)?.groups?.rules;
+    assert.ok(currentSummary);
+    assert.doesNotMatch(currentSummary, /\bborder(?:-radius)?\s*:/u);
+    assert.doesNotMatch(currentSummary, /\bbackground\s*:/u);
+    assert.doesNotMatch(currentSummary, /\bbox-shadow\s*:/u);
+    assert.doesNotMatch(styles, /@media\s*\(max-width:\s*460px\)[\s\S]*?\.current-column\s*\{/u);
   });
 
   it('uses brokered network and KV storage from the WASM worker', async () => {

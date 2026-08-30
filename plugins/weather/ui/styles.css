@@ -576,11 +576,8 @@ h1 {
   gap: 10px;
   min-width: 0;
   min-height: 0;
-  padding: clamp(12px, 2.3vh, 22px);
+  padding: clamp(8px, 1.6vh, 14px) 0;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  border-radius: 17px;
-  background: color-mix(in srgb, var(--surface) 78%, transparent);
 }
 
 .condition-symbol {
@@ -947,11 +944,6 @@ h1 {
   .condition-symbol,
   .local-date {
     display: none;
-  }
-
-  .current-column {
-    border: 0;
-    background: transparent;
   }
 
   .metrics {
