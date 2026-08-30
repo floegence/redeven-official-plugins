@@ -3,7 +3,10 @@
 Weather is a Redeven-maintained official plugin that combines a calm local
 clock, current conditions, and a seven-day forecast. Users can search for
 places, preview forecasts, save up to eight favorites, and keep the last
-successful forecast available when the weather service is temporarily offline.
+successful forecast visible immediately while a fresh update runs in the
+background. A compact location chooser includes localized major cities across
+the world, and the forecast adapts to the available surface without page
+scrolling.
 
 The visual concept is inspired by Patrick Kissling's MIT-licensed
 [clock-weather-card](https://github.com/pkissling/clock-weather-card): the clock
@@ -38,7 +41,7 @@ npm test
 npm run build
 ```
 
-Version `1.0.1` is the stable release-train version. Build the unsigned official
+Version `1.0.2` is the stable release-train version. Build the unsigned official
 package from the repository root with:
 
 ```bash

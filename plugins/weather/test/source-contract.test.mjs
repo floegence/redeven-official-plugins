@@ -20,11 +20,31 @@ describe('Weather official plugin source contract', () => {
       'open-location',
       'remove-location',
       'refresh-weather',
+      'toggle-location-chooser',
     ]) {
       assert.match(ui, new RegExp(action, 'u'));
     }
     assert.match(ui, /bridge\.onContext/u);
     assert.match(model, /Open-Meteo/u);
+  });
+
+  it('renders cached weather first, refreshes in the background, and fits the surface viewport', async () => {
+    const [ui, worker, manifest, styles] = await Promise.all([
+      readFile(path.join(pluginRoot, 'ui', 'src', 'app.tsx'), 'utf8'),
+      readFile(path.join(pluginRoot, 'worker', 'src', 'lib.rs'), 'utf8'),
+      readFile(path.join(pluginRoot, 'manifest.json'), 'utf8').then(JSON.parse),
+      readFile(path.join(pluginRoot, 'ui', 'styles.css'), 'utf8'),
+    ]);
+    const stateLoad = manifest.methods.find((method) => method.method === 'weather.state.load');
+    assert.ok(stateLoad);
+    assert.ok(stateLoad.response_schema.required.includes('forecast'));
+    assert.deepEqual(stateLoad.response_schema.properties.forecast.anyOf.at(-1), { type: 'null' });
+    assert.match(worker, /cached_forecast_for_selected/u);
+    assert.match(ui, /response\.data\.forecast/u);
+    assert.match(ui, /void loadForecast\(response\.data\.selected/u);
+    assert.match(styles, /height:\s*100svh/u);
+    assert.match(styles, /overflow:\s*hidden/u);
+    assert.match(styles, /@media\s*\(max-height:\s*600px\)/u);
   });
 
   it('uses brokered network and KV storage from the WASM worker', async () => {

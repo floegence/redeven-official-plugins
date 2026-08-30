@@ -166,10 +166,24 @@ fn handle(request: WorkerRequest) -> WorkerResult {
 
 fn load_public_state() -> WorkerResult {
     let state = load_state()?;
+    let forecast = cached_forecast_for_selected(&state);
     Ok(json!({
         "favorites": state.favorites,
         "selected": state.selected,
+        "forecast": forecast,
     }))
+}
+
+fn cached_forecast_for_selected(state: &StoredState) -> Option<Forecast> {
+    let selected = state.selected.as_ref()?;
+    let mut forecast = state
+        .caches
+        .iter()
+        .find(|cache| cache.location_id == selected.id)?
+        .forecast
+        .clone();
+    forecast.source = "saved".to_owned();
+    Some(forecast)
 }
 
 fn search_locations(request: SearchRequest) -> WorkerResult {
@@ -613,5 +627,25 @@ mod tests {
             ..StoredState::default()
         };
         assert!(validate_state(&state).is_err());
+    }
+
+    #[test]
+    fn selected_cache_is_projected_as_saved_without_mutating_stored_data() {
+        let mut stored = project_forecast(raw_forecast()).expect("forecast");
+        stored.source = "network".to_string();
+        let selected = location();
+        let state = StoredState {
+            selected: Some(selected.clone()),
+            caches: vec![ForecastCache {
+                location_id: selected.id,
+                forecast: stored.clone(),
+            }],
+            ..StoredState::default()
+        };
+
+        let cached = cached_forecast_for_selected(&state).expect("selected cache");
+        assert_eq!(cached.source, "saved");
+        assert_eq!(stored.source, "network");
+        assert_eq!(state.caches[0].forecast.source, "network");
     }
 }

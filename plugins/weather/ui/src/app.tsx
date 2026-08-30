@@ -7,21 +7,15 @@ import {
 import {
   conditionForCode,
   localeForLanguageTag,
+  majorCitiesForLocale,
   temperatureRangeClasses,
   translationsForLocale,
+  type MajorCityLocation,
   type SupportedLocale,
   type WeatherTranslations,
 } from "./weather-model.js";
 
-type Location = {
-  id: string;
-  name: string;
-  admin1: string;
-  country: string;
-  latitude: number;
-  longitude: number;
-  timezone: string;
-};
+type Location = Omit<MajorCityLocation, "region"> & { region?: MajorCityLocation["region"] };
 
 type CurrentWeather = {
   time: string;
@@ -51,7 +45,7 @@ type Forecast = {
   days: ForecastDay[];
 };
 
-type StateLoad = { favorites: Location[]; selected: Location | null };
+type StateLoad = { favorites: Location[]; selected: Location | null; forecast: Forecast | null };
 type LocationsResult = { locations: Location[] };
 type FavoritesResult = { favorites: Location[] };
 type ForecastResult = { location: Location; forecast: Forecast };
@@ -69,6 +63,7 @@ const state: {
   error: boolean;
   busy?: BusyState;
   now: Date;
+  chooserOpen: boolean;
 } = {
   locale: "en-US",
   favorites: [],
@@ -78,6 +73,7 @@ const state: {
   error: false,
   busy: "initial",
   now: new Date(),
+  chooserOpen: false,
 };
 
 let disposed = false;
@@ -91,6 +87,7 @@ bridge.onAction("open-location", (event) => void openLocation(event));
 bridge.onAction("remove-location", (event) => void removeLocation(event));
 bridge.onAction("refresh-weather", () => void refreshWeather());
 bridge.onAction("clear-search", () => void clearSearch());
+bridge.onAction("toggle-location-chooser", () => void toggleLocationChooser());
 bridge.onLifecycle((event) => {
   if (event.type !== "dispose") return;
   disposed = true;
@@ -121,9 +118,12 @@ async function initialize(): Promise<void> {
     const response = await bridge.call<PluginMethodResult<StateLoad>>("weather.state.load", {});
     state.favorites = response.data.favorites;
     state.selected = response.data.selected ?? undefined;
+    state.forecast = response.data.forecast ?? undefined;
     state.busy = undefined;
-    if (state.selected) {
-      await loadForecast(state.selected);
+    if (response.data.selected) {
+      state.status = state.forecast ? statusForForecast(state.forecast) : translations().loading;
+      await render();
+      void loadForecast(response.data.selected, { preserveVisible: true });
     } else {
       state.status = translations().ready;
       await render();
@@ -173,6 +173,7 @@ async function previewLocation(event: PluginUIActionEvent): Promise<void> {
   if (state.busy) return;
   const location = locationForAction(event);
   if (!location) return;
+  state.chooserOpen = false;
   await loadForecast(location);
 }
 
@@ -180,12 +181,13 @@ async function openLocation(event: PluginUIActionEvent): Promise<void> {
   if (state.busy) return;
   const location = state.favorites.find((item) => item.id === String(event.value ?? ""));
   if (!location) return;
+  state.chooserOpen = false;
   await loadForecast(location);
 }
 
 async function refreshWeather(): Promise<void> {
   if (state.busy || !state.selected) return;
-  await loadForecast(state.selected);
+  await loadForecast(state.selected, { preserveVisible: true });
 }
 
 async function saveLocation(event: PluginUIActionEvent): Promise<void> {
@@ -242,11 +244,25 @@ async function clearSearch(): Promise<void> {
   await render();
 }
 
-async function loadForecast(location: Location): Promise<void> {
+async function toggleLocationChooser(): Promise<void> {
+  state.chooserOpen = !state.chooserOpen;
+  if (!state.chooserOpen) {
+    state.query = "";
+    state.results = [];
+    state.error = false;
+    state.status = state.forecast ? statusForForecast(state.forecast) : translations().ready;
+  }
+  await render();
+}
+
+async function loadForecast(location: Location, options: { preserveVisible?: boolean } = {}): Promise<void> {
   if (state.busy) return;
+  const preserveVisible = Boolean(options.preserveVisible && state.forecast && state.selected?.id === location.id);
   state.busy = "forecast";
   state.error = false;
-  state.status = translations().loading;
+  state.selected = location;
+  if (!preserveVisible) state.forecast = undefined;
+  state.status = preserveVisible ? translations().refreshing : translations().loading;
   await render();
   try {
     const response = await bridge.call<PluginMethodResult<ForecastResult>>(
@@ -260,7 +276,9 @@ async function loadForecast(location: Location): Promise<void> {
     state.status = statusForForecast(response.data.forecast);
   } catch (error) {
     state.error = true;
-    state.status = friendlyError(error, "forecast");
+    state.status = preserveVisible && state.forecast
+      ? translations().refreshFailed
+      : friendlyError(error, "forecast");
   } finally {
     state.busy = undefined;
     await render();
@@ -283,30 +301,20 @@ function view() {
           <span key="brand-mark" className="brand-mark" aria-hidden="true" />
           <h1 key="brand-title">{t.appName}</h1>
         </div>
-        <form key="search-form" className="search-form" data-redevplugin-action="search-location" autoComplete="off">
-          <label key="search-label" className="sr-only" htmlFor="weather-query">{t.searchPlaceholder}</label>
-          <input
-            key="search-input"
-            id="weather-query"
-            name="query"
-            type="search"
-            value={state.query}
-            placeholder={t.searchPlaceholder}
-            maxLength={120}
-            disabled={Boolean(state.busy)}
-            autoComplete="off"
-          />
-          {state.query ? (
-            <button key="clear-search" className="icon-button clear-button" type="button" title={t.remove} aria-label={t.remove} data-redevplugin-action="clear-search">×</button>
-          ) : <span key="clear-search-placeholder" />}
-          <button key="search-submit" className="primary-button" type="submit" disabled={Boolean(state.busy)}>
-            {state.busy === "search" ? t.searching : t.search}
-          </button>
-        </form>
+        <button
+          key="location-trigger"
+          className="location-trigger"
+          type="button"
+          aria-expanded={state.chooserOpen}
+          data-redevplugin-action="toggle-location-chooser"
+        >
+          <span key="location-trigger-label">{t.currentLocation}</span>
+          <strong key="location-trigger-name">{state.selected?.name ?? t.chooseLocation}</strong>
+          <span key="location-trigger-arrow" aria-hidden="true">⌄</span>
+        </button>
       </header>
 
-      {state.results.length > 0 ? searchResults(t) : <span key="search-results-empty" />}
-      {state.favorites.length > 0 ? favoritePlaces(t) : <span key="favorites-empty" />}
+      {state.chooserOpen ? locationChooser(t) : <span key="location-chooser-empty" />}
 
       <div key="status-row" className={state.error ? "status-row error" : "status-row"} role="status">
         <span key="status-dot" className="status-dot" aria-hidden="true" />
@@ -327,9 +335,64 @@ function view() {
   );
 }
 
+function locationChooser(t: WeatherTranslations) {
+  return (
+    <section key="location-chooser" className="location-chooser" aria-label={t.chooseLocation}>
+      <div key="chooser-heading" className="chooser-heading">
+        <div key="chooser-title-copy">
+          <span key="chooser-overline">{t.chooseLocation}</span>
+          <strong key="chooser-title">{state.selected?.name ?? t.majorCities}</strong>
+        </div>
+        <button key="chooser-close" className="chooser-close" type="button" aria-label={t.closeLocationPicker} data-redevplugin-action="toggle-location-chooser">×</button>
+      </div>
+      <form key="search-form" className="search-form" data-redevplugin-action="search-location" autoComplete="off">
+        <label key="search-label" className="sr-only" htmlFor="weather-query">{t.searchPlaceholder}</label>
+        <input
+          key="search-input"
+          id="weather-query"
+          name="query"
+          type="search"
+          value={state.query}
+          placeholder={t.searchPlaceholder}
+          maxLength={120}
+          disabled={Boolean(state.busy)}
+          autoComplete="off"
+        />
+        {state.query ? (
+          <button key="clear-search" className="clear-button" type="button" title={t.remove} aria-label={t.remove} data-redevplugin-action="clear-search">×</button>
+        ) : <span key="clear-search-placeholder" />}
+        <button key="search-submit" className="primary-button" type="submit" disabled={Boolean(state.busy)}>
+          {state.busy === "search" ? t.searching : t.search}
+        </button>
+      </form>
+      {state.favorites.length > 0 ? favoritePlaces(t) : <span key="favorites-empty" />}
+      {state.results.length > 0 ? searchResults(t) : majorCities(t)}
+    </section>
+  );
+}
+
+function majorCities(t: WeatherTranslations) {
+  return (
+    <section key="major-cities" className="major-cities" aria-label={t.majorCities}>
+      <span key="major-cities-label" className="chooser-section-label">{t.majorCities}</span>
+      <ul key="major-cities-list">
+        {majorCitiesForLocale(state.locale).map((location) => (
+          <li key={`major-${location.id}`}>
+            <button key={`major-open-${location.id}`} type="button" value={location.id} disabled={Boolean(state.busy)} data-redevplugin-action="preview-location">
+              <strong key={`major-name-${location.id}`}>{location.name}</strong>
+              <span key={`major-country-${location.id}`}>{location.country}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function searchResults(t: WeatherTranslations) {
   return (
     <section key="search-results" className="search-results" aria-label={t.search}>
+      <span key="search-results-label" className="chooser-section-label">{t.search}</span>
       <ul key="search-results-list">
         {state.results.map((location) => (
           <li key={`result-${location.id}`} className="search-result">
@@ -489,6 +552,7 @@ function locationForAction(event: PluginUIActionEvent): Location | undefined {
   const id = String(event.value ?? "");
   return state.results.find((item) => item.id === id)
     ?? state.favorites.find((item) => item.id === id)
+    ?? majorCitiesForLocale(state.locale).find((item) => item.id === id)
     ?? (state.selected?.id === id ? state.selected : undefined);
 }
 

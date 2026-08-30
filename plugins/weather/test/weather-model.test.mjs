@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   conditionForCode,
   localeForLanguageTag,
+  majorCitiesForLocale,
   temperatureRangeClasses,
   translationsForLocale,
 } from '../ui/src/weather-model.ts';
@@ -41,5 +42,26 @@ describe('weather presentation model', () => {
     assert.equal(localeForLanguageTag('de-DE'), 'en-US');
     assert.equal(translationsForLocale('zh-CN').searchPlaceholder, '搜索城市或地区');
     assert.equal(translationsForLocale('en-US').searchPlaceholder, 'Search city or place');
+  });
+
+  it('offers stable localized major cities across every inhabited region', () => {
+    const english = majorCitiesForLocale('en-US');
+    const chinese = majorCitiesForLocale('zh-CN');
+    assert.equal(english.length, 12);
+    assert.deepEqual(chinese.map((city) => city.id), english.map((city) => city.id));
+    assert.equal(new Set(english.map((city) => city.id)).size, english.length);
+    assert.equal(english.find((city) => city.id === 'preset:beijing')?.name, 'Beijing');
+    assert.equal(chinese.find((city) => city.id === 'preset:beijing')?.name, '北京');
+    assert.equal(chinese.find((city) => city.id === 'preset:new-york')?.name, '纽约');
+    assert.deepEqual(
+      new Set(english.map((city) => city.region)),
+      new Set(['asia', 'middle-east', 'oceania', 'europe', 'africa', 'north-america', 'south-america']),
+    );
+    for (const city of english) {
+      assert.match(city.id, /^preset:[a-z-]+$/u);
+      assert.ok(Number.isFinite(city.latitude) && city.latitude >= -90 && city.latitude <= 90);
+      assert.ok(Number.isFinite(city.longitude) && city.longitude >= -180 && city.longitude <= 180);
+      assert.match(city.timezone, /^[A-Za-z_+-]+\/[A-Za-z_+-]+$/u);
+    }
   });
 });
