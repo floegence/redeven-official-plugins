@@ -157,7 +157,6 @@ fn handle(request: WorkerRequest) -> WorkerResult {
     match request.method.as_str() {
         "weather.state.load" => load_public_state(),
         "weather.locations.search" => search_locations(decode(request.params)?),
-        "weather.locations.save" => save_location(decode(request.params)?),
         "weather.locations.remove" => remove_location(decode(request.params)?),
         "weather.forecast" => forecast_for_location(decode(request.params)?),
         _ => Err(WorkerError::invalid_request("unsupported Weather method")),
@@ -211,16 +210,6 @@ fn search_locations(request: SearchRequest) -> WorkerResult {
     Ok(json!({ "locations": locations }))
 }
 
-fn save_location(location: Location) -> WorkerResult {
-    validate_location(&location)?;
-    let mut state = load_state()?;
-    state.favorites.retain(|item| item.id != location.id);
-    state.favorites.insert(0, location);
-    state.favorites.truncate(MAX_FAVORITES);
-    save_state(&state)?;
-    Ok(json!({ "favorites": state.favorites }))
-}
-
 fn remove_location(request: RemoveRequest) -> WorkerResult {
     validate_id(&request.id)?;
     let mut state = load_state()?;
@@ -232,9 +221,10 @@ fn remove_location(request: RemoveRequest) -> WorkerResult {
 fn forecast_for_location(location: Location) -> WorkerResult {
     validate_location(&location)?;
     let mut state = load_state()?;
+    remember_location(&mut state, &location);
+    state.selected = Some(location.clone());
     match fetch_forecast(&location) {
         Ok(forecast) => {
-            state.selected = Some(location.clone());
             state.caches.retain(|item| item.location_id != location.id);
             state.caches.insert(
                 0,
@@ -245,7 +235,7 @@ fn forecast_for_location(location: Location) -> WorkerResult {
             );
             state.caches.truncate(MAX_FAVORITES);
             save_state(&state)?;
-            Ok(json!({ "location": location, "forecast": forecast }))
+            Ok(json!({ "location": location, "forecast": forecast, "favorites": state.favorites }))
         }
         Err(network_error) => {
             let Some(cache) = state
@@ -253,15 +243,21 @@ fn forecast_for_location(location: Location) -> WorkerResult {
                 .iter()
                 .find(|item| item.location_id == location.id)
             else {
+                save_state(&state)?;
                 return Err(network_error);
             };
             let mut saved = cache.forecast.clone();
             saved.source = "saved".to_string();
-            state.selected = Some(location.clone());
             save_state(&state)?;
-            Ok(json!({ "location": location, "forecast": saved }))
+            Ok(json!({ "location": location, "forecast": saved, "favorites": state.favorites }))
         }
     }
+}
+
+fn remember_location(state: &mut StoredState, location: &Location) {
+    state.favorites.retain(|item| item.id != location.id);
+    state.favorites.insert(0, location.clone());
+    state.favorites.truncate(MAX_FAVORITES);
 }
 
 fn fetch_forecast(location: &Location) -> Result<Forecast, WorkerError> {
@@ -627,6 +623,27 @@ mod tests {
             ..StoredState::default()
         };
         assert!(validate_state(&state).is_err());
+    }
+
+    #[test]
+    fn selected_locations_are_remembered_once_in_recent_order() {
+        let mut state = StoredState::default();
+        for index in 0..=MAX_FAVORITES {
+            let mut candidate = location();
+            candidate.id = format!("open-meteo:{index}");
+            candidate.name = format!("City {index}");
+            remember_location(&mut state, &candidate);
+        }
+
+        assert_eq!(state.favorites.len(), MAX_FAVORITES);
+        assert_eq!(state.favorites[0].id, format!("open-meteo:{MAX_FAVORITES}"));
+        assert_eq!(state.favorites.last().map(|item| item.id.as_str()), Some("open-meteo:1"));
+
+        let existing = state.favorites[3].clone();
+        remember_location(&mut state, &existing);
+        assert_eq!(state.favorites.len(), MAX_FAVORITES);
+        assert_eq!(state.favorites[0], existing);
+        assert_eq!(state.favorites.iter().filter(|item| item.id == existing.id).count(), 1);
     }
 
     #[test]

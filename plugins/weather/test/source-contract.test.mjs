@@ -16,7 +16,6 @@ describe('Weather official plugin source contract', () => {
     for (const action of [
       'search-location',
       'preview-location',
-      'save-location',
       'open-location',
       'remove-location',
       'refresh-weather',
@@ -26,6 +25,7 @@ describe('Weather official plugin source contract', () => {
     }
     assert.match(ui, /bridge\.onContext/u);
     assert.match(model, /Open-Meteo/u);
+    assert.doesNotMatch(ui, /save-location|save-selected|\bt\.saved\b|\bt\.save\b/u);
   });
 
   it('renders cached weather first, refreshes in the background, and fits the surface viewport', async () => {
@@ -48,8 +48,12 @@ describe('Weather official plugin source contract', () => {
     assert.doesNotMatch(ui, /location-chooser-empty/u);
     assert.match(ui, /state\.chooserOpen\s*\?\s*locationChooser\(t\)\s*:\s*null/u);
     assert.match(styles, /\.weather-app\s*\{[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\) auto/su);
-    assert.match(styles, /\.clock-column\s*\{[^}]*grid-template-rows:\s*repeat\(3, max-content\)[^}]*align-content:\s*center[^}]*row-gap:/su);
-    assert.match(styles, /\.local-time\s*\{[^}]*line-height:\s*1;/su);
+    assert.match(styles, /\.clock-column\s*\{[^}]*grid-template-rows:\s*repeat\(3, max-content\)[^}]*align-content:\s*center[^}]*row-gap:\s*clamp\(8px,/su);
+    assert.match(styles, /\.place-copy\s*\{[^}]*display:\s*grid[^}]*gap:\s*clamp\(5px,/su);
+    assert.match(styles, /\.local-time\s*\{[^}]*line-height:\s*1\.08;/su);
+    assert.match(styles, /\.temperature-copy\s*\{[^}]*gap:\s*clamp\(6px,/su);
+    assert.match(styles, /\.forecast-row\s*\{[^}]*line-height:\s*1\.35;/su);
+    assert.match(styles, /\.search-result-button\s*\{[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\) auto;/su);
     assert.doesNotMatch(styles, /align-content:\s*space-between/u);
     const currentSummary = styles.match(/\.current-column\s*\{(?<rules>[^}]*)\}/u)?.groups?.rules;
     assert.ok(currentSummary);
@@ -57,6 +61,9 @@ describe('Weather official plugin source contract', () => {
     assert.doesNotMatch(currentSummary, /\bbackground\s*:/u);
     assert.doesNotMatch(currentSummary, /\bbox-shadow\s*:/u);
     assert.doesNotMatch(styles, /@media\s*\(max-width:\s*460px\)[\s\S]*?\.current-column\s*\{/u);
+    assert.match(ui, /className="topbar-actions"/u);
+    assert.match(ui, /className="icon-button topbar-refresh"/u);
+    assert.doesNotMatch(ui, /className="hero-actions"/u);
   });
 
   it('uses brokered network and KV storage from the WASM worker', async () => {
@@ -64,7 +71,6 @@ describe('Weather official plugin source contract', () => {
     for (const method of [
       'weather.state.load',
       'weather.locations.search',
-      'weather.locations.save',
       'weather.locations.remove',
       'weather.forecast',
     ]) {
@@ -74,6 +80,12 @@ describe('Weather official plugin source contract', () => {
     assert.match(worker, /api\.open-meteo\.com/u);
     assert.match(worker, /storage::kv/u);
     assert.match(worker, /MAX_RESPONSE_BYTES/u);
+    assert.match(worker, /remember_location/u);
+    assert.doesNotMatch(worker, /weather\.locations\.save|fn save_location/u);
+    const manifest = JSON.parse(await readFile(path.join(pluginRoot, 'manifest.json'), 'utf8'));
+    assert.equal(manifest.methods.some((method) => method.method === 'weather.locations.save'), false);
+    const forecast = manifest.methods.find((method) => method.method === 'weather.forecast');
+    assert.ok(forecast.response_schema.required.includes('favorites'));
   });
 
   it('ships an original package-local icon and upstream attribution', async () => {

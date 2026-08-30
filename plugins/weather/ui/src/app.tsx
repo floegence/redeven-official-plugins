@@ -48,8 +48,8 @@ type Forecast = {
 type StateLoad = { favorites: Location[]; selected: Location | null; forecast: Forecast | null };
 type LocationsResult = { locations: Location[] };
 type FavoritesResult = { favorites: Location[] };
-type ForecastResult = { location: Location; forecast: Forecast };
-type BusyState = "initial" | "search" | "forecast" | "save";
+type ForecastResult = { location: Location; forecast: Forecast; favorites: Location[] };
+type BusyState = "initial" | "search" | "forecast" | "remove";
 
 const bridge = new PluginBridgeClient({ timeoutMs: 20_000 });
 const state: {
@@ -82,7 +82,6 @@ let renderQueue = Promise.resolve();
 
 bridge.onAction("search-location", (event) => void searchLocations(event));
 bridge.onAction("preview-location", (event) => void previewLocation(event));
-bridge.onAction("save-location", (event) => void saveLocation(event));
 bridge.onAction("open-location", (event) => void openLocation(event));
 bridge.onAction("remove-location", (event) => void removeLocation(event));
 bridge.onAction("refresh-weather", () => void refreshWeather());
@@ -190,34 +189,11 @@ async function refreshWeather(): Promise<void> {
   await loadForecast(state.selected, { preserveVisible: true });
 }
 
-async function saveLocation(event: PluginUIActionEvent): Promise<void> {
-  if (state.busy) return;
-  const location = locationForAction(event);
-  if (!location || isFavorite(location.id)) return;
-  state.busy = "save";
-  state.error = false;
-  await render();
-  try {
-    const response = await bridge.call<PluginMethodResult<FavoritesResult>>(
-      "weather.locations.save",
-      location,
-    );
-    state.favorites = response.data.favorites;
-    state.status = translations().saved;
-  } catch (error) {
-    state.error = true;
-    state.status = friendlyError(error, "save");
-  } finally {
-    state.busy = undefined;
-    await render();
-  }
-}
-
 async function removeLocation(event: PluginUIActionEvent): Promise<void> {
   if (state.busy) return;
   const id = String(event.value ?? "");
   if (!isFavorite(id)) return;
-  state.busy = "save";
+  state.busy = "remove";
   state.error = false;
   await render();
   try {
@@ -229,7 +205,7 @@ async function removeLocation(event: PluginUIActionEvent): Promise<void> {
     state.status = state.forecast ? statusForForecast(state.forecast) : translations().ready;
   } catch (error) {
     state.error = true;
-    state.status = friendlyError(error, "save");
+    state.status = friendlyError(error, "remove");
   } finally {
     state.busy = undefined;
     await render();
@@ -271,6 +247,7 @@ async function loadForecast(location: Location, options: { preserveVisible?: boo
     );
     state.selected = response.data.location;
     state.forecast = response.data.forecast;
+    state.favorites = response.data.favorites;
     state.results = [];
     state.query = "";
     state.status = statusForForecast(response.data.forecast);
@@ -301,17 +278,22 @@ function view() {
           <span key="brand-mark" className="brand-mark" aria-hidden="true" />
           <h1 key="brand-title">{t.appName}</h1>
         </div>
-        <button
-          key="location-trigger"
-          className="location-trigger"
-          type="button"
-          aria-expanded={state.chooserOpen}
-          data-redevplugin-action="toggle-location-chooser"
-        >
-          <span key="location-trigger-label">{t.currentLocation}</span>
-          <strong key="location-trigger-name">{state.selected?.name ?? t.chooseLocation}</strong>
-          <span key="location-trigger-arrow" aria-hidden="true">⌄</span>
-        </button>
+        <div key="topbar-actions" className="topbar-actions">
+          <button
+            key="location-trigger"
+            className="location-trigger"
+            type="button"
+            aria-expanded={state.chooserOpen}
+            data-redevplugin-action="toggle-location-chooser"
+          >
+            <span key="location-trigger-label">{t.currentLocation}</span>
+            <strong key="location-trigger-name">{state.selected?.name ?? t.chooseLocation}</strong>
+            <span key="location-trigger-arrow" aria-hidden="true">⌄</span>
+          </button>
+          {state.selected ? (
+            <button key="refresh" className="icon-button topbar-refresh" type="button" title={t.refresh} aria-label={t.refresh} disabled={Boolean(state.busy)} data-redevplugin-action="refresh-weather">↻</button>
+          ) : <span key="refresh-placeholder" />}
+        </div>
       </header>
 
       {state.chooserOpen ? locationChooser(t) : null}
@@ -396,17 +378,14 @@ function searchResults(t: WeatherTranslations) {
       <ul key="search-results-list">
         {state.results.map((location) => (
           <li key={`result-${location.id}`} className="search-result">
-            <span key={`result-pin-${location.id}`} className="location-pin" aria-hidden="true">•</span>
-            <div key={`result-copy-${location.id}`} className="location-copy">
-              <strong key={`result-name-${location.id}`}>{location.name}</strong>
-              <span key={`result-place-${location.id}`}>{locationSubtitle(location)}</span>
-            </div>
-            <div key={`result-actions-${location.id}`} className="result-actions">
-              <button key={`result-view-${location.id}`} className="secondary-button" type="button" value={location.id} disabled={Boolean(state.busy)} data-redevplugin-action="preview-location">{t.view}</button>
-              <button key={`result-save-${location.id}`} className="secondary-button" type="button" value={location.id} disabled={Boolean(state.busy) || isFavorite(location.id)} data-redevplugin-action="save-location">
-                {isFavorite(location.id) ? t.saved : t.save}
-              </button>
-            </div>
+            <button key={`result-open-${location.id}`} className="search-result-button" type="button" value={location.id} disabled={Boolean(state.busy)} data-redevplugin-action="preview-location">
+              <span key={`result-pin-${location.id}`} className="location-pin" aria-hidden="true">•</span>
+              <span key={`result-copy-${location.id}`} className="location-copy">
+                <strong key={`result-name-${location.id}`}>{location.name}</strong>
+                <span key={`result-place-${location.id}`}>{locationSubtitle(location)}</span>
+              </span>
+              <span key={`result-arrow-${location.id}`} className="result-arrow" aria-hidden="true">→</span>
+            </button>
           </li>
         ))}
       </ul>
@@ -458,12 +437,6 @@ function forecastDashboard(location: Location, forecast: Forecast, t: WeatherTra
             <div key="place-copy">
               <p key="place-overline" className="overline">{locationSubtitle(location)}</p>
               <h2 key="place-name">{location.name}</h2>
-            </div>
-            <div key="hero-actions" className="hero-actions">
-              <button key="refresh" className="icon-button" type="button" title={t.refresh} aria-label={t.refresh} disabled={Boolean(state.busy)} data-redevplugin-action="refresh-weather">↻</button>
-              <button key="save-selected" className="secondary-button" type="button" value={location.id} disabled={Boolean(state.busy) || isFavorite(location.id)} data-redevplugin-action="save-location">
-                {isFavorite(location.id) ? t.saved : t.save}
-              </button>
             </div>
           </div>
           <time key="local-time" className="local-time" dateTime={state.now.toISOString()}>{formatTime(state.now, location.timezone)}</time>
@@ -576,7 +549,7 @@ function statusForForecast(forecast: Forecast): string {
   return forecast.source === "saved" ? translations().savedForecast : translations().updated;
 }
 
-function friendlyError(error: unknown, operation: "load" | "search" | "save" | "forecast"): string {
+function friendlyError(error: unknown, operation: "load" | "search" | "remove" | "forecast"): string {
   if (error instanceof PluginBridgeError && error.errorCode === "PLUGIN_PERMISSION_DENIED") {
     return translations().permission;
   }

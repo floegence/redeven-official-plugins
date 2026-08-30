@@ -82,6 +82,13 @@ p {
   min-height: 38px;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -262,6 +269,19 @@ h1 {
   font-size: 17px;
 }
 
+.topbar-refresh {
+  flex: none;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.topbar-refresh:not(:disabled):hover {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
+  color: var(--text);
+}
+
 .clear-button {
   width: 28px;
   min-height: 28px;
@@ -392,16 +412,29 @@ h1 {
 }
 
 .search-result {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 7px;
   min-width: 0;
-  min-height: 46px;
-  padding: 5px 7px;
+}
+
+.search-result-button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  min-height: 50px;
+  padding: 7px 11px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.search-result-button:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
+  background: color-mix(in srgb, var(--surface) 94%, var(--accent) 6%);
 }
 
 .location-pin {
@@ -410,7 +443,7 @@ h1 {
 
 .location-copy {
   display: grid;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -430,17 +463,9 @@ h1 {
   font-size: 10px;
 }
 
-.result-actions,
-.hero-actions {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.search-result .secondary-button {
-  min-height: 28px;
-  padding: 0 7px;
-  font-size: 10px;
+.result-arrow {
+  color: var(--muted);
+  font-size: 14px;
 }
 
 .status-row {
@@ -513,7 +538,7 @@ h1 {
   display: grid;
   grid-template-rows: repeat(3, max-content);
   align-content: center;
-  row-gap: clamp(4px, 0.8vh, 8px);
+  row-gap: clamp(8px, 1.25vh, 13px);
   min-width: 0;
   min-height: 0;
 }
@@ -530,9 +555,14 @@ h1 {
   min-width: 0;
 }
 
+.place-copy {
+  display: grid;
+  gap: clamp(5px, 0.8vh, 8px);
+  min-width: 0;
+}
+
 .overline {
   min-height: 14px;
-  margin-bottom: 2px;
   overflow: hidden;
   color: var(--muted);
   font-size: 10px;
@@ -547,7 +577,7 @@ h1 {
   overflow: hidden;
   font-size: clamp(20px, 3vh, 32px);
   font-weight: 690;
-  line-height: 1.08;
+  line-height: 1.14;
   letter-spacing: -0.035em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -559,14 +589,15 @@ h1 {
   overflow: hidden;
   font-size: clamp(40px, 6vh, 60px);
   font-weight: 560;
-  line-height: 1;
-  letter-spacing: -0.07em;
+  line-height: 1.08;
+  letter-spacing: -0.055em;
   font-variant-numeric: tabular-nums;
 }
 
 .local-date {
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.45;
 }
 
 .current-column {
@@ -588,15 +619,15 @@ h1 {
 
 .temperature-copy {
   display: grid;
-  gap: 3px;
+  gap: clamp(6px, 0.9vh, 9px);
   min-width: 0;
 }
 
 .current-temperature {
   font-size: clamp(40px, 6vh, 62px);
   font-weight: 620;
-  line-height: 0.95;
-  letter-spacing: -0.06em;
+  line-height: 1;
+  letter-spacing: -0.045em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -605,6 +636,7 @@ h1 {
   color: var(--muted);
   font-size: 11px;
   font-weight: 620;
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -618,7 +650,7 @@ h1 {
 
 .metric {
   display: grid;
-  gap: 3px;
+  gap: 5px;
   min-width: 0;
   padding: clamp(7px, 1.5vh, 13px) clamp(10px, 2vw, 18px);
   border-right: 1px solid var(--border);
@@ -642,13 +674,14 @@ h1 {
 .metric strong {
   font-size: clamp(14px, 2.4vh, 18px);
   font-weight: 680;
+  line-height: 1.25;
   font-variant-numeric: tabular-nums;
 }
 
 .weekly-forecast {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 4px;
+  gap: clamp(7px, 1.1vh, 11px);
   min-height: 0;
   padding: clamp(10px, 2vh, 18px) clamp(14px, 2.5vw, 24px);
   overflow: hidden;
@@ -665,6 +698,7 @@ h1 {
 .section-heading h3 {
   font-size: 12px;
   font-weight: 700;
+  line-height: 1.35;
 }
 
 .section-heading span {
@@ -687,6 +721,7 @@ h1 {
   min-height: 24px;
   overflow: hidden;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 68%, transparent);
+  line-height: 1.35;
   font-variant-numeric: tabular-nums;
 }
 
@@ -940,7 +975,6 @@ h1 {
     padding-left: 12px;
   }
 
-  .hero-actions .secondary-button,
   .condition-symbol,
   .local-date {
     display: none;
@@ -995,6 +1029,19 @@ h1 {
 
   .local-time {
     font-size: clamp(40px, 8vh, 58px);
+    line-height: 1;
+  }
+
+  .clock-column {
+    row-gap: 4px;
+  }
+
+  .place-copy {
+    gap: 2px;
+  }
+
+  .temperature-copy {
+    gap: 3px;
   }
 
   .metrics .metric {

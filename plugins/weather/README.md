@@ -2,8 +2,8 @@
 
 Weather is a Redeven-maintained official plugin that combines a calm local
 clock, current conditions, and a seven-day forecast. Users can search for
-places, preview forecasts, save up to eight favorites, and keep the last
-successful forecast visible immediately while a fresh update runs in the
+places, automatically keep their eight most recently selected locations, and
+see the last successful forecast immediately while a fresh update runs in the
 background. A compact location chooser includes localized major cities across
 the world, and the forecast adapts to the available surface without page
 scrolling.
@@ -25,8 +25,8 @@ beside every forecast and recorded in the packaged notices.
   browser networking or persistence.
 - The Rust WASM worker accesses only the declared Open-Meteo HTTPS origins
   through the Host network broker.
-- Saved places and bounded forecast fallback data use the Host-owned user KV
-  store.
+- Recent locations and bounded forecast fallback data use the Host-owned user
+  KV store.
 - The surface follows the host appearance and locale context, with English and
   Simplified Chinese copy.
 
@@ -41,7 +41,7 @@ npm test
 npm run build
 ```
 
-Version `1.0.7` is the stable release-train version. Build the unsigned official
+Version `1.0.8` is the stable release-train version. Build the unsigned official
 package from the repository root with:
 
 ```bash

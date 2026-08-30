@@ -21,7 +21,7 @@ describe('official plugin repository contract', () => {
     assert.equal(weather.name, 'weather');
     assert.equal(weather.manifest.schema_version, 'redevplugin.manifest.v9');
     assert.equal(weather.manifest.plugin.plugin_id, 'com.redeven.official.weather');
-    assert.equal(weather.manifest.plugin.version, '1.0.7');
+    assert.equal(weather.manifest.plugin.version, '1.0.8');
     assert.deepEqual(weather.manifest.permissions, ['network.client']);
     assert.deepEqual(weather.manifest.api.required_features, ['net.http.v1']);
     assert.equal(weather.manifest.presentation.icon.path, 'ui/assets/weather-plugin.png');
@@ -45,7 +45,7 @@ describe('official plugin repository contract', () => {
     const actual = await readJSON(path.join(repoRoot, 'catalog', 'official-catalog.seed.json'));
     assert.equal(actual.plugins.length, 1);
     assert.equal(actual.plugins[0].plugin_id, 'com.redeven.official.weather');
-    assert.equal(actual.plugins[0].latest.version, '1.0.7');
+    assert.equal(actual.plugins[0].latest.version, '1.0.8');
     assert.equal(stableJSONString(actual), stableJSONString(expected));
   });
 
