@@ -1,6 +1,6 @@
 {
   "name": "@redeven/official-weather-plugin",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@floegence/redevplugin-ui": "3.0.17"
+    "@floegence/redevplugin-ui": "3.0.18"
   },
   "devDependencies": {
     "esbuild": "0.25.5",

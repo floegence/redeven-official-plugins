@@ -41,17 +41,17 @@
         "stable"
       ],
       "latest": {
-        "version": "1.0.0",
+        "version": "1.0.1",
         "min_redeven_version": "1.0.0",
-        "min_redevplugin_version": "3.0.17",
+        "min_redevplugin_version": "3.0.18",
         "rollout_state": "stable",
         "default_surface_id": "weather.dashboard",
         "distribution": {
           "provider": "github_release",
           "repository": "floegence/redeven-official-plugins",
-          "tag": "v1.0.0",
-          "artifact_name": "weather-1.0.0.redevplugin",
-          "release_ref_asset_name": "weather-1.0.0.release-ref.json",
+          "tag": "v1.0.1",
+          "artifact_name": "weather-1.0.1.redevplugin",
+          "release_ref_asset_name": "weather-1.0.1.release-ref.json",
           "trust_root_asset_name": "root.public.json"
         }
       }
