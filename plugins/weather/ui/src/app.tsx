@@ -15,7 +15,7 @@ import {
   type WeatherTranslations,
 } from "./weather-model.js";
 
-type Location = Omit<MajorCityLocation, "region"> & { region?: MajorCityLocation["region"] };
+type Location = MajorCityLocation;
 
 type CurrentWeather = {
   time: string;

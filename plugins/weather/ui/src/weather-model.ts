@@ -1,14 +1,5 @@
 export type SupportedLocale = "en-US" | "zh-CN";
 
-export type MajorCityRegion =
-  | "asia"
-  | "middle-east"
-  | "oceania"
-  | "europe"
-  | "africa"
-  | "north-america"
-  | "south-america";
-
 export type MajorCityLocation = {
   id: string;
   name: string;
@@ -17,7 +8,6 @@ export type MajorCityLocation = {
   latitude: number;
   longitude: number;
   timezone: string;
-  region: MajorCityRegion;
 };
 
 export type WeatherConditionKind =
@@ -176,18 +166,18 @@ type MajorCityDefinition = Omit<MajorCityLocation, "name" | "admin1" | "country"
 };
 
 const majorCityDefinitions: readonly MajorCityDefinition[] = [
-  { id: "preset:beijing", latitude: 39.9042, longitude: 116.4074, timezone: "Asia/Shanghai", region: "asia", en: { name: "Beijing", admin1: "Beijing", country: "China" }, zh: { name: "北京", admin1: "北京市", country: "中国" } },
-  { id: "preset:tokyo", latitude: 35.6762, longitude: 139.6503, timezone: "Asia/Tokyo", region: "asia", en: { name: "Tokyo", admin1: "Tokyo", country: "Japan" }, zh: { name: "东京", admin1: "东京都", country: "日本" } },
-  { id: "preset:singapore", latitude: 1.3521, longitude: 103.8198, timezone: "Asia/Singapore", region: "asia", en: { name: "Singapore", admin1: "", country: "Singapore" }, zh: { name: "新加坡", admin1: "", country: "新加坡" } },
-  { id: "preset:dubai", latitude: 25.2048, longitude: 55.2708, timezone: "Asia/Dubai", region: "middle-east", en: { name: "Dubai", admin1: "Dubai", country: "United Arab Emirates" }, zh: { name: "迪拜", admin1: "迪拜酋长国", country: "阿联酋" } },
-  { id: "preset:sydney", latitude: -33.8688, longitude: 151.2093, timezone: "Australia/Sydney", region: "oceania", en: { name: "Sydney", admin1: "New South Wales", country: "Australia" }, zh: { name: "悉尼", admin1: "新南威尔士州", country: "澳大利亚" } },
-  { id: "preset:london", latitude: 51.5074, longitude: -0.1278, timezone: "Europe/London", region: "europe", en: { name: "London", admin1: "England", country: "United Kingdom" }, zh: { name: "伦敦", admin1: "英格兰", country: "英国" } },
-  { id: "preset:paris", latitude: 48.8566, longitude: 2.3522, timezone: "Europe/Paris", region: "europe", en: { name: "Paris", admin1: "Île-de-France", country: "France" }, zh: { name: "巴黎", admin1: "法兰西岛大区", country: "法国" } },
-  { id: "preset:cairo", latitude: 30.0444, longitude: 31.2357, timezone: "Africa/Cairo", region: "africa", en: { name: "Cairo", admin1: "Cairo", country: "Egypt" }, zh: { name: "开罗", admin1: "开罗省", country: "埃及" } },
-  { id: "preset:cape-town", latitude: -33.9249, longitude: 18.4241, timezone: "Africa/Johannesburg", region: "africa", en: { name: "Cape Town", admin1: "Western Cape", country: "South Africa" }, zh: { name: "开普敦", admin1: "西开普省", country: "南非" } },
-  { id: "preset:new-york", latitude: 40.7128, longitude: -74.006, timezone: "America/New_York", region: "north-america", en: { name: "New York", admin1: "New York", country: "United States" }, zh: { name: "纽约", admin1: "纽约州", country: "美国" } },
-  { id: "preset:los-angeles", latitude: 34.0522, longitude: -118.2437, timezone: "America/Los_Angeles", region: "north-america", en: { name: "Los Angeles", admin1: "California", country: "United States" }, zh: { name: "洛杉矶", admin1: "加利福尼亚州", country: "美国" } },
-  { id: "preset:sao-paulo", latitude: -23.5505, longitude: -46.6333, timezone: "America/Sao_Paulo", region: "south-america", en: { name: "São Paulo", admin1: "São Paulo", country: "Brazil" }, zh: { name: "圣保罗", admin1: "圣保罗州", country: "巴西" } },
+  { id: "preset:beijing", latitude: 39.9042, longitude: 116.4074, timezone: "Asia/Shanghai", en: { name: "Beijing", admin1: "Beijing", country: "China" }, zh: { name: "北京", admin1: "北京市", country: "中国" } },
+  { id: "preset:tokyo", latitude: 35.6762, longitude: 139.6503, timezone: "Asia/Tokyo", en: { name: "Tokyo", admin1: "Tokyo", country: "Japan" }, zh: { name: "东京", admin1: "东京都", country: "日本" } },
+  { id: "preset:singapore", latitude: 1.3521, longitude: 103.8198, timezone: "Asia/Singapore", en: { name: "Singapore", admin1: "", country: "Singapore" }, zh: { name: "新加坡", admin1: "", country: "新加坡" } },
+  { id: "preset:dubai", latitude: 25.2048, longitude: 55.2708, timezone: "Asia/Dubai", en: { name: "Dubai", admin1: "Dubai", country: "United Arab Emirates" }, zh: { name: "迪拜", admin1: "迪拜酋长国", country: "阿联酋" } },
+  { id: "preset:sydney", latitude: -33.8688, longitude: 151.2093, timezone: "Australia/Sydney", en: { name: "Sydney", admin1: "New South Wales", country: "Australia" }, zh: { name: "悉尼", admin1: "新南威尔士州", country: "澳大利亚" } },
+  { id: "preset:london", latitude: 51.5074, longitude: -0.1278, timezone: "Europe/London", en: { name: "London", admin1: "England", country: "United Kingdom" }, zh: { name: "伦敦", admin1: "英格兰", country: "英国" } },
+  { id: "preset:paris", latitude: 48.8566, longitude: 2.3522, timezone: "Europe/Paris", en: { name: "Paris", admin1: "Île-de-France", country: "France" }, zh: { name: "巴黎", admin1: "法兰西岛大区", country: "法国" } },
+  { id: "preset:cairo", latitude: 30.0444, longitude: 31.2357, timezone: "Africa/Cairo", en: { name: "Cairo", admin1: "Cairo", country: "Egypt" }, zh: { name: "开罗", admin1: "开罗省", country: "埃及" } },
+  { id: "preset:cape-town", latitude: -33.9249, longitude: 18.4241, timezone: "Africa/Johannesburg", en: { name: "Cape Town", admin1: "Western Cape", country: "South Africa" }, zh: { name: "开普敦", admin1: "西开普省", country: "南非" } },
+  { id: "preset:new-york", latitude: 40.7128, longitude: -74.006, timezone: "America/New_York", en: { name: "New York", admin1: "New York", country: "United States" }, zh: { name: "纽约", admin1: "纽约州", country: "美国" } },
+  { id: "preset:los-angeles", latitude: 34.0522, longitude: -118.2437, timezone: "America/Los_Angeles", en: { name: "Los Angeles", admin1: "California", country: "United States" }, zh: { name: "洛杉矶", admin1: "加利福尼亚州", country: "美国" } },
+  { id: "preset:sao-paulo", latitude: -23.5505, longitude: -46.6333, timezone: "America/Sao_Paulo", en: { name: "São Paulo", admin1: "São Paulo", country: "Brazil" }, zh: { name: "圣保罗", admin1: "圣保罗州", country: "巴西" } },
 ] as const;
 
 export function majorCitiesForLocale(locale: SupportedLocale): MajorCityLocation[] {

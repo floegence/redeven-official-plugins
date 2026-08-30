@@ -44,20 +44,39 @@ describe('weather presentation model', () => {
     assert.equal(translationsForLocale('en-US').searchPlaceholder, 'Search city or place');
   });
 
-  it('offers stable localized major cities across every inhabited region', () => {
+  it('offers stable localized major cities with contract-safe location fields', () => {
     const english = majorCitiesForLocale('en-US');
     const chinese = majorCitiesForLocale('zh-CN');
     assert.equal(english.length, 12);
+    assert.deepEqual(english.map((city) => city.id), [
+      'preset:beijing',
+      'preset:tokyo',
+      'preset:singapore',
+      'preset:dubai',
+      'preset:sydney',
+      'preset:london',
+      'preset:paris',
+      'preset:cairo',
+      'preset:cape-town',
+      'preset:new-york',
+      'preset:los-angeles',
+      'preset:sao-paulo',
+    ]);
     assert.deepEqual(chinese.map((city) => city.id), english.map((city) => city.id));
     assert.equal(new Set(english.map((city) => city.id)).size, english.length);
     assert.equal(english.find((city) => city.id === 'preset:beijing')?.name, 'Beijing');
     assert.equal(chinese.find((city) => city.id === 'preset:beijing')?.name, '北京');
     assert.equal(chinese.find((city) => city.id === 'preset:new-york')?.name, '纽约');
-    assert.deepEqual(
-      new Set(english.map((city) => city.region)),
-      new Set(['asia', 'middle-east', 'oceania', 'europe', 'africa', 'north-america', 'south-america']),
-    );
     for (const city of english) {
+      assert.deepEqual(Object.keys(city).sort(), [
+        'admin1',
+        'country',
+        'id',
+        'latitude',
+        'longitude',
+        'name',
+        'timezone',
+      ]);
       assert.match(city.id, /^preset:[a-z-]+$/u);
       assert.ok(Number.isFinite(city.latitude) && city.latitude >= -90 && city.latitude <= 90);
       assert.ok(Number.isFinite(city.longitude) && city.longitude >= -180 && city.longitude <= 180);
