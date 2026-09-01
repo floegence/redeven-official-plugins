@@ -14,6 +14,7 @@ import {
   type GamePhase,
   type Platform,
 } from './game-model.js';
+import { canvasBackingSize } from './canvas-backing.js';
 
 type Locale = 'en-US' | 'zh-CN';
 
@@ -159,10 +160,11 @@ function handleInput(event: PluginCanvasInputEvent): void {
 function configureCanvas(width: number, height: number, nextPixelRatio: number): void {
   cssWidth = Math.max(1, width);
   cssHeight = Math.max(1, height);
-  pixelRatio = clamp(nextPixelRatio || 1, 0.5, 4);
+  const backing = canvasBackingSize(cssWidth, cssHeight, nextPixelRatio);
+  pixelRatio = backing.pixelRatio;
   if (canvas) {
-    canvas.width = Math.max(1, Math.ceil(cssWidth * pixelRatio));
-    canvas.height = Math.max(1, Math.ceil(cssHeight * pixelRatio));
+    canvas.width = backing.width;
+    canvas.height = backing.height;
   }
   renderScale = Math.min(cssWidth / WORLD_WIDTH, cssHeight / WORLD_HEIGHT);
   offsetX = (cssWidth - WORLD_WIDTH * renderScale) / 2;

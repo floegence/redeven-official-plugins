@@ -15,7 +15,7 @@ describe('Pocket Pounce source contract', () => {
     ]);
     assert.equal(manifest.schema_version, 'redevplugin.manifest.v9');
     assert.equal(manifest.plugin.plugin_id, 'com.redeven.official.pocket-pounce');
-    assert.equal(manifest.plugin.version, '1.0.11');
+    assert.equal(manifest.plugin.version, '1.0.12');
     assert.deepEqual(manifest.permissions, []);
     assert.deepEqual(manifest.workers, []);
     assert.deepEqual(manifest.methods, []);
@@ -30,6 +30,7 @@ describe('Pocket Pounce source contract', () => {
     assert.match(app, /event\.type === 'visible'[\s\S]*lastFrameAt = performance\.now\(\)[\s\S]*accumulator = 0/u);
     assert.match(app, /event\.type === 'dispose'[\s\S]*stopFrameLoop\(\)[\s\S]*canvas\.width = 1[\s\S]*canvas\.height = 1/u);
     assert.match(app, /clamp\(\(now - lastFrameAt\) \/ 1000, 0, 0\.05\)/u);
+    assert.match(app, /canvasBackingSize\(cssWidth, cssHeight, nextPixelRatio\)/u);
     assert.match(model, /export function jumpDistanceForCharge/u);
     assert.doesNotMatch(app, /\b(?:window|document|navigator)\b/u);
     assert.doesNotMatch(`${app}\n${model}`, /\bfetch\s*\(|WebSocket|localStorage|sessionStorage|indexedDB|https?:\/\//u);
