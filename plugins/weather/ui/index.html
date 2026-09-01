@@ -8,10 +8,13 @@
   </head>
   <body>
     <main class="weather-app">
-      <header class="topbar">
-        <div class="brand"><span class="brand-mark"></span><h1>Weather</h1></div>
-      </header>
       <section class="empty-state">
+        <div class="weather-card-controls">
+          <button class="location-trigger" type="button" aria-label="Choose location">
+            <strong class="location-trigger-name">Choose location</strong>
+            <span class="location-trigger-arrow" aria-hidden="true">⌄</span>
+          </button>
+        </div>
         <span class="loading-mark"></span>
         <h2>Loading your weather…</h2>
       </section>

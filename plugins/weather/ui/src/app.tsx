@@ -50,6 +50,7 @@ type LocationsResult = { locations: Location[] };
 type FavoritesResult = { favorites: Location[] };
 type ForecastResult = { location: Location; forecast: Forecast; favorites: Location[] };
 type BusyState = "initial" | "search" | "forecast" | "remove";
+type Notice = { scope: "chooser" | "weather"; text: string; error?: boolean };
 
 const bridge = new PluginBridgeClient({ timeoutMs: 20_000 });
 const state: {
@@ -59,8 +60,7 @@ const state: {
   selected?: Location;
   forecast?: Forecast;
   query: string;
-  status: string;
-  error: boolean;
+  notice?: Notice;
   busy?: BusyState;
   now: Date;
   chooserOpen: boolean;
@@ -69,8 +69,6 @@ const state: {
   favorites: [],
   results: [],
   query: "",
-  status: translationsForLocale("en-US").loading,
-  error: false,
   busy: "initial",
   now: new Date(),
   chooserOpen: false,
@@ -101,9 +99,6 @@ async function initialize(): Promise<void> {
     const locale = localeForLanguageTag(context.locale.language_tag);
     if (locale === state.locale) return;
     state.locale = locale;
-    if (!state.error) state.status = state.forecast
-      ? statusForForecast(state.forecast)
-      : translations().ready;
     void render();
   });
   clockTimer = setInterval(() => {
@@ -120,17 +115,14 @@ async function initialize(): Promise<void> {
     state.forecast = response.data.forecast ?? undefined;
     state.busy = undefined;
     if (response.data.selected) {
-      state.status = state.forecast ? statusForForecast(state.forecast) : translations().loading;
       await render();
       void loadForecast(response.data.selected, { preserveVisible: true });
     } else {
-      state.status = translations().ready;
       await render();
     }
   } catch (error) {
     state.busy = undefined;
-    state.error = true;
-    state.status = friendlyError(error, "load");
+    state.notice = { scope: "weather", text: friendlyError(error, "load"), error: true };
     await render();
   }
 }
@@ -140,15 +132,13 @@ async function searchLocations(event: PluginUIActionEvent): Promise<void> {
   const query = String(event.form_data?.query ?? "").trim();
   state.query = query;
   if ([...query].length < 2) {
-    state.error = false;
-    state.status = translations().searchHint;
+    state.notice = { scope: "chooser", text: translations().searchHint };
     state.results = [];
     await render();
     return;
   }
   state.busy = "search";
-  state.error = false;
-  state.status = translations().searching;
+  state.notice = undefined;
   await render();
   try {
     const language = state.locale === "zh-CN" ? "zh" : "en";
@@ -157,11 +147,12 @@ async function searchLocations(event: PluginUIActionEvent): Promise<void> {
       { query, language },
     );
     state.results = response.data.locations;
-    state.status = state.results.length === 0 ? translations().noResults : "";
+    state.notice = state.results.length === 0
+      ? { scope: "chooser", text: translations().noResults }
+      : undefined;
   } catch (error) {
     state.results = [];
-    state.error = true;
-    state.status = friendlyError(error, "search");
+    state.notice = { scope: "chooser", text: friendlyError(error, "search"), error: true };
   } finally {
     state.busy = undefined;
     await render();
@@ -194,7 +185,7 @@ async function removeLocation(event: PluginUIActionEvent): Promise<void> {
   const id = String(event.value ?? "");
   if (!isFavorite(id)) return;
   state.busy = "remove";
-  state.error = false;
+  state.notice = undefined;
   await render();
   try {
     const response = await bridge.call<PluginMethodResult<FavoritesResult>>(
@@ -202,10 +193,8 @@ async function removeLocation(event: PluginUIActionEvent): Promise<void> {
       { id },
     );
     state.favorites = response.data.favorites;
-    state.status = state.forecast ? statusForForecast(state.forecast) : translations().ready;
   } catch (error) {
-    state.error = true;
-    state.status = friendlyError(error, "remove");
+    state.notice = { scope: "chooser", text: friendlyError(error, "remove"), error: true };
   } finally {
     state.busy = undefined;
     await render();
@@ -215,8 +204,7 @@ async function removeLocation(event: PluginUIActionEvent): Promise<void> {
 async function clearSearch(): Promise<void> {
   state.query = "";
   state.results = [];
-  state.error = false;
-  state.status = state.forecast ? statusForForecast(state.forecast) : translations().ready;
+  state.notice = undefined;
   await render();
 }
 
@@ -225,8 +213,7 @@ async function toggleLocationChooser(): Promise<void> {
   if (!state.chooserOpen) {
     state.query = "";
     state.results = [];
-    state.error = false;
-    state.status = state.forecast ? statusForForecast(state.forecast) : translations().ready;
+    state.notice = undefined;
   }
   await render();
 }
@@ -235,10 +222,9 @@ async function loadForecast(location: Location, options: { preserveVisible?: boo
   if (state.busy) return;
   const preserveVisible = Boolean(options.preserveVisible && state.forecast && state.selected?.id === location.id);
   state.busy = "forecast";
-  state.error = false;
+  state.notice = undefined;
   state.selected = location;
   if (!preserveVisible) state.forecast = undefined;
-  state.status = preserveVisible ? translations().refreshing : translations().loading;
   await render();
   try {
     const response = await bridge.call<PluginMethodResult<ForecastResult>>(
@@ -250,12 +236,11 @@ async function loadForecast(location: Location, options: { preserveVisible?: boo
     state.favorites = response.data.favorites;
     state.results = [];
     state.query = "";
-    state.status = statusForForecast(response.data.forecast);
   } catch (error) {
-    state.error = true;
-    state.status = preserveVisible && state.forecast
+    const message = preserveVisible && state.forecast
       ? translations().refreshFailed
       : friendlyError(error, "forecast");
+    state.notice = { scope: "weather", text: message, error: true };
   } finally {
     state.busy = undefined;
     await render();
@@ -273,35 +258,7 @@ function view() {
   const t = translations();
   return (
     <main key="weather-root" className="weather-app">
-      <header key="topbar" className="topbar">
-        <div key="brand" className="brand">
-          <span key="brand-mark" className="brand-mark" aria-hidden="true" />
-          <h1 key="brand-title">{t.appName}</h1>
-        </div>
-        <div key="topbar-actions" className="topbar-actions">
-          <button
-            key="location-trigger"
-            className="location-trigger"
-            type="button"
-            aria-expanded={state.chooserOpen}
-            data-redevplugin-action="toggle-location-chooser"
-          >
-            <span key="location-trigger-label">{t.currentLocation}</span>
-            <strong key="location-trigger-name">{state.selected?.name ?? t.chooseLocation}</strong>
-            <span key="location-trigger-arrow" aria-hidden="true">⌄</span>
-          </button>
-          {state.selected ? (
-            <button key="refresh" className="icon-button topbar-refresh" type="button" title={t.refresh} aria-label={t.refresh} disabled={Boolean(state.busy)} data-redevplugin-action="refresh-weather">↻</button>
-          ) : <span key="refresh-placeholder" />}
-        </div>
-      </header>
-
       {state.chooserOpen ? locationChooser(t) : null}
-
-      <div key="status-row" className={state.error ? "status-row error" : "status-row"} role="status">
-        <span key="status-dot" className="status-dot" aria-hidden="true" />
-        <span key="status-copy">{state.status}</span>
-      </div>
 
       {state.forecast && state.selected
         ? forecastDashboard(state.selected, state.forecast, t)
@@ -318,6 +275,7 @@ function view() {
 }
 
 function locationChooser(t: WeatherTranslations) {
+  const notice = state.notice?.scope === "chooser" ? state.notice : undefined;
   return (
     <section key="location-chooser" className="location-chooser" aria-label={t.chooseLocation}>
       <div key="chooser-heading" className="chooser-heading">
@@ -347,6 +305,9 @@ function locationChooser(t: WeatherTranslations) {
           {state.busy === "search" ? t.searching : t.search}
         </button>
       </form>
+      <p key="chooser-status" className={notice?.error ? "chooser-status error" : "chooser-status"} role="status">
+        {notice?.text ?? ""}
+      </p>
       {state.favorites.length > 0 ? favoritePlaces(t) : <span key="favorites-empty" />}
       {state.results.length > 0 ? searchResults(t) : majorCities(t)}
     </section>
@@ -429,9 +390,11 @@ function favoritePlaces(t: WeatherTranslations) {
 function forecastDashboard(location: Location, forecast: Forecast, t: WeatherTranslations) {
   const current = forecast.current;
   const condition = conditionForCode(current.weather_code, current.is_day);
+  const notice = state.notice?.scope === "weather" ? state.notice : undefined;
   return (
     <article key="forecast-dashboard" className={`forecast-dashboard condition-${condition.kind}`}>
       <section key="weather-hero" className="weather-hero">
+        {weatherCardControls(t)}
         <div key="clock-column" className="clock-column">
           <div key="place-heading" className="place-heading">
             <div key="place-copy">
@@ -449,6 +412,9 @@ function forecastDashboard(location: Location, forecast: Forecast, t: WeatherTra
             <span key="condition-label" className="condition-label">{translatedCondition(condition.kind)}</span>
           </div>
         </div>
+        {notice ? (
+          <p key="weather-alert" className="weather-alert" role={notice.error ? "alert" : "status"}>{notice.text}</p>
+        ) : null}
       </section>
 
       <section key="metrics" className="metrics" aria-label={t.detailsLabel}>
@@ -505,6 +471,7 @@ function metric(key: string, label: string, value: string) {
 function loadingState(t: WeatherTranslations) {
   return (
     <section key="loading-state" className="empty-state" aria-label={t.loading}>
+      {weatherCardControls(t)}
       <span key="loading-mark" className="loading-mark" aria-hidden="true" />
       <h2 key="loading-title">{t.loading}</h2>
     </section>
@@ -512,12 +479,49 @@ function loadingState(t: WeatherTranslations) {
 }
 
 function emptyState(t: WeatherTranslations) {
+  const notice = state.notice?.scope === "weather" ? state.notice : undefined;
   return (
     <section key="empty-state" className="empty-state">
+      {weatherCardControls(t)}
       <span key="empty-symbol" className="empty-symbol" aria-hidden="true">○</span>
       <h2 key="empty-title">{t.emptyTitle}</h2>
-      <p key="empty-body">{t.emptyBody}</p>
+      <p key="empty-body" role={notice?.error ? "alert" : undefined}>{notice?.text ?? t.emptyBody}</p>
     </section>
+  );
+}
+
+function weatherCardControls(t: WeatherTranslations) {
+  const refreshing = state.busy === "forecast" && Boolean(state.forecast);
+  const refreshLabel = refreshing ? t.refreshing : t.refresh;
+  return (
+    <div key="weather-card-controls" className="weather-card-controls">
+      <button
+        key="location-trigger"
+        className="location-trigger"
+        type="button"
+        title={t.chooseLocation}
+        aria-label={`${t.chooseLocation}: ${state.selected?.name ?? t.chooseLocation}`}
+        aria-expanded={state.chooserOpen}
+        data-redevplugin-action="toggle-location-chooser"
+      >
+        <strong key="location-trigger-name" className="location-trigger-name">{state.selected?.name ?? t.chooseLocation}</strong>
+        <span key="location-trigger-arrow" className="location-trigger-arrow" aria-hidden="true">⌄</span>
+      </button>
+      {state.selected ? (
+        <button
+          key="refresh"
+          className={refreshing ? "icon-button weather-card-refresh is-refreshing" : "icon-button weather-card-refresh"}
+          type="button"
+          title={refreshLabel}
+          aria-label={refreshLabel}
+          aria-busy={refreshing}
+          disabled={Boolean(state.busy)}
+          data-redevplugin-action="refresh-weather"
+        >
+          <span key="refresh-icon" className="refresh-icon" aria-hidden="true">↻</span>
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -543,10 +547,6 @@ function translatedCondition(kind: ReturnType<typeof conditionForCode>["kind"]):
 
 function locationSubtitle(location: Location): string {
   return [...new Set([location.admin1, location.country].filter(Boolean))].join(", ");
-}
-
-function statusForForecast(forecast: Forecast): string {
-  return forecast.source === "saved" ? translations().savedForecast : translations().updated;
 }
 
 function friendlyError(error: unknown, operation: "load" | "search" | "remove" | "forecast"): string {

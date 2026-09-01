@@ -26,6 +26,8 @@ describe('Weather official plugin source contract', () => {
     assert.match(ui, /bridge\.onContext/u);
     assert.match(model, /Open-Meteo/u);
     assert.doesNotMatch(ui, /save-location|save-selected|\bt\.saved\b|\bt\.save\b/u);
+    assert.doesNotMatch(ui, /state\.status|errorScope/u);
+    assert.doesNotMatch(model, /\b(?:appName|currentLocation|ready|updated|savedForecast):/u);
   });
 
   it('renders cached weather first, refreshes in the background, and fits the surface viewport', async () => {
@@ -47,7 +49,7 @@ describe('Weather official plugin source contract', () => {
     assert.match(styles, /@media\s*\(max-height:\s*600px\)/u);
     assert.doesNotMatch(ui, /location-chooser-empty/u);
     assert.match(ui, /state\.chooserOpen\s*\?\s*locationChooser\(t\)\s*:\s*null/u);
-    assert.match(styles, /\.weather-app\s*\{[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\) auto/su);
+    assert.match(styles, /\.weather-app\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) auto/su);
     assert.match(styles, /\.clock-column\s*\{[^}]*grid-template-rows:\s*repeat\(3, max-content\)[^}]*align-content:\s*center[^}]*row-gap:\s*clamp\(8px,/su);
     assert.match(styles, /\.place-copy\s*\{[^}]*display:\s*grid[^}]*gap:\s*clamp\(5px,/su);
     assert.match(styles, /\.local-time\s*\{[^}]*line-height:\s*1\.08;/su);
@@ -61,9 +63,18 @@ describe('Weather official plugin source contract', () => {
     assert.doesNotMatch(currentSummary, /\bbackground\s*:/u);
     assert.doesNotMatch(currentSummary, /\bbox-shadow\s*:/u);
     assert.doesNotMatch(styles, /@media\s*\(max-width:\s*460px\)[\s\S]*?\.current-column\s*\{/u);
-    assert.match(ui, /className="topbar-actions"/u);
-    assert.match(ui, /className="icon-button topbar-refresh"/u);
-    assert.doesNotMatch(ui, /className="hero-actions"/u);
+    assert.doesNotMatch(ui, /className="topbar"|className="brand"|className="status-row/u);
+    assert.doesNotMatch(ui, /state\.status\s*=\s*preserveVisible\s*\?\s*translations\(\)\.refreshing/u);
+    assert.match(ui, /className="weather-card-controls"/u);
+    assert.match(ui, /className="location-trigger-name"/u);
+    assert.match(ui, /className="refresh-icon"/u);
+    assert.match(ui, /const refreshing = state\.busy === "forecast" && Boolean\(state\.forecast\)/u);
+    assert.match(ui, /refreshing\s*\?\s*"icon-button weather-card-refresh is-refreshing"/u);
+    assert.match(styles, /\.weather-card-refresh\.is-refreshing \.refresh-icon\s*\{[^}]*animation:\s*spin 800ms linear infinite/su);
+    assert.doesNotMatch(styles, /\.topbar\b|\.topbar-actions\b|\.status-row\b/u);
+    const dashboard = ui.match(/function forecastDashboard[\s\S]*?function forecastRow/u)?.[0];
+    assert.ok(dashboard);
+    assert.match(dashboard, /className="weather-hero"[\s\S]*weatherCardControls\(t\)[\s\S]*className="current-column"/u);
   });
 
   it('uses brokered network and KV storage from the WASM worker', async () => {
