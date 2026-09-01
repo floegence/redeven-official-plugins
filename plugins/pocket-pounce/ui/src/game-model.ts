@@ -3,13 +3,15 @@ export type GamePhase = 'ready' | 'charging' | 'jumping' | 'landed' | 'game-over
 export type Platform = {
   id: number;
   x: number;
+  z: number;
   width: number;
+  depth: number;
   top: number;
 };
 
 export type GameState = {
   phase: GamePhase;
-  player: { x: number; y: number; vx: number; vy: number; radius: number };
+  player: { x: number; y: number; z: number; vx: number; vy: number; vz: number; radius: number };
   platforms: Platform[];
   currentPlatformID: number;
   score: number;
@@ -18,6 +20,7 @@ export type GameState = {
   chargeStartedAtMs?: number;
   landedElapsed: number;
   cameraTargetX: number;
+  cameraTargetZ: number;
   seed: number;
   nextPlatformID: number;
 };
@@ -34,6 +37,7 @@ const JUMP_DURATION_SECONDS = 1;
 const JUMP_VELOCITY_Y = -550;
 const GRAVITY = 1_100;
 const LANDING_HOLD_SECONDS = 0.22;
+const MAX_LANE_DEPTH = 82;
 
 export function chargeRatio(elapsedMs: number): number {
   return clamp(elapsedMs / CHARGE_MAX_MS, 0, 1);
@@ -46,14 +50,16 @@ export function jumpDistanceForCharge(ratio: number): number {
 }
 
 export function createGame(seed = 1): GameState {
-  const first: Platform = { id: 1, x: 72, width: 188, top: 414 };
+  const first: Platform = { id: 1, x: 72, z: 0, width: 188, depth: 142, top: 414 };
   const state: GameState = {
     phase: 'ready',
     player: {
       x: first.x + first.width * 0.58,
       y: first.top - PLAYER_RADIUS,
+      z: first.z,
       vx: 0,
       vy: 0,
+      vz: 0,
       radius: PLAYER_RADIUS,
     },
     platforms: [first],
@@ -63,6 +69,7 @@ export function createGame(seed = 1): GameState {
     landings: 0,
     landedElapsed: 0,
     cameraTargetX: 0,
+    cameraTargetZ: 0,
     seed: normalizeSeed(seed),
     nextPlatformID: 2,
   };
@@ -86,6 +93,8 @@ export function releaseJump(state: GameState, nowMs: number): boolean {
   state.chargeStartedAtMs = undefined;
   state.player.vx = distance / JUMP_DURATION_SECONDS;
   state.player.vy = JUMP_VELOCITY_Y;
+  const target = nextPlatform(state);
+  state.player.vz = target ? (target.z - state.player.z) / JUMP_DURATION_SECONDS : 0;
   return true;
 }
 
@@ -95,6 +104,7 @@ export function cancelCharge(state: GameState): boolean {
   state.chargeStartedAtMs = undefined;
   state.player.vx = 0;
   state.player.vy = 0;
+  state.player.vz = 0;
   return true;
 }
 
@@ -113,13 +123,17 @@ export function stepGame(state: GameState, dtSeconds: number): void {
   const previousBottom = state.player.y + state.player.radius;
   state.player.x += state.player.vx * dt;
   state.player.y += state.player.vy * dt + GRAVITY * dt * dt * 0.5;
+  state.player.z += state.player.vz * dt;
   state.player.vy += GRAVITY * dt;
   const nextBottom = state.player.y + state.player.radius;
 
   if (state.player.vy > 0) {
     const landed = state.platforms
       .filter((platform) => platform.id !== state.currentPlatformID)
-      .find((platform) => previousBottom <= platform.top && nextBottom >= platform.top && horizontalOverlap(state, platform));
+      .find((platform) => previousBottom <= platform.top
+        && nextBottom >= platform.top
+        && horizontalOverlap(state, platform)
+        && depthOverlap(state, platform));
     if (landed) {
       landOnPlatform(state, landed);
       return;
@@ -129,6 +143,7 @@ export function stepGame(state: GameState, dtSeconds: number): void {
   if (state.player.y - state.player.radius > WORLD_HEIGHT) {
     state.phase = 'game-over';
     state.player.vx = 0;
+    state.player.vz = 0;
     state.bestScore = Math.max(state.bestScore, state.score);
   }
 }
@@ -142,12 +157,21 @@ function horizontalOverlap(state: GameState, platform: Platform): boolean {
   return state.player.x + inset >= platform.x && state.player.x - inset <= platform.x + platform.width;
 }
 
+function depthOverlap(state: GameState, platform: Platform): boolean {
+  const inset = state.player.radius * 0.42;
+  return state.player.z + inset >= platform.z - platform.depth / 2
+    && state.player.z - inset <= platform.z + platform.depth / 2;
+}
+
 function landOnPlatform(state: GameState, platform: Platform): void {
   const center = platform.x + platform.width / 2;
-  const centered = Math.abs(state.player.x - center) <= platform.width * 0.18;
+  const centered = Math.abs(state.player.x - center) <= platform.width * 0.18
+    && Math.abs(state.player.z - platform.z) <= platform.depth * 0.18;
   state.player.y = platform.top - state.player.radius;
+  state.player.z = platform.z;
   state.player.vx = 0;
   state.player.vy = 0;
+  state.player.vz = 0;
   state.phase = 'landed';
   state.landedElapsed = 0;
   state.currentPlatformID = platform.id;
@@ -155,6 +179,7 @@ function landOnPlatform(state: GameState, platform: Platform): void {
   state.score += centered ? 2 : 1;
   state.bestScore = Math.max(state.bestScore, state.score);
   state.cameraTargetX = Math.max(0, state.player.x - 260);
+  state.cameraTargetZ = platform.z * 0.42;
   state.platforms = state.platforms.filter((candidate) => candidate.x + candidate.width >= platform.x - 300);
   appendReachablePlatform(state);
 }
@@ -162,14 +187,22 @@ function landOnPlatform(state: GameState, platform: Platform): void {
 function appendReachablePlatform(state: GameState): void {
   const previous = state.platforms.at(-1)!;
   const width = platformWidthForLandings(state.landings);
-  const random = nextRandom(state);
+  const distanceRandom = nextRandom(state);
+  const depthRandom = nextRandom(state);
   const minDistance = jumpDistanceForCharge(0) + 18;
   const maxDistance = jumpDistanceForCharge(1) - 18;
-  const centerDistance = minDistance + (maxDistance - minDistance) * random;
+  const centerDistance = minDistance + (maxDistance - minDistance) * distanceRandom;
   let x = state.player.x + centerDistance - width / 2;
   x = Math.max(x, previous.x + previous.width + 46);
-  state.platforms.push({ id: state.nextPlatformID, x, width, top: 414 });
+  const z = (depthRandom * 2 - 1) * MAX_LANE_DEPTH;
+  state.platforms.push({ id: state.nextPlatformID, x, z, width, depth: 116, top: 414 });
   state.nextPlatformID += 1;
+}
+
+function nextPlatform(state: GameState): Platform | undefined {
+  return state.platforms
+    .filter((platform) => platform.id !== state.currentPlatformID && platform.x > state.player.x)
+    .sort((left, right) => left.x - right.x)[0];
 }
 
 function resetRun(state: GameState): void {

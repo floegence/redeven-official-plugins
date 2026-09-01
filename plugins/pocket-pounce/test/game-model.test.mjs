@@ -47,7 +47,21 @@ describe('Pocket Pounce game model', () => {
       const distance = current.x + current.width / 2 - state.player.x;
       assert.ok(distance >= jumpDistanceForCharge(0));
       assert.ok(distance <= jumpDistanceForCharge(1));
+      assert.ok(Number.isFinite(current.z));
+      assert.ok(current.depth > 0);
     }
+  });
+
+  it('moves through depth toward the generated three-dimensional target', () => {
+    const state = createGame(23);
+    const target = state.platforms[1];
+    target.z = 72;
+    const startZ = state.player.z;
+    beginCharge(state, 100);
+    releaseJump(state, 720);
+    assert.ok(state.player.vz > 0);
+    stepGame(state, 0.2);
+    assert.ok(state.player.z > startZ);
   });
 
   it('lands once while descending and awards the centered bonus once', () => {
@@ -55,6 +69,7 @@ describe('Pocket Pounce game model', () => {
     const target = state.platforms[1];
     state.phase = 'jumping';
     state.player.x = target.x + target.width / 2;
+    state.player.z = target.z;
     state.player.y = target.top - state.player.radius - 3;
     state.player.vx = 0;
     state.player.vy = 180;
@@ -81,6 +96,21 @@ describe('Pocket Pounce game model', () => {
     state.player.vy = 250;
     stepGame(state, 1 / 60);
     assert.equal(state.phase, 'game-over');
+  });
+
+  it('requires depth overlap before a descending player can land', () => {
+    const state = createGame(29);
+    const target = state.platforms[1];
+    state.phase = 'jumping';
+    state.player.x = target.x + target.width / 2;
+    state.player.z = target.z + target.depth + 100;
+    state.player.y = target.top - state.player.radius - 3;
+    state.player.vx = 0;
+    state.player.vy = 180;
+    state.player.vz = 0;
+    stepGame(state, 1 / 30);
+    assert.equal(state.phase, 'jumping');
+    assert.equal(state.score, 0);
   });
 
   it('restarts from game over and preserves only the session best', () => {

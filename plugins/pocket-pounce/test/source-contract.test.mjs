@@ -8,14 +8,15 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 describe('Pocket Pounce source contract', () => {
   it('is a permissionless sandboxed Canvas game with one authoritative model', async () => {
-    const [manifest, app, model] = await Promise.all([
+    const [manifest, app, model, scene] = await Promise.all([
       readFile(path.join(root, 'manifest.json'), 'utf8').then(JSON.parse),
       readFile(path.join(root, 'ui/src/app.tsx'), 'utf8'),
       readFile(path.join(root, 'ui/src/game-model.ts'), 'utf8'),
+      readFile(path.join(root, 'ui/src/scene-3d.ts'), 'utf8'),
     ]);
     assert.equal(manifest.schema_version, 'redevplugin.manifest.v9');
     assert.equal(manifest.plugin.plugin_id, 'com.redeven.official.pocket-pounce');
-    assert.equal(manifest.plugin.version, '1.0.12');
+    assert.equal(manifest.plugin.version, '1.0.13');
     assert.deepEqual(manifest.permissions, []);
     assert.deepEqual(manifest.workers, []);
     assert.deepEqual(manifest.methods, []);
@@ -32,6 +33,11 @@ describe('Pocket Pounce source contract', () => {
     assert.match(app, /clamp\(\(now - lastFrameAt\) \/ 1000, 0, 0\.05\)/u);
     assert.match(app, /canvasBackingSize\(cssWidth, cssHeight, nextPixelRatio\)/u);
     assert.match(model, /export function jumpDistanceForCharge/u);
+    assert.match(model, /player\.z/u);
+    assert.match(model, /depthOverlap/u);
+    assert.match(app, /projectPoint/u);
+    assert.match(app, /spawnDust/u);
+    assert.match(scene, /export function sceneMotion/u);
     assert.doesNotMatch(app, /\b(?:window|document|navigator)\b/u);
     assert.doesNotMatch(`${app}\n${model}`, /\bfetch\s*\(|WebSocket|localStorage|sessionStorage|indexedDB|https?:\/\//u);
   });
