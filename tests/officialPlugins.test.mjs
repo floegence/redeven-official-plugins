@@ -35,7 +35,7 @@ describe('official plugin repository contract', () => {
     assert.equal(weather.release.stable_catalog.min_redevplugin_version, '3.0.18');
     assert.equal(pocketPounce.manifest.schema_version, 'redevplugin.manifest.v9');
     assert.equal(pocketPounce.manifest.plugin.plugin_id, 'com.redeven.official.pocket-pounce');
-    assert.equal(pocketPounce.manifest.plugin.version, '1.0.10');
+    assert.equal(pocketPounce.manifest.plugin.version, '1.0.11');
     assert.deepEqual(pocketPounce.manifest.permissions, []);
     assert.deepEqual(pocketPounce.manifest.workers, []);
     assert.deepEqual(pocketPounce.manifest.methods, []);
@@ -66,7 +66,7 @@ describe('official plugin repository contract', () => {
   it('resolves each global release tag to exactly one plugin', async () => {
     const sources = await loadAllPluginSources(repoRoot);
     assert.equal(resolvePluginForReleaseTag(sources, 'v1.0.9').name, 'weather');
-    assert.equal(resolvePluginForReleaseTag(sources, 'v1.0.10').name, 'pocket-pounce');
+    assert.equal(resolvePluginForReleaseTag(sources, 'v1.0.11').name, 'pocket-pounce');
     assert.throws(() => resolvePluginForReleaseTag(sources, 'v9.9.9'), /exactly one plugin/u);
 
     const duplicate = structuredClone(sources[0]);

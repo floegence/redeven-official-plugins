@@ -16,7 +16,6 @@ import {
 } from './game-model.js';
 
 type Locale = 'en-US' | 'zh-CN';
-type Particle = { x: number; y: number; vx: number; vy: number; life: number; size: number };
 
 const copy = {
   'en-US': {
@@ -35,7 +34,6 @@ const copy = {
 
 const bridge = new PluginBridgeClient({ timeoutMs: 20_000 });
 const game = createGame(Date.now());
-const particles: Particle[] = [];
 let locale: Locale = 'en-US';
 let canvas: OffscreenCanvas;
 let context: OffscreenCanvasRenderingContext2D;
@@ -52,21 +50,12 @@ let frameTimer: ReturnType<typeof setTimeout> | undefined;
 let surfaceVisible = true;
 let disposed = false;
 let ready = false;
-let reducedMotion = false;
 let lastPhase: GamePhase = game.phase;
 let lastScore = game.score;
 let awardText = '';
 let awardLife = 0;
 let accessibilitySignature = '';
 let accessibilityInFlight: Promise<void> | undefined;
-const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-
-function updateReducedMotion(): void {
-  reducedMotion = reducedMotionQuery.matches;
-}
-
-updateReducedMotion();
-reducedMotionQuery.addEventListener('change', updateReducedMotion);
 
 bridge.onCanvasInput('playfield', handleInput);
 bridge.onLifecycle((event) => {
@@ -90,8 +79,11 @@ bridge.onLifecycle((event) => {
     surfaceVisible = false;
     cancelCharge(game);
     stopFrameLoop();
-    particles.length = 0;
-    reducedMotionQuery.removeEventListener('change', updateReducedMotion);
+    ready = false;
+    if (canvas) {
+      canvas.width = 1;
+      canvas.height = 1;
+    }
   }
 });
 
@@ -198,11 +190,10 @@ function frame(): void {
   accumulator = Math.min(0.1, accumulator + elapsed);
   while (accumulator >= 1 / 120) {
     stepGame(game, 1 / 120);
-    updateParticles(1 / 120);
     accumulator -= 1 / 120;
   }
   observeGameTransitions();
-  cameraX += (game.cameraTargetX - cameraX) * Math.min(1, elapsed * (reducedMotion ? 30 : 7));
+  cameraX = game.cameraTargetX;
   awardLife = Math.max(0, awardLife - elapsed);
   draw(now);
   syncAccessibility(false);
@@ -211,39 +202,12 @@ function frame(): void {
 
 function observeGameTransitions(): void {
   if (lastPhase === 'jumping' && game.phase === 'landed') {
-    if (!reducedMotion) createLandingDust();
     const gained = game.score - lastScore;
     awardText = gained === 2 ? copy[locale].exact : '+1';
     awardLife = 0.9;
   }
   lastPhase = game.phase;
   lastScore = game.score;
-}
-
-function createLandingDust(): void {
-  for (let index = 0; index < 12; index += 1) {
-    const direction = index % 2 === 0 ? -1 : 1;
-    particles.push({
-      x: game.player.x + direction * (6 + index * 0.8),
-      y: game.player.y + game.player.radius - 3,
-      vx: direction * (28 + index * 5),
-      vy: -35 - (index % 4) * 9,
-      life: 0.55 + (index % 3) * 0.08,
-      size: 3 + index % 4,
-    });
-  }
-}
-
-function updateParticles(dt: number): void {
-  for (const particle of particles) {
-    particle.x += particle.vx * dt;
-    particle.y += particle.vy * dt;
-    particle.vy += 90 * dt;
-    particle.life -= dt;
-  }
-  for (let index = particles.length - 1; index >= 0; index -= 1) {
-    if (particles[index].life <= 0) particles.splice(index, 1);
-  }
 }
 
 function draw(nowMs: number): void {
@@ -257,19 +221,18 @@ function draw(nowMs: number): void {
   context.save();
   context.translate(offsetX, offsetY);
   context.scale(renderScale, renderScale);
-  drawSky(nowMs / 1000);
+  drawSky();
   drawDunes();
   context.save();
   context.translate(-cameraX, 0);
   for (const platform of game.platforms) drawPlatform(platform);
-  for (const particle of particles) drawParticle(particle);
   drawJerboa(nowMs);
   context.restore();
   drawHUD(nowMs);
   context.restore();
 }
 
-function drawSky(time: number): void {
+function drawSky(): void {
   const sky = context.createLinearGradient(0, 0, 0, WORLD_HEIGHT);
   sky.addColorStop(0, '#101a35');
   sky.addColorStop(0.56, '#343550');
@@ -287,8 +250,7 @@ function drawSky(time: number): void {
   for (let index = 0; index < 42; index += 1) {
     const x = (index * 83 + 31) % WORLD_WIDTH;
     const y = 24 + (index * 47) % 215;
-    const pulse = reducedMotion ? 1 : 0.72 + Math.sin(time * 1.2 + index) * 0.22;
-    context.globalAlpha = pulse;
+    context.globalAlpha = 1;
     context.fillRect(x, y, index % 9 === 0 ? 2 : 1, index % 9 === 0 ? 2 : 1);
   }
   context.globalAlpha = 1;
@@ -393,15 +355,6 @@ function drawJerboa(nowMs: number): void {
   context.lineTo(16, 22 + charging * 5);
   context.stroke();
   context.restore();
-}
-
-function drawParticle(particle: Particle): void {
-  context.globalAlpha = clamp(particle.life * 1.8, 0, 1);
-  context.fillStyle = '#efd09f';
-  context.beginPath();
-  context.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
-  context.fill();
-  context.globalAlpha = 1;
 }
 
 function drawHUD(nowMs: number): void {
