@@ -81,5 +81,7 @@ describe('official plugin repository contract', () => {
     assert.doesNotMatch(`${buildScript}\n${releaseScript}`, /private_key_file|SIGNING_KEY/iu);
     assert.doesNotMatch(tracked, /(?:plugins|releases)\/containers\//u);
     assert.doesNotMatch(tracked, /\.redevplugin$/mu);
+    const weatherReleaseInputs = [...tracked.matchAll(/^releases\/weather\/([^/]+)\//gmu)].map((match) => match[1]);
+    assert.deepEqual([...new Set(weatherReleaseInputs)], ['1.0.9']);
   });
 });
