@@ -33,7 +33,7 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            plugins/weather/package-lock.json
+            plugins/*/package-lock.json
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.26.6'
@@ -50,24 +50,16 @@ jobs:
           set -euo pipefail
           [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
           version="${RELEASE_TAG#v}"
+          plugin=$(node scripts/resolve_release_plugin.mjs "$RELEASE_TAG")
           tag_commit=$(git rev-parse "${RELEASE_TAG}^{commit}")
           remote_main=$(git ls-remote origin refs/heads/main | awk '{print $1}')
           test "$GITHUB_SHA" = "$remote_main"
           git merge-base --is-ancestor "$tag_commit" "$remote_main"
-          test "$(git show "$tag_commit:plugins/weather/manifest.json" | jq -r '.plugin.version')" = "$version"
-          test "$(git show "$tag_commit:plugins/weather/release.json" | jq -r '.release_train_tag')" = "$RELEASE_TAG"
-          test "$(jq -r '.plugin.version' plugins/weather/manifest.json)" = "$version"
-          test "$(jq -r '.release_train_tag' plugins/weather/release.json)" = "$RELEASE_TAG"
-          for package_path in \
-            plugins/weather/manifest.json \
-            plugins/weather/assets \
-            plugins/weather/ui \
-            plugins/weather/worker/Cargo.toml \
-            plugins/weather/worker/Cargo.lock \
-            plugins/weather/worker/src \
-            plugins/weather/THIRD_PARTY_NOTICES.txt; do
-            git diff --quiet "$tag_commit" "$remote_main" -- "$package_path"
-          done
+          test "$(git show "$tag_commit:plugins/$plugin/manifest.json" | jq -r '.plugin.version')" = "$version"
+          test "$(git show "$tag_commit:plugins/$plugin/release.json" | jq -r '.release_train_tag')" = "$RELEASE_TAG"
+          test "$(jq -r '.plugin.version' "plugins/$plugin/manifest.json")" = "$version"
+          test "$(jq -r '.release_train_tag' "plugins/$plugin/release.json")" = "$RELEASE_TAG"
+          git diff --quiet "$tag_commit" "$remote_main" -- "plugins/$plugin"
           tag_ci=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&status=completed&per_page=100" \
             --jq ".workflow_runs[] | select(.head_sha == \"$tag_commit\") | .conclusion" | head -n 1)
           main_ci=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&status=completed&per_page=100" \
@@ -79,7 +71,7 @@ jobs:
             exit 1
           fi
       - run: npm ci
-      - run: npm --prefix plugins/weather ci
+      - run: npm run plugins:ci
       - run: npm run verify
       - name: Build, verify, and publish signed release set
         env:

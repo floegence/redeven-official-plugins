@@ -1,0 +1,9 @@
+Redeven Official Pocket Pounce Plugin - Third-Party Notices
+
+Pocket Pounce does not contain third-party visual, audio, or font assets. The
+jerboa character, desert scene, icon, animation, and gameplay implementation
+were created for this plugin from original vector and Canvas primitives.
+
+JavaScript build dependencies retain their respective upstream licences. The
+released package contains compiled output only and does not redistribute their
+source distributions.

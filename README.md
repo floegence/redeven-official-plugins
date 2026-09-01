@@ -5,12 +5,13 @@ release framework for Redeven-maintained official plugins. It is not the
 ReDevPlugin platform implementation and it does not store user-local plugin
 state.
 
-The current catalog contains the official Weather plugin. It pairs a local
-clock with current conditions, seven-day temperature trends, saved places, and
-offline forecast fallback through ReDevPlugin's brokered network and storage
-contracts. Container management remains a native Redeven product feature, so
-its former plugin source and release-train directories are intentionally absent.
-Historical tags and immutable releases remain the audit record.
+The current catalog contains Weather and Pocket Pounce. Weather pairs a local
+clock with forecasts through ReDevPlugin's brokered network and storage
+contracts. Pocket Pounce is a permissionless, keyboard-first Canvas game with
+original code-drawn artwork. Container management remains a native Redeven
+product feature, so its former plugin source and release-train directories are
+intentionally absent. Historical tags and immutable releases remain the audit
+record.
 
 ## Repository Layout
 
@@ -40,8 +41,9 @@ npm run check
 npm run catalog:verify
 ```
 
-When a new official plugin is added, give it a package-specific build script
-and use the generic packager with the released ReDevPlugin CLI:
+When a new official plugin is added, give it the common `build`,
+`build:release`, `test`, and `typecheck` package interface, then use the generic
+packager with the released ReDevPlugin CLI:
 
 ```bash
 node scripts/build_official_plugin.mjs <plugin-name>
@@ -54,12 +56,20 @@ npm --prefix plugins/weather ci
 npm run package:weather
 ```
 
+Pocket Pounce uses the same commands through `package:pocket-pounce`. Root
+tests, dependency installation, CI, and catalog generation discover every
+`plugins/*/manifest.json` plus `release.json` pair instead of maintaining a
+plugin-name list.
+
 The package script writes untracked output under `dist/`. The release commands
 use ReDevPlugin's neutral external-signer exchange: `release:prepare` writes
 public signing requests, `release:apply` accepts public responses, and
 `release:finalize` plus `release:verify` produce and verify the complete GitHub
 Release asset set. This repository never reads or stores private signing
 material, and plugin package bytes are kept in GitHub Releases rather than git.
-Weather release preparation builds its WASM worker in a pinned Linux AMD64
-container at a fixed source path, so external signing and GitHub publication
-operate on byte-identical package input across developer machines and CI.
+Repository tags are globally unique. A tag must match exactly one plugin's
+`release_train_tag`, and that tag publishes only the matching plugin's exact
+asset names. Markets must use that release reference so independent plugin
+release trains cannot select one another's assets. Weather's package-local
+`build:release` builds its WASM worker in a pinned Linux AMD64 container;
+plugins without a Worker keep their own simpler release build.

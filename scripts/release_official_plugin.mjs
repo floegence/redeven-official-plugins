@@ -23,13 +23,7 @@ const output = path.join(workRoot, 'output');
 const unsignedPackage = path.join(repoRoot, 'dist', pluginName, version, `${pluginName}-${version}.unsigned.redevplugin`);
 
 if (action === 'prepare') {
-  const buildEnvironment = {};
-  if (pluginName === 'weather') {
-    const releaseWorker = path.join(workRoot, 'canonical-weather.wasm');
-    await run(path.join(repoRoot, 'scripts', 'build_weather_release_wasm.sh'), [releaseWorker]);
-    buildEnvironment.WEATHER_RELEASE_WASM = releaseWorker;
-  }
-  await run('npm', ['run', `build:${pluginName}`], buildEnvironment);
+  await run('npm', ['--prefix', source.pluginRoot, 'run', 'build:release']);
   await runNodeScript('scripts/build_official_plugin.mjs', pluginName);
   await runReDevPlugin(['release', 'prepare', configFile, unsignedPackage, workspace]);
 } else if (action === 'apply') {

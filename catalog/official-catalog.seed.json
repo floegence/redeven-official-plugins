@@ -7,6 +7,56 @@
   },
   "plugins": [
     {
+      "plugin_id": "com.redeven.official.pocket-pounce",
+      "publisher_id": "com.redeven.official",
+      "presentation": {
+        "default_locale": "en-US",
+        "locales": [
+          {
+            "locale": "en-US",
+            "name": "Pocket Pounce",
+            "publisher_name": "Redeven Official",
+            "summary": "Pocket Pounce",
+            "description": [
+              "Pocket Pounce"
+            ],
+            "highlights": [],
+            "keywords": [
+              "Pocket Pounce"
+            ],
+            "surfaces": [
+              {
+                "surface_id": "pocket-pounce.game",
+                "label": "Pocket Pounce"
+              }
+            ],
+            "settings": []
+          }
+        ]
+      },
+      "categories": [
+        "pocket-pounce"
+      ],
+      "channels": [
+        "stable"
+      ],
+      "latest": {
+        "version": "1.0.10",
+        "min_redeven_version": "1.0.0",
+        "min_redevplugin_version": "3.0.18",
+        "rollout_state": "stable",
+        "default_surface_id": "pocket-pounce.game",
+        "distribution": {
+          "provider": "github_release",
+          "repository": "floegence/redeven-official-plugins",
+          "tag": "v1.0.10",
+          "artifact_name": "pocket-pounce-1.0.10.redevplugin",
+          "release_ref_asset_name": "pocket-pounce-1.0.10.release-ref.json",
+          "trust_root_asset_name": "root.public.json"
+        }
+      }
+    },
+    {
       "plugin_id": "com.redeven.official.weather",
       "publisher_id": "com.redeven.official",
       "presentation": {

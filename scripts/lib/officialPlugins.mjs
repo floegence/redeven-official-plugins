@@ -50,16 +50,47 @@ export async function listPluginNames(repoRoot) {
 
 export async function loadPluginSource(repoRoot, name) {
   const pluginRoot = path.join(repoRoot, 'plugins', name);
+  const packagePath = path.join(pluginRoot, 'package.json');
+  const packageJSON = await readJSON(packagePath);
   const manifestPath = path.join(pluginRoot, 'manifest.json');
   const manifest = await readJSON(manifestPath);
   const releasePath = path.join(pluginRoot, 'release.json');
   const release = await readJSON(releasePath);
-  return { name, pluginRoot, manifestPath, manifest, releasePath, release };
+  return { name, pluginRoot, packagePath, packageJSON, manifestPath, manifest, releasePath, release };
 }
 
 export async function loadAllPluginSources(repoRoot) {
   const names = await listPluginNames(repoRoot);
   return Promise.all(names.map((name) => loadPluginSource(repoRoot, name)));
+}
+
+export function resolvePluginForReleaseTag(sources, tag) {
+  const matches = sources.filter((source) => source.release?.release_train_tag === tag);
+  if (matches.length !== 1) {
+    throw new Error(`release tag ${tag} must match exactly one plugin; found ${matches.length}`);
+  }
+  return matches[0];
+}
+
+export function validatePluginCollection(sources) {
+  const errors = [];
+  collectDuplicateErrors(sources, (source) => source.manifest.plugin?.plugin_id, 'plugin ID', errors);
+  collectDuplicateErrors(sources, (source) => source.release?.release_train_tag, 'release tag', errors);
+  return errors;
+}
+
+function collectDuplicateErrors(sources, valueFor, label, errors) {
+  const owners = new Map();
+  for (const source of sources) {
+    const value = String(valueFor(source) ?? '');
+    if (!value) continue;
+    const names = owners.get(value) ?? [];
+    names.push(source.name);
+    owners.set(value, names);
+  }
+  for (const [value, names] of owners) {
+    if (names.length > 1) errors.push(`duplicate ${label} ${value}: ${names.sort().join(', ')}`);
+  }
 }
 
 export function catalogItemForPlugin(source) {
@@ -132,6 +163,14 @@ export function sha256Hex(data) {
 export async function validatePluginSource(source) {
   const errors = [];
   const { manifest, pluginRoot, name } = source;
+  if (source.packageJSON?.version !== manifest.plugin?.version) {
+    errors.push(`${name}: package version must match manifest version`);
+  }
+  for (const script of ['build', 'build:release', 'test', 'typecheck']) {
+    if (typeof source.packageJSON?.scripts?.[script] !== 'string') {
+      errors.push(`${name}: package script ${script} is required`);
+    }
+  }
   if (manifest.schema_version !== 'redevplugin.manifest.v9') {
     errors.push(`${name}: manifest schema_version must be redevplugin.manifest.v9`);
   }

@@ -102,6 +102,14 @@ npm run build:<plugin-name>
 node scripts/build_official_plugin.mjs <plugin-name>
 ```
 
+Every `plugins/*/manifest.json` plus `release.json` pair is a discovered plugin
+source. Each plugin package must expose `build`, `build:release`, `test`, and
+`typecheck`; plugin-specific release work such as a canonical Worker build must
+stay behind that package interface. Shared repository tags are globally unique,
+must match exactly one discovered plugin, and may publish only that plugin's
+exact release assets. Markets consume the exact release-ref asset for each
+plugin release train.
+
 The generic packager builds a deterministic unsigned `.redevplugin` package
 using the released ReDevPlugin CLI. Official publication must use the
 released neutral external-signer publisher flow and verify the complete signed

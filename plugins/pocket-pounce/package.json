@@ -1,13 +1,13 @@
 {
-  "name": "@redeven/official-weather-plugin",
-  "version": "1.0.9",
+  "name": "@redeven/official-pocket-pounce-plugin",
+  "version": "1.0.10",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "npm run typecheck && node scripts/build.mjs",
-    "build:release": "node scripts/build-release.mjs",
+    "build:release": "npm run build",
     "build:ui": "esbuild ui/src/app.tsx --bundle --format=iife --platform=browser --target=es2022 --jsx=automatic --jsx-import-source=@floegence/redevplugin-ui --outfile=dist/ui/assets/app.js",
-    "test": "node --test test/*.test.mjs && cargo test --locked --manifest-path worker/Cargo.toml",
+    "test": "node --test test/*.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

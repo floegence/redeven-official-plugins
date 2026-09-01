@@ -6,12 +6,15 @@ import {
   readJSON,
   repoRootFrom,
   stableJSONString,
+  validatePluginCollection,
   validatePluginSource,
 } from './lib/officialPlugins.mjs';
 
 const repoRoot = repoRootFrom(import.meta.url);
 const sources = await loadAllPluginSources(repoRoot);
 const errors = [];
+
+errors.push(...validatePluginCollection(sources));
 
 for (const source of sources) {
   errors.push(...await validatePluginSource(source));

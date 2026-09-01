@@ -4,7 +4,8 @@ set -euo pipefail
 tag="${1:?release tag is required}"
 [[ "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
 version="${tag#v}"
-plugin="weather"
+plugin=$(node scripts/resolve_release_plugin.mjs "$tag")
+display_name=$(jq -r '.plugin.display_name' "plugins/$plugin/manifest.json")
 
 if gh release view "$tag" >/dev/null 2>&1; then
   echo "release already exists for $tag" >&2
@@ -37,8 +38,8 @@ mapfile -t output_files < <(find "$output" -maxdepth 1 -type f -print | sort)
 ((${#output_files[@]} > 0))
 gh release create "$tag" "${output_files[@]}" \
   --verify-tag \
-  --title "Redeven Official Weather $tag" \
-  --notes "Weather $version with its signed ReDevPlugin release reference and public trust evidence."
+  --title "Redeven Official $display_name $tag" \
+  --notes "$display_name $version with its signed ReDevPlugin release reference and public trust evidence."
 
 gh release download "$tag" --dir "$readback"
 diff -qr "$output" "$readback"

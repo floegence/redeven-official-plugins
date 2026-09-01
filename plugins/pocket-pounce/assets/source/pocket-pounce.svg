@@ -1,0 +1,22 @@
+<!-- Pocket Pounce original icon. Copyright Floegence. No third-party assets. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Pocket Pounce original icon">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#101a35"/><stop offset="1" stop-color="#9a6550"/></linearGradient>
+    <linearGradient id="stone" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ddb17d"/><stop offset="1" stop-color="#513942"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#sky)"/>
+  <circle cx="394" cy="112" r="54" fill="#ffe6b0"/>
+  <path d="M0 350Q130 285 256 355T512 330V512H0Z" fill="#6e4d46"/>
+  <ellipse cx="270" cy="397" rx="150" ry="38" fill="#ddb17d"/>
+  <path d="M120 397q18 92 72 103h160q36-30 68-103z" fill="url(#stone)"/>
+  <path d="M220 318C120 330 116 236 194 224" fill="none" stroke="#4c2f35" stroke-width="24" stroke-linecap="round"/>
+  <ellipse cx="254" cy="305" rx="72" ry="61" fill="#d98765"/>
+  <circle cx="315" cy="254" r="55" fill="#eda27a"/>
+  <ellipse cx="286" cy="176" rx="20" ry="54" transform="rotate(-10 286 176)" fill="#e99a75"/>
+  <ellipse cx="335" cy="169" rx="20" ry="58" transform="rotate(12 335 169)" fill="#e99a75"/>
+  <ellipse cx="286" cy="177" rx="8" ry="35" transform="rotate(-10 286 177)" fill="#75434a"/>
+  <ellipse cx="335" cy="170" rx="8" ry="38" transform="rotate(12 335 170)" fill="#75434a"/>
+  <circle cx="331" cy="245" r="9" fill="#221d29"/>
+  <ellipse cx="367" cy="270" rx="20" ry="14" fill="#f7d7b5"/>
+  <path d="M230 354l-27 42M283 356l34 39" stroke="#5a343a" stroke-width="18" stroke-linecap="round"/>
+</svg>

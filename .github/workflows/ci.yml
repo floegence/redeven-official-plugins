@@ -25,9 +25,9 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            plugins/weather/package-lock.json
+            plugins/*/package-lock.json
       - run: npm ci
-      - run: npm --prefix plugins/weather ci
+      - run: npm run plugins:ci
       - run: npm run verify
       - run: npm audit --audit-level=moderate
-      - run: npm --prefix plugins/weather audit --audit-level=moderate
+      - run: npm run plugins:audit

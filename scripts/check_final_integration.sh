@@ -7,6 +7,7 @@ cd "$ROOT_DIR"
 
 test -z "$(git status --porcelain)"
 npm ci
+npm run plugins:ci
 npm run verify
 git diff --exit-code
 test -z "$(git status --porcelain)"
