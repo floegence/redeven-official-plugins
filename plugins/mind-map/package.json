@@ -1,11 +1,11 @@
 {
   "name": "@redeven/official-mind-map-plugin",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "npm run typecheck && node scripts/build.mjs",
-    "build:release": "npm run build",
+    "build:release": "node scripts/build-release.mjs",
     "build:ui": "esbuild ui/src/app.tsx --bundle --format=iife --platform=browser --target=es2022 --jsx=automatic --jsx-import-source=@floegence/redevplugin-ui --outfile=dist/ui/assets/app.js",
     "test": "node --test test/*.test.mjs && cargo test --locked --manifest-path worker/Cargo.toml",
     "typecheck": "tsc -p tsconfig.json --noEmit"

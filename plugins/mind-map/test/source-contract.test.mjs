@@ -34,4 +34,17 @@ describe('Mind Map source contract', () => {
     assert.doesNotMatch(`${app}\n${css}`, /@font-face|\.mp3|\.wav|\.ogg/iu);
     assert.match(notice, /No third-party visual, audio, or font assets/u);
   });
+
+  it('builds release WASM in the pinned Linux environment', async () => {
+    const [packageJSON, releaseBuild, wasmBuild] = await Promise.all([
+      readFile(path.join(root, 'package.json'), 'utf8'),
+      readFile(path.join(root, 'scripts', 'build-release.mjs'), 'utf8'),
+      readFile(path.join(root, 'scripts', 'build-release-wasm.sh'), 'utf8'),
+    ]);
+    assert.match(packageJSON, /build-release\.mjs/u);
+    assert.match(releaseBuild, /MIND_MAP_RELEASE_WASM/u);
+    assert.match(wasmBuild, /--platform linux\/amd64/u);
+    assert.match(wasmBuild, /rust:1\.88-bookworm@sha256:/u);
+    assert.match(wasmBuild, /cargo build --locked --release/u);
+  });
 });
