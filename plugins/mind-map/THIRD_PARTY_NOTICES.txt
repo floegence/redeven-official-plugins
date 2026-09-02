@@ -1,0 +1,8 @@
+Redeven Official Mind Map Plugin - Third-Party Notices
+
+The interface, icon, layout algorithm, Canvas renderer, and application logic
+were created for this plugin. No third-party visual, audio, or font assets are
+included.
+
+JavaScript and Rust build dependencies retain their respective upstream
+licenses. The released package contains compiled output and this notice.

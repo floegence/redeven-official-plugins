@@ -7,27 +7,27 @@
   },
   "plugins": [
     {
-      "plugin_id": "com.redeven.official.pocket-pounce",
+      "plugin_id": "com.redeven.official.mind-map",
       "publisher_id": "com.redeven.official",
       "presentation": {
         "default_locale": "en-US",
         "locales": [
           {
             "locale": "en-US",
-            "name": "Pocket Pounce",
+            "name": "Mind Map",
             "publisher_name": "Redeven Official",
-            "summary": "Pocket Pounce",
+            "summary": "Mind Map",
             "description": [
-              "Pocket Pounce"
+              "Mind Map"
             ],
             "highlights": [],
             "keywords": [
-              "Pocket Pounce"
+              "Mind Map"
             ],
             "surfaces": [
               {
-                "surface_id": "pocket-pounce.game",
-                "label": "Pocket Pounce"
+                "surface_id": "mind-map.editor",
+                "label": "Mind Map"
               }
             ],
             "settings": []
@@ -35,23 +35,23 @@
         ]
       },
       "categories": [
-        "pocket-pounce"
+        "mind-map"
       ],
       "channels": [
         "stable"
       ],
       "latest": {
-        "version": "1.0.16",
+        "version": "1.0.17",
         "min_redeven_version": "1.0.0",
         "min_redevplugin_version": "3.0.18",
         "rollout_state": "stable",
-        "default_surface_id": "pocket-pounce.game",
+        "default_surface_id": "mind-map.editor",
         "distribution": {
           "provider": "github_release",
           "repository": "floegence/redeven-official-plugins",
-          "tag": "v1.0.16",
-          "artifact_name": "pocket-pounce-1.0.16.redevplugin",
-          "release_ref_asset_name": "pocket-pounce-1.0.16.release-ref.json",
+          "tag": "v1.0.17",
+          "artifact_name": "mind-map-1.0.17.redevplugin",
+          "release_ref_asset_name": "mind-map-1.0.17.release-ref.json",
           "trust_root_asset_name": "root.public.json"
         }
       }

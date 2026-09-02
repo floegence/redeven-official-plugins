@@ -5,13 +5,12 @@ release framework for Redeven-maintained official plugins. It is not the
 ReDevPlugin platform implementation and it does not store user-local plugin
 state.
 
-The current catalog contains Weather and Pocket Pounce. Weather pairs a local
-clock with forecasts through ReDevPlugin's brokered network and storage
-contracts. Pocket Pounce is a permissionless, keyboard-first Canvas game with
-original code-drawn artwork. Container management remains a native Redeven
-product feature, so its former plugin source and release-train directories are
-intentionally absent. Historical tags and immutable releases remain the audit
-record.
+The current catalog contains Weather and Mind Map. Weather pairs a local clock
+with forecasts through ReDevPlugin's brokered network and storage contracts.
+Mind Map is an offline-first Canvas editor with brokered user-scoped storage,
+optimistic revision checks, multi-document editing, and portable JSON import
+and export. Retired plugin source is intentionally absent. Historical tags and
+immutable releases remain the audit record.
 
 ## Repository Layout
 
@@ -56,8 +55,8 @@ npm --prefix plugins/weather ci
 npm run package:weather
 ```
 
-Pocket Pounce uses the same commands through `package:pocket-pounce`. Root
-tests, dependency installation, CI, and catalog generation discover every
+Mind Map uses the same commands through `package:mind-map`. Root tests,
+dependency installation, CI, and catalog generation discover every
 `plugins/*/manifest.json` plus `release.json` pair instead of maintaining a
 plugin-name list.
 
@@ -71,5 +70,6 @@ Repository tags are globally unique. A tag must match exactly one plugin's
 `release_train_tag`, and that tag publishes only the matching plugin's exact
 asset names. Markets must use that release reference so independent plugin
 release trains cannot select one another's assets. Weather's package-local
-`build:release` builds its WASM worker in a pinned Linux AMD64 container;
-plugins without a Worker keep their own simpler release build.
+`build:release` builds its WASM worker in a pinned Linux AMD64 container. Mind
+Map builds its permissionless storage Worker behind its package-local release
+interface, so the shared release framework remains plugin-neutral.

@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "WebWorker"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "@floegence/redevplugin-ui",
+    "skipLibCheck": true
+  },
+  "include": ["ui/src/**/*.ts", "ui/src/**/*.tsx"]
+}

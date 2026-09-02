@@ -1,0 +1,16 @@
+<!-- Mind Map original icon. Copyright Floegence. No third-party assets. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Mind Map icon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#6558e8"/><stop offset="1" stop-color="#3d2e91"/></linearGradient>
+    <linearGradient id="root" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#e8e5ff"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <path d="M194 256H114M318 218h80M318 294h80" fill="none" stroke="#c9c3ff" stroke-width="22" stroke-linecap="round"/>
+  <path d="M114 256c0-66 0-78 0-108M114 256c0 66 0 78 0 108M398 218v-72M398 294v72" fill="none" stroke="#a79eff" stroke-width="18" stroke-linecap="round"/>
+  <rect x="176" y="194" width="160" height="124" rx="38" fill="url(#root)"/>
+  <circle cx="114" cy="142" r="38" fill="#55d4ab"/>
+  <circle cx="114" cy="370" r="38" fill="#ffb35d"/>
+  <circle cx="398" cy="140" r="38" fill="#73a4ff"/>
+  <circle cx="398" cy="372" r="38" fill="#ff7d91"/>
+  <path d="M218 238h76M218 274h52" stroke="#6558e8" stroke-width="16" stroke-linecap="round"/>
+</svg>

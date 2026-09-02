@@ -1,0 +1,183 @@
+{
+  "schema_version": "redevplugin.manifest.v9",
+  "publisher": {
+    "publisher_id": "com.redeven.official",
+    "display_name": "Redeven Official"
+  },
+  "plugin": {
+    "plugin_id": "com.redeven.official.mind-map",
+    "display_name": "Mind Map",
+    "version": "1.0.17"
+  },
+  "api": {
+    "major": 1,
+    "required_features": [],
+    "optional_features": []
+  },
+  "permissions": [],
+  "presentation": {
+    "icon": { "path": "ui/assets/mind-map.png" },
+    "locales": { "default": "en-US" }
+  },
+  "surfaces": [
+    {
+      "surface_id": "mind-map.editor",
+      "kind": "view",
+      "intent": "primary",
+      "label": "Mind Map",
+      "entry": "ui/index.html",
+      "icon": "ui/assets/mind-map.png",
+      "default_size": { "width": 1120, "height": 760 }
+    }
+  ],
+  "workers": [
+    {
+      "worker_id": "mind_map_backend",
+      "artifact": "workers/mind-map.wasm",
+      "mode": "job",
+      "scope": "user",
+      "memory_limit_bytes": 33554432
+    }
+  ],
+  "methods": [
+    {
+      "method": "mindmap.workspace.load",
+      "effect": "read",
+      "execution": "sync",
+      "route": { "kind": "worker", "worker_id": "mind_map_backend" },
+      "broker_access": { "storage": [{ "store_id": "mind-map", "operations": ["get"] }] },
+      "request_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "response_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["revision", "saved_at", "workspace"],
+        "properties": {
+          "revision": { "type": "integer", "minimum": 0 },
+          "saved_at": { "type": ["string", "null"], "maxLength": 64 },
+          "workspace": { "$ref": "#/$defs/workspace" }
+        },
+        "$defs": {
+          "workspace": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["schema_version", "selected_document_id", "documents"],
+            "properties": {
+              "schema_version": { "const": "mind-map.workspace.v1" },
+              "selected_document_id": { "$ref": "#/$defs/id" },
+              "documents": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/document" } }
+            }
+          },
+          "document": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["schema_version", "id", "title", "layout", "nodes", "updated_at"],
+            "properties": {
+              "schema_version": { "const": "mind-map.document.v1" },
+              "id": { "$ref": "#/$defs/id" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+              "layout": { "enum": ["bilateral", "right"] },
+              "nodes": { "type": "array", "minItems": 1, "maxItems": 500, "items": { "$ref": "#/$defs/node" } },
+              "updated_at": { "type": "string", "maxLength": 64 }
+            }
+          },
+          "node": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "parent_id", "order", "side", "title", "color", "collapsed"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "parent_id": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+              "order": { "type": "integer", "minimum": 0, "maximum": 499 },
+              "side": { "enum": ["left", "right"] },
+              "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+              "color": { "enum": ["accent", "blue", "green", "amber", "rose", "violet"] },
+              "collapsed": { "type": "boolean" }
+            }
+          },
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" }
+        }
+      }
+    },
+    {
+      "method": "mindmap.workspace.save",
+      "effect": "write",
+      "execution": "sync",
+      "route": { "kind": "worker", "worker_id": "mind_map_backend" },
+      "broker_access": { "storage": [{ "store_id": "mind-map", "operations": ["get", "put"] }] },
+      "request_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["expected_revision", "workspace"],
+        "properties": {
+          "expected_revision": { "type": "integer", "minimum": 0 },
+          "workspace": { "$ref": "#/$defs/workspace" }
+        },
+        "$defs": {
+          "workspace": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["schema_version", "selected_document_id", "documents"],
+            "properties": {
+              "schema_version": { "const": "mind-map.workspace.v1" },
+              "selected_document_id": { "$ref": "#/$defs/id" },
+              "documents": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/document" } }
+            }
+          },
+          "document": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["schema_version", "id", "title", "layout", "nodes", "updated_at"],
+            "properties": {
+              "schema_version": { "const": "mind-map.document.v1" },
+              "id": { "$ref": "#/$defs/id" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+              "layout": { "enum": ["bilateral", "right"] },
+              "nodes": { "type": "array", "minItems": 1, "maxItems": 500, "items": { "$ref": "#/$defs/node" } },
+              "updated_at": { "type": "string", "maxLength": 64 }
+            }
+          },
+          "node": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "parent_id", "order", "side", "title", "color", "collapsed"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "parent_id": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+              "order": { "type": "integer", "minimum": 0, "maximum": 499 },
+              "side": { "enum": ["left", "right"] },
+              "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+              "color": { "enum": ["accent", "blue", "green", "amber", "rose", "violet"] },
+              "collapsed": { "type": "boolean" }
+            }
+          },
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$" }
+        }
+      },
+      "response_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["revision", "saved_at"],
+        "properties": {
+          "revision": { "type": "integer", "minimum": 1 },
+          "saved_at": { "type": "string", "maxLength": 64 }
+        }
+      }
+    }
+  ],
+  "storage": {
+    "stores": [
+      {
+        "store_id": "mind-map",
+        "kind": "kv",
+        "scope": "user",
+        "quota_bytes": 4194304,
+        "quota_files": 16,
+        "schema_version": 1
+      }
+    ]
+  }
+}
