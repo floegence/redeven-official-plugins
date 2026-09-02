@@ -68,7 +68,7 @@ button:disabled { cursor: not-allowed; opacity: .42; }
 .document-button.is-active { border-color: color-mix(in srgb, var(--redevplugin-color-accent) 28%, transparent); background: color-mix(in srgb, var(--redevplugin-color-accent) 13%, transparent); color: var(--redevplugin-color-text); font-weight: 700; }
 .sidebar-footer { flex-wrap: wrap; border-top: 1px solid var(--redevplugin-color-border); }
 
-.editor-shell { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
+.editor-shell { container: editor / inline-size; display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
 .toolbar {
   display: flex;
   min-width: 0;
@@ -125,6 +125,13 @@ button:disabled { cursor: not-allowed; opacity: .42; }
 .modal-card input:focus, .modal-card textarea:focus { border-color: var(--redevplugin-color-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--redevplugin-color-focus) 18%, transparent); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
+@container editor (max-width: 900px) {
+  .toolbar { gap: 4px; padding-inline: 6px; overflow-x: hidden; }
+  .toolbar-group { gap: 3px; padding-right: 4px; }
+  .toolbar .tool-button { display: inline-grid; width: 32px; padding: 0; place-items: center; }
+  .toolbar .tool-button span, .save-state { display: none; }
+}
+
 @media (max-width: 760px) {
   .mind-map-app { grid-template-columns: 74px minmax(0, 1fr); }
   .sidebar-heading { justify-content: center; padding: 12px 6px; }
@@ -133,7 +140,6 @@ button:disabled { cursor: not-allowed; opacity: .42; }
   .document-list { padding: 7px 5px; }
   .document-button { padding: 9px 5px; text-align: center; }
   .document-button span { display: block; overflow: hidden; text-overflow: ellipsis; }
-  .save-state { display: none; }
   .toolbar { padding-inline: 8px; }
   .canvas-hint { display: none; }
 }

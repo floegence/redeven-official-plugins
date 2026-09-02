@@ -35,6 +35,14 @@ describe('Mind Map source contract', () => {
     assert.match(notice, /No third-party visual, audio, or font assets/u);
   });
 
+  it('keeps every toolbar action available without horizontal scrolling in compact surfaces', async () => {
+    const css = await readFile(path.join(root, 'ui', 'styles.css'), 'utf8');
+    assert.match(css, /\.editor-shell \{ container: editor \/ inline-size;/u);
+    assert.match(css, /@container editor \(max-width: 900px\)[\s\S]*\.toolbar \{[^}]*overflow-x: hidden/u);
+    assert.match(css, /\.toolbar \.tool-button \{[^}]*width: 32px/u);
+    assert.match(css, /\.toolbar \.tool-button span, \.save-state \{ display: none; \}/u);
+  });
+
   it('builds release WASM in the pinned Linux environment', async () => {
     const [packageJSON, releaseBuild, wasmBuild] = await Promise.all([
       readFile(path.join(root, 'package.json'), 'utf8'),
