@@ -60,6 +60,18 @@ describe('Mind Map source contract', () => {
     assert.match(app, /function branchColor/u);
   });
 
+  it('fails closed until the saved workspace is confirmed after a runtime restart', async () => {
+    const [app, startup] = await Promise.all([
+      readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8'),
+      readFile(path.join(root, 'ui', 'src', 'startup-load.ts'), 'utf8'),
+    ]);
+    assert.match(app, /if \(!await loadWorkspaceAtStartup\(\)\) return/u);
+    assert.match(app, /if \(loadState !== 'ready'\) return/u);
+    assert.match(app, /loadState !== 'ready' \? startupOverlay\(\) : null/u);
+    assert.doesNotMatch(app, /initialized = true/u);
+    assert.match(startup, /STARTUP_LOAD_RETRY_DELAYS_MS = \[500, 1_000, 2_000, 4_000, 8_000\]/u);
+  });
+
   it('builds release WASM in the pinned Linux environment', async () => {
     const [packageJSON, releaseBuild, wasmBuild] = await Promise.all([
       readFile(path.join(root, 'package.json'), 'utf8'),

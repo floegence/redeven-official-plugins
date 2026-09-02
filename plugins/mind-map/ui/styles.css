@@ -41,6 +41,7 @@ button:disabled { cursor: not-allowed; opacity: .34; }
 .loading-mark::after { width: 9px; height: 9px; top: 2px; left: 3px; box-shadow: 34px 24px 0 var(--redevplugin-color-success); }
 
 .mind-map-app {
+  position: relative;
   display: grid;
   grid-template-columns: 224px minmax(0, 1fr);
   width: 100%;
@@ -49,6 +50,59 @@ button:disabled { cursor: not-allowed; opacity: .34; }
   overflow: hidden;
   background: var(--redevplugin-color-canvas);
 }
+
+.mind-map-app.is-starting .document-sidebar,
+.mind-map-app.is-starting .editor-shell {
+  visibility: hidden;
+}
+
+.startup-overlay {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--redevplugin-color-accent) 10%, transparent), transparent 34%),
+    var(--redevplugin-color-canvas);
+}
+.startup-card {
+  display: grid;
+  width: min(360px, 100%);
+  justify-items: center;
+  gap: 10px;
+  padding: 26px;
+  border: 1px solid color-mix(in srgb, var(--redevplugin-color-border) 64%, transparent);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--redevplugin-color-surface-elevated) 94%, transparent);
+  box-shadow: 0 24px 70px color-mix(in srgb, #000000 15%, transparent);
+  text-align: center;
+}
+.startup-mark {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 4px;
+  border-radius: 15px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--redevplugin-color-accent) 84%, white), var(--redevplugin-color-accent));
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--redevplugin-color-accent) 24%, transparent);
+}
+.startup-mark::before, .startup-mark::after, .startup-mark span {
+  position: absolute;
+  content: "";
+  border-radius: 999px;
+  background: var(--redevplugin-color-accent-text);
+}
+.startup-mark::before { width: 8px; height: 8px; left: 9px; top: 11px; }
+.startup-mark::after { width: 7px; height: 7px; right: 8px; bottom: 10px; }
+.startup-mark span { width: 10px; height: 10px; left: 17px; top: 17px; }
+.startup-card:not(.is-error) .startup-mark { animation: startup-breathe 1.4s ease-in-out infinite; }
+.startup-card.is-error .startup-mark { background: var(--redevplugin-color-danger); box-shadow: 0 12px 28px color-mix(in srgb, var(--redevplugin-color-danger) 22%, transparent); }
+.startup-card strong { font-size: 16px; font-weight: 730; letter-spacing: -.015em; }
+.startup-card p { max-width: 290px; margin: 0; color: var(--redevplugin-color-text-muted); font-size: 12px; line-height: 1.55; }
+.startup-card button { min-height: 34px; margin-top: 5px; padding: 0 15px; border: 0; border-radius: 10px; background: var(--redevplugin-color-accent); color: var(--redevplugin-color-accent-text); font-size: 12px; font-weight: 700; }
+@keyframes startup-breathe { 50% { opacity: .72; transform: translateY(-2px) scale(.96); } }
 
 .document-sidebar {
   position: relative;

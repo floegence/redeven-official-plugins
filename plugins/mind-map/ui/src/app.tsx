@@ -8,6 +8,7 @@ import {
   type PluginUIActionEvent,
 } from '@floegence/redevplugin-ui/plugin';
 import { fitLayoutToViewport, layoutDocument, type DocumentLayout, type LayoutNode, type ViewportPadding } from './layout.js';
+import { loadWithRetry } from './startup-load.js';
 import {
   MAX_IMPORT_BYTES,
   addChild,
@@ -39,7 +40,8 @@ import {
 } from './workspace-model.js';
 
 type Locale = 'en' | 'zh';
-type SaveState = 'loading' | 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'conflict';
+type LoadState = 'loading' | 'ready' | 'error';
+type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'conflict';
 type Modal =
   | { kind: 'new-document'; title: string }
   | { kind: 'rename-document'; title: string }
@@ -76,7 +78,9 @@ let workspace = createWorkspace(1);
 let history: WorkspaceHistory = createHistory(workspace);
 let revision = 0;
 let savedAt: string | null = null;
-let saveState: SaveState = 'loading';
+let loadState: LoadState = 'loading';
+let loadMessage = '';
+let saveState: SaveState = 'idle';
 let saveMessage = '';
 let dirty = false;
 let editVersion = 0;
@@ -94,8 +98,10 @@ let pointer: PointerGesture | undefined;
 let dropTarget: DropTarget | undefined;
 let visible = true;
 let disposed = false;
-let initialized = false;
+let surfaceDisposing = false;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let loadRetryTimer: ReturnType<typeof setTimeout> | undefined;
+let loadRetryResolve: ((shouldContinue: boolean) => void) | undefined;
 let saveInFlight: Promise<boolean> | undefined;
 let renderQueue = Promise.resolve();
 let lastClick = { nodeID: '', time: 0 };
@@ -105,7 +111,9 @@ const COPY = {
     app: 'Mind Map', maps: 'Maps', newMap: 'New map', rename: 'Rename', duplicate: 'Duplicate', remove: 'Delete',
     workspace: 'Workspace', documents: 'maps', topics: 'topics', selectedMap: 'Current map',
     undo: 'Undo', redo: 'Redo', bilateral: 'Both sides', right: 'Right only', child: 'Child', sibling: 'Sibling',
-    collapse: 'Fold / unfold', importLabel: 'Import', exportLabel: 'Export', center: 'Center', loading: 'Loading workspace…',
+    collapse: 'Fold / unfold', importLabel: 'Import', exportLabel: 'Export', center: 'Center', loading: 'Restoring your workspace…',
+    loadingBody: 'Your saved maps will appear as soon as the local plugin runtime is ready.',
+    loadFailedTitle: 'Workspace is still unavailable', loadFailed: 'Your saved data was not changed. Try loading it again.',
     saved: 'Saved', saving: 'Saving…', unsaved: 'Unsaved changes', saveFailed: 'Save failed — changes remain here',
     conflict: 'A newer workspace was saved elsewhere.', reload: 'Reload latest', recover: 'Keep mine as copy', retry: 'Retry',
     hint: 'Tab child · Enter sibling · F2 rename · Drag a node to reorganize · Drag empty space to pan',
@@ -124,7 +132,9 @@ const COPY = {
     app: '思维导图', maps: '导图', newMap: '新建', rename: '重命名', duplicate: '复制', remove: '删除',
     workspace: '工作空间', documents: '张导图', topics: '个节点', selectedMap: '当前导图',
     undo: '撤销', redo: '重做', bilateral: '双向', right: '向右', child: '子节点', sibling: '同级节点',
-    collapse: '折叠 / 展开', importLabel: '导入', exportLabel: '导出', center: '居中', loading: '正在载入工作区…',
+    collapse: '折叠 / 展开', importLabel: '导入', exportLabel: '导出', center: '居中', loading: '正在恢复工作区…',
+    loadingBody: '本地插件运行时就绪后，将自动载入已保存的导图。',
+    loadFailedTitle: '工作区暂时不可用', loadFailed: '已保存的数据没有被修改，请重新载入。',
     saved: '已保存', saving: '正在保存…', unsaved: '有未保存修改', saveFailed: '保存失败，修改仍保留在本地界面',
     conflict: '其他窗口已保存了更新版本。', reload: '载入最新版本', recover: '将我的内容保留为副本', retry: '重试',
     hint: 'Tab 新建子节点 · Enter 新建同级 · F2 重命名 · 拖动节点调整结构 · 拖动空白处平移',
@@ -166,6 +176,7 @@ bridge.onAction('submit-modal', (event) => submitModal(event));
 bridge.onAction('reload-conflict', () => void reloadLatest());
 bridge.onAction('recover-conflict', () => void recoverLocalCopy());
 bridge.onAction('retry-save', () => void flushSave());
+bridge.onAction('retry-workspace-load', () => void retryInitialLoad());
 bridge.onCanvasInput(CANVAS_ID, handleCanvasInput);
 bridge.onLifecycle(async (event) => {
   if (event.type === 'visible') {
@@ -182,7 +193,9 @@ bridge.onLifecycle(async (event) => {
   }
   if (event.type === 'dispose') {
     visible = false;
+    surfaceDisposing = true;
     clearSaveTimer();
+    clearLoadRetryWait();
     await flushSave();
     disposed = true;
     canvas = undefined;
@@ -212,9 +225,11 @@ async function initialize(): Promise<void> {
   const drawingContext = canvas.getContext('2d', { alpha: false });
   if (!drawingContext) throw new Error('2D canvas is unavailable');
   context = drawingContext;
-  await reloadLatest();
-  initialized = true;
-  saveState = 'idle';
+  if (!await loadWorkspaceAtStartup()) return;
+  await activateLoadedWorkspace();
+}
+
+async function activateLoadedWorkspace(): Promise<void> {
   await bridge.updateCanvasAccessibility(CANVAS_ID, {
     label: text().app,
     description: text().hint,
@@ -224,9 +239,8 @@ async function initialize(): Promise<void> {
 }
 
 async function showFatal(error: unknown): Promise<void> {
-  saveState = 'error';
-  saveMessage = error instanceof Error ? error.message : text().operationFailed;
-  initialized = true;
+  loadState = 'error';
+  loadMessage = error instanceof Error ? error.message : text().loadFailed;
   try {
     await bridge.ready();
     await render();
@@ -240,7 +254,7 @@ function view() {
   const selected = document.nodes.find((node) => node.id === selectedNodeID) ?? document.nodes[0];
   const t = text();
   return (
-    <main key="mind-map-root" className="mind-map-app">
+    <main key="mind-map-root" className={loadState === 'ready' ? 'mind-map-app' : 'mind-map-app is-starting'}>
       <aside key="document-sidebar" className="document-sidebar" aria-label={t.maps}>
         <header key="sidebar-heading" className="sidebar-heading">
           <span key="brand-mark" className="brand-mark" aria-hidden="true"><span key="brand-core"></span></span>
@@ -308,7 +322,7 @@ function view() {
               </div>
             </nav>
           </header>
-          <span key="save-state" className={saveState === 'error' || saveState === 'conflict' ? 'save-pill is-error' : saveState === 'saving' ? 'save-pill is-saving' : 'save-pill'} role="status"><span key="save-dot" className="save-dot"></span>{saveLabel()}</span>
+          {loadState === 'ready' ? <span key="save-state" className={saveState === 'error' || saveState === 'conflict' ? 'save-pill is-error' : saveState === 'saving' ? 'save-pill is-saving' : 'save-pill'} role="status"><span key="save-dot" className="save-dot"></span>{saveLabel()}</span> : null}
           <p key="canvas-hint" id="canvas-hint" className="shortcut-pill"><kbd key="tab-key">Tab</kbd><span key="tab-label">{t.child}</span><span key="hint-divider-1">·</span><kbd key="enter-key">Enter</kbd><span key="enter-label">{t.sibling}</span><span key="hint-divider-2">·</span><kbd key="f2-key">F2</kbd><span key="f2-label">{t.rename}</span></p>
           <div key="color-panel" className="color-panel" aria-label={t.colors}>
             <span key="color-label" className="color-label">{t.colors}</span>
@@ -316,12 +330,12 @@ function view() {
               <button key={`color-${color}`} className={`color-button color-${color}`} type="button" value={color} aria-label={color} aria-pressed={selected.color === color} data-redevplugin-action="set-node-color"></button>
             ))}
           </div>
-          {!initialized ? notice('loading-notice', t.loading) : null}
-          {saveState === 'conflict' ? conflictNotice() : null}
-          {saveState === 'error' ? errorNotice() : null}
-          {modal ? modalView(modal) : null}
+          {loadState === 'ready' && saveState === 'conflict' ? conflictNotice() : null}
+          {loadState === 'ready' && saveState === 'error' ? errorNotice() : null}
+          {loadState === 'ready' && modal ? modalView(modal) : null}
         </div>
       </section>
+      {loadState !== 'ready' ? startupOverlay() : null}
     </main>
   );
 }
@@ -334,8 +348,19 @@ function sideActionButton(action: string, icon: string, label: string, disabled 
   return <button key={`side-${action}`} className="side-action-button" type="button" title={label} aria-label={label} disabled={disabled} data-redevplugin-action={action}><span key={`side-${action}-icon`} className={`tool-icon icon-${icon}`}></span></button>;
 }
 
-function notice(key: string, message: string) {
-  return <div key={key} className="notice-banner" role="status"><span key={`${key}-message`}>{message}</span></div>;
+function startupOverlay() {
+  const t = text();
+  const failed = loadState === 'error';
+  return (
+    <div key="startup-overlay" className="startup-overlay" role={failed ? 'alert' : 'status'}>
+      <div key="startup-card" className={failed ? 'startup-card is-error' : 'startup-card'}>
+        <span key="startup-mark" className="startup-mark" aria-hidden="true"><span key="startup-core"></span></span>
+        <strong key="startup-title">{failed ? t.loadFailedTitle : t.loading}</strong>
+        <p key="startup-message">{failed ? loadMessage || t.loadFailed : t.loadingBody}</p>
+        {failed ? <button key="retry-workspace-load" type="button" data-redevplugin-action="retry-workspace-load">{t.retry}</button> : null}
+      </div>
+    </div>
+  );
 }
 
 function conflictNotice() {
@@ -431,6 +456,7 @@ function submitModal(event: PluginUIActionEvent): void {
 }
 
 function openModal(next: Modal): void {
+  if (loadState !== 'ready') return;
   modal = next;
   void render();
 }
@@ -442,6 +468,7 @@ function closeModal(): void {
 }
 
 async function selectMap(event: PluginUIActionEvent): Promise<void> {
+  if (loadState !== 'ready') return;
   const id = String(event.value ?? '');
   if (!workspace.documents.some((document) => document.id === id) || id === workspace.selected_document_id) return;
   await flushSave();
@@ -509,6 +536,7 @@ function setSelectedColor(value: string): void {
 }
 
 function runMutation(mutator: (draft: MindMapWorkspace) => string | undefined, immediateSave = false): void {
+  if (loadState !== 'ready') return;
   try {
     const draft = clone(workspace);
     const nextSelected = mutator(draft);
@@ -530,6 +558,7 @@ function runMutation(mutator: (draft: MindMapWorkspace) => string | undefined, i
 }
 
 function undo(): void {
+  if (loadState !== 'ready') return;
   const next = undoHistory(history, workspace);
   if (next === workspace) return;
   workspace = next;
@@ -540,6 +569,7 @@ function undo(): void {
 }
 
 function redo(): void {
+  if (loadState !== 'ready') return;
   const next = redoHistory(history, workspace);
   if (next === workspace) return;
   workspace = next;
@@ -557,6 +587,7 @@ function ensureSelection(preferred?: string): void {
 }
 
 function markDirty(immediate: boolean): void {
+  if (loadState !== 'ready') return;
   dirty = true;
   editVersion += 1;
   if (saveState !== 'conflict') saveState = 'dirty';
@@ -567,6 +598,7 @@ function markDirty(immediate: boolean): void {
 
 async function flushSave(): Promise<void> {
   clearSaveTimer();
+  if (loadState !== 'ready') return;
   if (saveInFlight) await saveInFlight;
   while (!disposed && dirty && saveState !== 'conflict') {
     const saved = await saveOnce();
@@ -611,20 +643,67 @@ async function saveOnce(): Promise<boolean> {
   return saveInFlight;
 }
 
+async function loadWorkspaceAtStartup(): Promise<boolean> {
+  clearLoadRetryWait();
+  loadState = 'loading';
+  loadMessage = '';
+  saveState = 'idle';
+  await render();
+  let response: PluginMethodResult<LoadResponse>;
+  try {
+    response = await loadWithRetry(
+      () => bridge.call<PluginMethodResult<LoadResponse>>('mindmap.workspace.load', {}),
+      waitForLoadRetry,
+    );
+  } catch {
+    if (surfaceDisposing || disposed) return false;
+    loadState = 'error';
+    loadMessage = text().loadFailed;
+    await render();
+    draw();
+    return false;
+  }
+  try {
+    validateWorkspace(response.data.workspace);
+  } catch {
+    loadState = 'error';
+    loadMessage = text().loadFailed;
+    await render();
+    draw();
+    return false;
+  }
+  applyLoadedWorkspace(response.data);
+  loadState = 'ready';
+  saveState = savedAt ? 'saved' : 'idle';
+  await render();
+  draw();
+  return true;
+}
+
+async function retryInitialLoad(): Promise<void> {
+  if (loadState === 'loading' || surfaceDisposing || disposed) return;
+  if (await loadWorkspaceAtStartup()) await activateLoadedWorkspace();
+}
+
+function applyLoadedWorkspace(response: LoadResponse): void {
+  workspace = clone(response.workspace);
+  revision = response.revision;
+  savedAt = response.saved_at;
+  history = createHistory(workspace);
+  selectedNodeID = selectedDocument(workspace).nodes[0].id;
+  dirty = false;
+  saveMessage = '';
+  modal = undefined;
+  centerMap(false);
+}
+
 async function reloadLatest(): Promise<void> {
+  if (loadState !== 'ready') return;
   try {
     const response = await bridge.call<PluginMethodResult<LoadResponse>>('mindmap.workspace.load', {});
     validateWorkspace(response.data.workspace);
-    workspace = clone(response.data.workspace);
-    revision = response.data.revision;
-    savedAt = response.data.saved_at;
-    history = createHistory(workspace);
-    selectedNodeID = selectedDocument(workspace).nodes[0].id;
-    dirty = false;
-    saveState = initialized ? 'saved' : 'idle';
-    saveMessage = '';
-    modal = undefined;
-    centerMap(false);
+    applyLoadedWorkspace(response.data);
+    saveState = 'saved';
   } catch (error) {
     saveState = 'error';
     saveMessage = error instanceof Error ? error.message : text().operationFailed;
@@ -634,6 +713,7 @@ async function reloadLatest(): Promise<void> {
 }
 
 async function recoverLocalCopy(): Promise<void> {
+  if (loadState !== 'ready') return;
   const localDocument = clone(currentDocument());
   try {
     const response = await bridge.call<PluginMethodResult<LoadResponse>>('mindmap.workspace.load', {});
@@ -661,7 +741,6 @@ async function recoverLocalCopy(): Promise<void> {
 }
 
 function handleCanvasInput(event: PluginCanvasInputEvent): void {
-  if (!initialized || modal) return;
   if (event.type === 'resize') {
     cssWidth = event.cssWidth;
     cssHeight = event.cssHeight;
@@ -671,6 +750,7 @@ function handleCanvasInput(event: PluginCanvasInputEvent): void {
     draw();
     return;
   }
+  if (loadState !== 'ready' || modal) return;
   if (event.type === 'blur') {
     pointer = undefined;
     dropTarget = undefined;
@@ -807,6 +887,7 @@ function draw(): void {
   context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   drawCanvasAtmosphere();
   drawGrid();
+  if (loadState !== 'ready') return;
   context.save();
   context.translate(cssWidth / 2 + viewport.x, cssHeight / 2 + viewport.y);
   context.scale(viewport.zoom, viewport.zoom);
@@ -1017,6 +1098,7 @@ function viewportPadding(): ViewportPadding {
 }
 
 function setZoom(value: number): void {
+  if (loadState !== 'ready') return;
   viewport.zoom = Math.max(0.42, Math.min(2.4, value));
   draw();
   void render();
@@ -1046,7 +1128,6 @@ function hasChildren(document: MindMapDocument, nodeID: string): boolean {
 
 function saveLabel(): string {
   const t = text();
-  if (saveState === 'loading') return t.loading;
   if (saveState === 'saving') return t.saving;
   if (saveState === 'dirty') return t.unsaved;
   if (saveState === 'error') return t.saveFailed;
@@ -1063,6 +1144,26 @@ function render(): Promise<void> {
 function clearSaveTimer(): void {
   if (saveTimer !== undefined) clearTimeout(saveTimer);
   saveTimer = undefined;
+}
+
+function waitForLoadRetry(delayMs: number): Promise<boolean> {
+  if (surfaceDisposing || disposed) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    loadRetryResolve = resolve;
+    loadRetryTimer = setTimeout(() => {
+      loadRetryTimer = undefined;
+      loadRetryResolve = undefined;
+      resolve(true);
+    }, delayMs);
+  });
+}
+
+function clearLoadRetryWait(): void {
+  if (loadRetryTimer !== undefined) clearTimeout(loadRetryTimer);
+  loadRetryTimer = undefined;
+  const resolve = loadRetryResolve;
+  loadRetryResolve = undefined;
+  resolve?.(false);
 }
 
 function text() {
