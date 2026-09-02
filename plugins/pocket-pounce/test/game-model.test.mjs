@@ -35,44 +35,45 @@ describe('Pocket Pounce game model', () => {
     assert.equal(state.phase, 'ready');
     assert.equal(state.player.vx, 0);
     assert.equal(state.player.vy, 0);
+    assert.equal(state.player.vz, 0);
   });
 
-  it('generates non-overlapping reachable targets and bounds difficulty', () => {
+  it('generates reachable targets straight ahead without lateral travel', () => {
     const state = createGame(11);
     for (let index = 1; index < state.platforms.length; index += 1) {
       const previous = state.platforms[index - 1];
       const current = state.platforms[index];
-      assert.ok(current.x > previous.x + previous.width);
+      assert.equal(current.x, 0);
+      assert.ok(current.z + current.depth / 2 < previous.z - previous.depth / 2);
       assert.ok(current.width >= MIN_PLATFORM_WIDTH);
-      const distance = current.x + current.width / 2 - state.player.x;
+      const distance = state.player.z - current.z;
       assert.ok(distance >= jumpDistanceForCharge(0));
       assert.ok(distance <= jumpDistanceForCharge(1));
-      assert.ok(Number.isFinite(current.z));
       assert.ok(current.depth > 0);
     }
   });
 
-  it('moves through depth toward the generated three-dimensional target', () => {
+  it('moves forward through depth and never jumps sideways', () => {
     const state = createGame(23);
-    const target = state.platforms[1];
-    target.z = 72;
     const startZ = state.player.z;
     beginCharge(state, 100);
     releaseJump(state, 720);
-    assert.ok(state.player.vz > 0);
+    assert.equal(state.player.vx, 0);
+    assert.ok(state.player.vz < 0);
     stepGame(state, 0.2);
-    assert.ok(state.player.z > startZ);
+    assert.equal(state.player.x, 0);
+    assert.ok(state.player.z < startZ);
   });
 
   it('lands once while descending and awards the centered bonus once', () => {
     const state = createGame(13);
     const target = state.platforms[1];
     state.phase = 'jumping';
-    state.player.x = target.x + target.width / 2;
+    state.player.x = target.x;
     state.player.z = target.z;
-    state.player.y = target.top - state.player.radius - 3;
+    state.player.y = target.top + state.player.radius + 0.03;
     state.player.vx = 0;
-    state.player.vy = 180;
+    state.player.vy = -1.8;
     stepGame(state, 1 / 30);
     assert.equal(state.phase, 'landed');
     assert.equal(state.score, 2);
@@ -85,15 +86,16 @@ describe('Pocket Pounce game model', () => {
     const state = createGame(17);
     const target = state.platforms[1];
     state.phase = 'jumping';
-    state.player.x = target.x + target.width / 2;
-    state.player.y = target.top - state.player.radius + 1;
+    state.player.x = target.x;
+    state.player.z = target.z;
+    state.player.y = target.top + state.player.radius - 0.01;
     state.player.vx = 0;
-    state.player.vy = -100;
+    state.player.vy = 1;
     stepGame(state, 1 / 120);
     assert.equal(state.phase, 'jumping');
-    state.player.x = target.x + target.width + 200;
-    state.player.y = 590;
-    state.player.vy = 250;
+    state.player.z = target.z - target.depth - 2;
+    state.player.y = -5;
+    state.player.vy = -2.5;
     stepGame(state, 1 / 60);
     assert.equal(state.phase, 'game-over');
   });
@@ -102,11 +104,11 @@ describe('Pocket Pounce game model', () => {
     const state = createGame(29);
     const target = state.platforms[1];
     state.phase = 'jumping';
-    state.player.x = target.x + target.width / 2;
-    state.player.z = target.z + target.depth + 100;
-    state.player.y = target.top - state.player.radius - 3;
+    state.player.x = target.x + target.width + 2;
+    state.player.z = target.z;
+    state.player.y = target.top + state.player.radius + 0.03;
     state.player.vx = 0;
-    state.player.vy = 180;
+    state.player.vy = -1.8;
     state.player.vz = 0;
     stepGame(state, 1 / 30);
     assert.equal(state.phase, 'jumping');
