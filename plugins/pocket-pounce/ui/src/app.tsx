@@ -7,18 +7,24 @@ import {
   beginCharge,
   cancelCharge,
   chargeRatio,
+  courseDirection,
   createGame,
-  jumpDistanceForCharge,
+  platformContainsSupport,
+  platformFootprint,
+  predictedLandingPoint,
   releaseJump,
   stepGame,
+  targetPlatform,
   type GamePhase,
   type Platform,
+  type PlatformMaterial,
 } from './game-model.js';
 import { canvasBackingSize } from './canvas-backing.js';
-import { cameraTarget, dampingAlpha, sceneryForwardDistance, sceneMotion } from './scene-3d.js';
+import { cameraTarget, dampingAlpha, platformSpawnPose, sceneryForwardDistance, sceneMotion } from './scene-3d.js';
 import {
   buildCylinderFaces,
   buildEllipsoidFaces,
+  buildPrismFaces,
   dot,
   faceNormal,
   projectPoint,
@@ -39,6 +45,7 @@ type Particle = {
   vz: number;
   life: number;
   maxLife: number;
+  color: string;
 };
 type MutableCamera = {
   position: { x: number; y: number; z: number };
@@ -67,6 +74,17 @@ const particles: Particle[] = [];
 const MAX_PARTICLES = 64;
 const FIXED_STEP = 1 / 120;
 const LIGHT_DIRECTION = normalize({ x: -0.45, y: 0.86, z: 0.34 });
+const PLATFORM_PALETTES: Record<PlatformMaterial, Readonly<{
+  top: string;
+  sides: readonly string[];
+  accent: string;
+  dust: string;
+}>> = {
+  sandstone: { top: '#d9a263', sides: ['#a9634e', '#824450', '#b87555'], accent: '#f4c780', dust: '#efb47b' },
+  slate: { top: '#536177', sides: ['#32394e', '#252a3d', '#42485c'], accent: '#8da0b8', dust: '#9299ae' },
+  moonstone: { top: '#9c8dc8', sides: ['#5e4f83', '#39365d', '#74629a'], accent: '#e2d7ff', dust: '#cbbbf0' },
+  copper: { top: '#c77b50', sides: ['#87483f', '#5d3941', '#a85d43'], accent: '#f3bb72', dust: '#d99365' },
+};
 const STAR_FIELD = Array.from({ length: 88 }, (_, index) => ({
   x: ((index * 47) % 101) / 101,
   y: ((index * 61) % 71) / 71,
@@ -93,15 +111,16 @@ let awardText = '';
 let awardLife = 0;
 let launchRingLife = 0;
 let landingRingLife = 0;
-let launchRingZ = 0;
-let landingRingZ = 0;
+let launchRingPoint = { x: 0, z: 0 };
+let landingRingPoint = { x: 0, z: 0 };
 let particleSequence = 0;
+const observedPlatformSpawns = new Set<number>([game.currentPlatformID]);
 let accessibilitySignature = '';
 let accessibilityInFlight: Promise<void> | undefined;
 const camera: MutableCamera = {
-  position: { x: 0, y: 10.4, z: 7.2 },
-  lookAt: { x: 0, y: 0.3, z: -1.8 },
-  fovDegrees: 38,
+  position: { x: -2.5, y: 13.35, z: 8.2 },
+  lookAt: { x: -1, y: 0.28, z: -2.1 },
+  fovDegrees: 37,
 };
 
 bridge.onCanvasInput('playfield', handleInput);
@@ -163,7 +182,12 @@ async function initialize(): Promise<void> {
   if (!nextContext) throw new Error('Canvas2D is unavailable');
   context = nextContext;
   configureCanvas(surface.cssWidth, surface.cssHeight, surface.devicePixelRatio);
-  const initialTarget = cameraTarget(game.player, 0);
+  const initialTarget = cameraTarget(
+    game.player,
+    0,
+    { x: game.player.x, z: game.player.z },
+    courseDirection(game),
+  );
   Object.assign(camera.position, initialTarget.position);
   Object.assign(camera.lookAt, initialTarget.lookAt);
   ready = true;
@@ -244,6 +268,7 @@ function frame(): void {
     accumulator -= FIXED_STEP;
   }
   observeGameTransitions();
+  observePlatformSpawns();
   updateParticles(elapsed);
   updateCamera(now, elapsed);
   renderWorld(now);
@@ -253,27 +278,44 @@ function frame(): void {
 }
 
 function observeGameTransitions(): void {
+  if (lastPhase === 'game-over' && game.phase === 'charging') {
+    observedPlatformSpawns.clear();
+    observedPlatformSpawns.add(game.currentPlatformID);
+  }
   if (lastPhase === 'charging' && game.phase === 'jumping') {
-    launchRingZ = game.player.z;
+    launchRingPoint = { x: game.player.x, z: game.player.z };
     launchRingLife = 0.42;
-    spawnDust(14, 0.86);
+    spawnDustAt(game.player.x, game.player.y - PLAYER_RADIUS, game.player.z, 18, 0.94, '#efb47b');
   }
   if (lastPhase === 'jumping' && game.phase === 'landed') {
     const gained = game.score - lastScore;
     awardText = gained === 2 ? copy[locale].exact : '+1';
     awardLife = 0.9;
-    landingRingZ = game.player.z;
+    landingRingPoint = { x: game.player.x, z: game.player.z };
     landingRingLife = 0.58;
-    spawnDust(26, 1.08);
+    const current = currentPlatformForPlayer();
+    const dust = current ? PLATFORM_PALETTES[current.material].dust : '#efb47b';
+    spawnDustAt(game.player.x, game.player.y - PLAYER_RADIUS, game.player.z, 30, 1.14, dust);
   }
   lastPhase = game.phase;
   lastScore = game.score;
 }
 
+function observePlatformSpawns(): void {
+  for (const platform of game.platforms) {
+    if (observedPlatformSpawns.has(platform.id)) continue;
+    observedPlatformSpawns.add(platform.id);
+    const palette = PLATFORM_PALETTES[platform.material];
+    spawnDustAt(platform.x, platform.top - 0.18, platform.z, 22, 0.8, palette.dust);
+  }
+}
+
 function updateCamera(nowMs: number, elapsed: number): void {
   const currentPlatform = currentPlatformForPlayer();
-  const forwardAnchorZ = game.phase === 'jumping' ? currentPlatform?.z ?? game.player.z : game.player.z;
-  const desired = cameraTarget(game.player, currentPlatform?.top ?? 0, forwardAnchorZ);
+  const anchor = game.phase === 'jumping' && currentPlatform
+    ? { x: currentPlatform.x, z: currentPlatform.z }
+    : { x: game.player.x, z: game.player.z };
+  const desired = cameraTarget(game.player, currentPlatform?.top ?? 0, anchor, courseDirection(game));
   const follow = dampingAlpha(elapsed, game.phase === 'jumping' ? 8.5 : 6.2);
   camera.position.x += (desired.position.x - camera.position.x) * follow;
   camera.position.y += (desired.position.y - camera.position.y) * follow;
@@ -393,19 +435,20 @@ function drawLandingGuides(nowMs: number): void {
   const target = nextTargetPlatform();
   if (target) {
     const pulse = 1 + Math.sin(nowMs * 0.006) * 0.08;
+    const spawn = platformSpawnPose(target.spawnElapsed, target.spawnDuration, target.rotation);
     let color = '#ffe5a2';
-    let alpha = 0.72;
+    let alpha = 0.72 * Math.min(1, target.spawnElapsed / Math.max(0.001, target.spawnDuration * 0.42));
     let lineWidth = 2.2;
     if (game.phase === 'charging' && game.chargeStartedAtMs !== undefined) {
       const ratio = chargeRatio(nowMs - game.chargeStartedAtMs);
-      const predictedZ = game.player.z - jumpDistanceForCharge(ratio);
-      const withinTarget = Math.abs(predictedZ - target.z) <= target.depth * 0.45;
+      const predicted = predictedLandingPoint(game, ratio);
+      const withinTarget = platformContainsSupport(target, predicted.x, predicted.z, PLAYER_RADIUS);
       color = withinTarget ? '#bdf6c7' : '#ff9e79';
       alpha = 0.92;
       lineWidth = 3;
     }
     drawWorldRing(
-      { x: target.x, y: target.top + 0.055, z: target.z },
+      { x: target.x, y: target.top + spawn.elevation + 0.055, z: target.z },
       target.width * 0.24 * pulse,
       target.depth * 0.24 * pulse,
       color,
@@ -415,11 +458,25 @@ function drawLandingGuides(nowMs: number): void {
   }
   if (launchRingLife > 0) {
     const progress = 1 - launchRingLife / 0.42;
-    drawWorldRing({ x: 0, y: 0.04, z: launchRingZ }, 0.52 + progress * 1.8, 0.36 + progress * 1.2, '#f6b66f', launchRingLife / 0.42, 3);
+    drawWorldRing(
+      { x: launchRingPoint.x, y: 0.04, z: launchRingPoint.z },
+      0.52 + progress * 1.8,
+      0.36 + progress * 1.2,
+      '#f6b66f',
+      launchRingLife / 0.42,
+      3,
+    );
   }
   if (landingRingLife > 0) {
     const progress = 1 - landingRingLife / 0.58;
-    drawWorldRing({ x: 0, y: 0.045, z: landingRingZ }, 0.58 + progress * 2.4, 0.4 + progress * 1.5, '#fff0bd', landingRingLife / 0.58, 3.4);
+    drawWorldRing(
+      { x: landingRingPoint.x, y: 0.045, z: landingRingPoint.z },
+      0.58 + progress * 2.4,
+      0.4 + progress * 1.5,
+      '#fff0bd',
+      landingRingLife / 0.58,
+      3.4,
+    );
   }
 }
 
@@ -463,66 +520,129 @@ function groundHorizon(): number {
 function appendPlatformFaces(faces: MeshFace[], nowMs: number): void {
   const motion = currentMotion(nowMs);
   for (const platform of game.platforms) {
+    const spawn = platformSpawnPose(platform.spawnElapsed, platform.spawnDuration, platform.rotation);
     const impact = platform.id === game.currentPlatformID && game.phase === 'landed' ? motion.impact : 0;
-    const chargeCompression = platform.id === game.currentPlatformID && game.phase === 'charging' ? motion.coil : 0;
-    const height = 1.04 * (1 - chargeCompression * 0.22 - impact * 0.16);
-    const visualTop = platform.top - chargeCompression * 0.16 - impact * 0.07;
-    faces.push(...buildCylinderFaces(
-      { x: platform.x, y: visualTop - height * 0.5, z: platform.z },
-      platform.width * 0.5,
-      platform.depth * 0.5,
-      height,
-      8,
-      '#d99a6f',
-      platform.id % 2 === 0 ? '#9d5a54' : '#844a50',
-    ));
+    const chargeCompression = platform.id === game.currentPlatformID ? motion.platformCompression : 0;
+    const height = platform.height * (1 - chargeCompression * 0.25 - impact * 0.18);
+    const visualTop = platform.top + spawn.elevation - chargeCompression * 0.19 - impact * 0.09;
+    const footprint = transformedFootprint(platform, spawn.scale, spawn.rotation);
+    const palette = PLATFORM_PALETTES[platform.material];
+    faces.push(...buildPrismFaces(footprint, visualTop, height, palette.top, palette.sides));
+    const inset = footprint.map((point) => ({
+      x: platform.x + (point.x - platform.x) * materialInset(platform.material),
+      y: visualTop + 0.012,
+      z: platform.z + (point.z - platform.z) * materialInset(platform.material),
+    }));
+    faces.push({ points: [...inset].reverse(), color: palette.accent });
+    if (spawn.glow > 0.02) {
+      const glowInset = footprint.map((point) => ({
+        x: platform.x + (point.x - platform.x) * (0.34 + spawn.glow * 0.12),
+        y: visualTop + 0.024,
+        z: platform.z + (point.z - platform.z) * (0.34 + spawn.glow * 0.12),
+      }));
+      faces.push({ points: [...glowInset].reverse(), color: palette.accent });
+    }
   }
+}
+
+function transformedFootprint(platform: Platform, scale: number, extraRotation: number): { x: number; z: number }[] {
+  const cosine = Math.cos(extraRotation);
+  const sine = Math.sin(extraRotation);
+  return platformFootprint(platform).map((point) => {
+    const x = (point.x - platform.x) * scale;
+    const z = (point.z - platform.z) * scale;
+    return {
+      x: platform.x + x * cosine - z * sine,
+      z: platform.z + x * sine + z * cosine,
+    };
+  });
+}
+
+function materialInset(material: PlatformMaterial): number {
+  if (material === 'slate') return 0.78;
+  if (material === 'moonstone') return 0.52;
+  if (material === 'copper') return 0.7;
+  return 0.84;
 }
 
 function appendJerboaFaces(faces: MeshFace[], nowMs: number): void {
   const motion = currentMotion(nowMs);
   const base = game.player.y - PLAYER_RADIUS + motion.bodyLift;
   const tilt = motion.tilt;
+  const direction = courseDirection(game);
+  const yaw = Math.atan2(direction.x, -direction.z);
+  const edgeSign = Math.abs(game.fallDirection.x) > Math.abs(game.fallDirection.z)
+    ? -Math.sign(game.fallDirection.x || 1)
+    : Math.sign(game.fallDirection.z || 1);
+  const rotation = { x: tilt, y: yaw, z: motion.fallRoll * edgeSign };
   const xScale = motion.scaleX;
   const yScale = motion.scaleY;
   const zScale = motion.scaleZ;
-  const bodyCenter = { x: game.player.x, y: base + 0.63 * yScale, z: game.player.z };
-  faces.push(...buildEllipsoidFaces(bodyCenter, { x: 0.44 * xScale, y: 0.58 * yScale, z: 0.54 * zScale }, 5, 8, '#cf725f', { x: tilt }));
+  const bodyCenter = orientedPoint(0, base + 0.63 * yScale, 0, direction);
+  faces.push(...buildEllipsoidFaces(bodyCenter, { x: 0.44 * xScale, y: 0.58 * yScale, z: 0.54 * zScale }, 5, 8, '#cf725f', rotation));
+  const headCenter = orientedPoint(0, base + 1.14 * yScale, 0.43, direction);
   faces.push(...buildEllipsoidFaces(
-    { x: game.player.x, y: base + 1.14 * yScale, z: game.player.z - 0.43 },
-    { x: 0.35 * xScale, y: 0.37 * yScale, z: 0.39 * zScale }, 5, 8, '#ef9f78', { x: tilt * 0.7 },
+    headCenter,
+    { x: 0.35 * xScale, y: 0.37 * yScale, z: 0.39 * zScale },
+    5,
+    8,
+    '#ef9f78',
+    { x: tilt * 0.7, y: yaw, z: motion.fallRoll * edgeSign },
   ));
   const earCoil = motion.coil * 0.38 + Math.max(0, -tilt) * 0.2;
   for (const side of [-1, 1]) {
-    const earCenter = { x: game.player.x + side * 0.21, y: base + 1.72 * yScale, z: game.player.z - 0.34 + earCoil * 0.16 };
-    faces.push(...buildEllipsoidFaces(earCenter, { x: 0.12, y: 0.46 * (1 - motion.coil * 0.16), z: 0.105 }, 4, 7, '#eca07b', { x: -earCoil, z: side * -0.13 }));
+    const earCenter = orientedPoint(side * 0.21, base + 1.72 * yScale, 0.34 - earCoil * 0.16, direction);
     faces.push(...buildEllipsoidFaces(
-      { x: earCenter.x, y: earCenter.y, z: earCenter.z + 0.085 },
-      { x: 0.055, y: 0.31 * (1 - motion.coil * 0.16), z: 0.035 }, 3, 6, '#75405a', { x: -earCoil, z: side * -0.13 },
+      earCenter,
+      { x: 0.12, y: 0.46 * (1 - motion.coil * 0.2), z: 0.105 },
+      4,
+      7,
+      '#eca07b',
+      { x: -earCoil, y: yaw, z: side * -0.13 + motion.fallRoll * edgeSign },
+    ));
+    const earInner = orientedPoint(side * 0.21, base + 1.72 * yScale, 0.34 - earCoil * 0.16 - 0.085, direction);
+    faces.push(...buildEllipsoidFaces(
+      earInner,
+      { x: 0.055, y: 0.31 * (1 - motion.coil * 0.2), z: 0.035 },
+      3,
+      6,
+      '#75405a',
+      { x: -earCoil, y: yaw, z: side * -0.13 + motion.fallRoll * edgeSign },
     ));
     const legY = base + 0.28 + motion.legTuck * 0.16;
+    const thigh = orientedPoint(side * 0.31, legY, -0.19, direction);
     faces.push(...buildEllipsoidFaces(
-      { x: game.player.x + side * 0.31, y: legY, z: game.player.z + 0.19 },
-      { x: 0.22, y: 0.18, z: 0.32 }, 4, 7, '#bd6659', { x: -motion.legTuck * 0.9 },
+      thigh,
+      { x: 0.22, y: 0.18, z: 0.32 },
+      4,
+      7,
+      '#bd6659',
+      { x: -motion.legTuck * 0.9, y: yaw, z: motion.fallRoll * edgeSign },
     ));
+    const foot = orientedPoint(side * 0.31, legY - 0.12, 0.08 - motion.legTuck * 0.18, direction);
     faces.push(...buildEllipsoidFaces(
-      { x: game.player.x + side * 0.31, y: legY - 0.12, z: game.player.z - 0.08 + motion.legTuck * 0.18 },
-      { x: 0.09, y: 0.075, z: 0.28 }, 3, 6, '#2c2030', { x: -0.22 - motion.legTuck * 0.8 },
+      foot,
+      { x: 0.09, y: 0.075, z: 0.28 },
+      3,
+      6,
+      '#2c2030',
+      { x: -0.22 - motion.legTuck * 0.8, y: yaw, z: motion.fallRoll * edgeSign },
     ));
   }
-  const backPatch = { x: game.player.x, y: base + 0.8 * yScale, z: game.player.z + 0.47 * zScale };
-  faces.push(...buildEllipsoidFaces(backPatch, { x: 0.22, y: 0.3, z: 0.045 }, 3, 6, '#f0a47d', { x: tilt }));
+  const backPatch = orientedPoint(0, base + 0.8 * yScale, -0.47 * zScale, direction);
+  faces.push(...buildEllipsoidFaces(backPatch, { x: 0.22, y: 0.3, z: 0.045 }, 3, 6, '#f0a47d', rotation));
 }
 
 function drawJerboaTail(nowMs: number): void {
   const motion = currentMotion(nowMs);
   const base = game.player.y - PLAYER_RADIUS + motion.bodyLift;
+  const direction = courseDirection(game);
   const sway = Math.sin(nowMs * 0.004) * 0.14 + motion.coil * 0.28;
   const points: Vec3[] = [
-    { x: 0, y: base + 0.54, z: game.player.z + 0.35 },
-    { x: sway * 0.45, y: base + 0.46, z: game.player.z + 0.95 },
-    { x: sway + 0.2, y: base + 0.72, z: game.player.z + 1.48 },
-    { x: sway * 0.55, y: base + 1.0, z: game.player.z + 1.92 },
+    orientedPoint(0, base + 0.54, -0.35, direction),
+    orientedPoint(sway * 0.45, base + 0.46, -0.95, direction),
+    orientedPoint(sway + 0.2, base + 0.72, -1.48, direction),
+    orientedPoint(sway * 0.55, base + 1.0, -1.92, direction),
   ];
   const projected = points.map((point) => projectPoint(point, camera, cssWidth, cssHeight)).filter(isProjected);
   if (projected.length < 2) return;
@@ -564,15 +684,18 @@ function drawFaces(faces: MeshFace[]): void {
 
 function drawSpeedLines(nowMs: number): void {
   if (game.phase !== 'jumping') return;
+  const direction = courseDirection(game);
   context.save();
   context.strokeStyle = '#ffd89abc';
   context.lineCap = 'round';
   for (let index = 0; index < 6; index += 1) {
-    const x = ((index % 3) - 1) * 0.46;
+    const lateral = ((index % 3) - 1) * 0.46;
     const y = game.player.y + 0.2 + Math.floor(index / 3) * 0.52;
     const wave = Math.sin(nowMs * 0.02 + index) * 0.12;
-    const start = projectPoint({ x: x + wave, y, z: game.player.z + 0.45 }, camera, cssWidth, cssHeight);
-    const end = projectPoint({ x: x + wave, y, z: game.player.z + 2.2 + index * 0.12 }, camera, cssWidth, cssHeight);
+    const startWorld = orientedPoint(lateral + wave, y, -0.45, direction);
+    const endWorld = orientedPoint(lateral + wave, y, -2.2 - index * 0.12, direction);
+    const start = projectPoint(startWorld, camera, cssWidth, cssHeight);
+    const end = projectPoint(endWorld, camera, cssWidth, cssHeight);
     if (!start || !end) continue;
     context.globalAlpha = 0.36 + (index % 3) * 0.14;
     context.lineWidth = clamp(start.scale * 0.018, 1.2, 4);
@@ -584,7 +707,7 @@ function drawSpeedLines(nowMs: number): void {
   context.restore();
 }
 
-function spawnDust(count: number, force: number): void {
+function spawnDustAt(x: number, y: number, z: number, count: number, force: number, color: string): void {
   particleSequence += 1;
   for (let index = 0; index < count; index += 1) {
     const angle = (index / count) * Math.PI * 2 + particleSequence * 0.71;
@@ -592,14 +715,15 @@ function spawnDust(count: number, force: number): void {
     const speed = (0.8 + variation * 1.4) * force;
     const life = 0.38 + variation * 0.36;
     particles.push({
-      x: game.player.x + Math.cos(angle) * 0.16,
-      y: 0.1,
-      z: game.player.z + Math.sin(angle) * 0.16,
+      x: x + Math.cos(angle) * 0.16,
+      y: y + 0.08,
+      z: z + Math.sin(angle) * 0.16,
       vx: Math.cos(angle) * speed,
       vy: (0.8 + variation * 1.2) * force,
       vz: Math.sin(angle) * speed - game.player.vz * 0.035,
       life,
       maxLife: life,
+      color,
     });
   }
   if (particles.length > MAX_PARTICLES) particles.splice(0, particles.length - MAX_PARTICLES);
@@ -631,7 +755,7 @@ function drawDust(): void {
   for (const { particle, point } of ordered) {
     const alpha = clamp(particle.life / particle.maxLife, 0, 1);
     context.globalAlpha = alpha * 0.78;
-    context.fillStyle = '#efb17d';
+    context.fillStyle = particle.color;
     context.beginPath();
     context.arc(point.x, point.y, clamp(point.scale * 0.055, 1.2, 5.5), 0, Math.PI * 2);
     context.fill();
@@ -658,6 +782,7 @@ function drawHUD(nowMs: number): void {
     drawPanel(text.ended, text.again, uiScale);
     return;
   }
+  if (game.phase === 'jumping' || game.phase === 'landed') return;
   if (cssWidth < 560) {
     drawPanel(text.keyboard, text.controls, uiScale);
     return;
@@ -783,7 +908,7 @@ function currentMotion(nowMs: number): ReturnType<typeof sceneMotion> {
   const charge = game.phase === 'charging' && game.chargeStartedAtMs !== undefined
     ? chargeRatio(nowMs - game.chargeStartedAtMs)
     : 0;
-  return sceneMotion(game.phase, charge, game.player.vy, game.landedElapsed, nowMs);
+  return sceneMotion(game.phase, charge, game.player.vy, game.landedElapsed, nowMs, game.fallStyle);
 }
 
 function currentPlatformForPlayer(): Platform | undefined {
@@ -791,9 +916,16 @@ function currentPlatformForPlayer(): Platform | undefined {
 }
 
 function nextTargetPlatform(): Platform | undefined {
-  return game.platforms
-    .filter((platform) => platform.id !== game.currentPlatformID && platform.z < game.player.z)
-    .sort((left, right) => right.z - left.z)[0];
+  return targetPlatform(game);
+}
+
+function orientedPoint(lateral: number, y: number, forward: number, direction = courseDirection(game)): Vec3 {
+  const right = { x: -direction.z, z: direction.x };
+  return {
+    x: game.player.x + right.x * lateral + direction.x * forward,
+    y,
+    z: game.player.z + right.z * lateral + direction.z * forward,
+  };
 }
 
 function roundRect(

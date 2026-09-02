@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildCylinderFaces,
   buildEllipsoidFaces,
+  buildPrismFaces,
   projectPoint,
   sortFacesBackToFront,
 } from '../ui/src/software-3d.ts';
@@ -14,7 +15,7 @@ const camera = {
 };
 
 describe('Pocket Pounce software 3D renderer', () => {
-  it('projects straight-forward world positions through one perspective camera', () => {
+  it('projects forward and lateral world positions through one perspective camera', () => {
     const player = projectPoint({ x: 0, y: 0.52, z: 0 }, camera, 960, 540);
     const target = projectPoint({ x: 0, y: 0.2, z: -6 }, camera, 960, 540);
     assert.ok(player);
@@ -24,6 +25,18 @@ describe('Pocket Pounce software 3D renderer', () => {
     assert.ok(target.y < player.y);
     assert.ok(target.depth > player.depth);
     assert.ok(target.scale < player.scale);
+  });
+
+  it('builds closed prisms for non-round platform silhouettes', () => {
+    const footprint = [
+      { x: -2, z: -1 }, { x: 2, z: -1 }, { x: 2, z: 1 }, { x: -2, z: 1 },
+    ];
+    const faces = buildPrismFaces(footprint, 0.2, 1.1, '#dcb274', ['#96604d', '#704353']);
+    assert.equal(faces.length, 5);
+    assert.ok(faces.every((face) => face.points.length >= 3));
+    assert.equal(faces.at(-1).color, '#dcb274');
+    assert.equal(faces[0].color, '#96604d');
+    assert.equal(faces[1].color, '#704353');
   });
 
   it('clips points behind the camera near plane', () => {

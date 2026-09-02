@@ -6,11 +6,19 @@ original software 3D renderer were created for this plugin from original
 geometry and code.
 
 Interaction and camera research consulted the MIT-licensed Night's Watch Games
-Jump Jump project. Pocket Pounce adapts the general design principles of a high
-oblique camera, charge compression, landing recovery, and post-landing camera
-follow to its own forward-only physics, original character, and Canvas2D
-renderer. No upstream source or assets are copied.
+Jump Jump project. Pocket Pounce adapts the general design principles of an
+oblique camera, alternating course directions, charge compression, explicit
+edge-fall states, landing recovery, and post-landing camera follow to its own
+two-axis physics, original character, and Canvas2D renderer. No upstream source
+or assets are copied.
 https://github.com/NightsWatchGames/jump-jump
+
+Interaction research also consulted the MIT-licensed shenmaxg Web Jump
+project. Pocket Pounce applies the general principles of coordinating character
+and current-platform deformation, generating a new target after landing, and
+using a staged target entrance. No upstream source, texture, model, sound, or
+layout is included.
+https://github.com/shenmaxg/web-jump
 
 Renderer research also consulted the MIT-licensed Zdog scene-graph approach.
 No Zdog source or assets are included.

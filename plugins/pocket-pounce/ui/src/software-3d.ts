@@ -86,6 +86,36 @@ export function buildCylinderFaces(
   return faces;
 }
 
+export function buildPrismFaces(
+  footprint: readonly Readonly<{ x: number; z: number }>[],
+  top: number,
+  height: number,
+  topColor: string,
+  sideColors: string | readonly string[],
+): MeshFace[] {
+  if (footprint.length < 3) return [];
+  const bottom = top - Math.max(0.01, height);
+  const palette = typeof sideColors === 'string' ? [sideColors] : sideColors.length > 0 ? sideColors : [topColor];
+  const faces: MeshFace[] = [];
+  for (let index = 0; index < footprint.length; index += 1) {
+    const next = (index + 1) % footprint.length;
+    faces.push({
+      points: [
+        { x: footprint[index].x, y: top, z: footprint[index].z },
+        { x: footprint[next].x, y: top, z: footprint[next].z },
+        { x: footprint[next].x, y: bottom, z: footprint[next].z },
+        { x: footprint[index].x, y: bottom, z: footprint[index].z },
+      ],
+      color: palette[index % palette.length],
+    });
+  }
+  faces.push({
+    points: [...footprint].reverse().map((point) => ({ x: point.x, y: top, z: point.z })),
+    color: topColor,
+  });
+  return faces;
+}
+
 export function buildEllipsoidFaces(
   center: Vec3,
   radii: Vec3,

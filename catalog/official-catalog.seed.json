@@ -41,7 +41,7 @@
         "stable"
       ],
       "latest": {
-        "version": "1.0.15",
+        "version": "1.0.16",
         "min_redeven_version": "1.0.0",
         "min_redevplugin_version": "3.0.18",
         "rollout_state": "stable",
@@ -49,9 +49,9 @@
         "distribution": {
           "provider": "github_release",
           "repository": "floegence/redeven-official-plugins",
-          "tag": "v1.0.15",
-          "artifact_name": "pocket-pounce-1.0.15.redevplugin",
-          "release_ref_asset_name": "pocket-pounce-1.0.15.release-ref.json",
+          "tag": "v1.0.16",
+          "artifact_name": "pocket-pounce-1.0.16.redevplugin",
+          "release_ref_asset_name": "pocket-pounce-1.0.16.release-ref.json",
           "trust_root_asset_name": "root.public.json"
         }
       }

@@ -17,7 +17,7 @@ describe('Pocket Pounce source contract', () => {
     ]);
     assert.equal(manifest.schema_version, 'redevplugin.manifest.v9');
     assert.equal(manifest.plugin.plugin_id, 'com.redeven.official.pocket-pounce');
-    assert.equal(manifest.plugin.version, '1.0.15');
+    assert.equal(manifest.plugin.version, '1.0.16');
     assert.deepEqual(manifest.permissions, []);
     assert.deepEqual(manifest.workers, []);
     assert.deepEqual(manifest.methods, []);
@@ -34,8 +34,9 @@ describe('Pocket Pounce source contract', () => {
     assert.match(app, /clamp\(\(now - lastFrameAt\) \/ 1000, 0, 0\.05\)/u);
     assert.match(app, /canvasBackingSize\(cssWidth, cssHeight, nextPixelRatio\)/u);
     assert.match(model, /export function jumpDistanceForCharge/u);
-    assert.match(model, /player\.z/u);
-    assert.match(model, /depthOverlap/u);
+    assert.match(model, /predictedLandingPoint/u);
+    assert.match(model, /platformContainsSupport/u);
+    assert.match(model, /targetPlatformID/u);
     assert.match(app, /getContext\(['"]2d['"]\)/u);
     assert.match(app, /renderWorld/u);
     assert.match(app, /drawGroundGrid[\s\S]*context\.clip\(\)/u);
@@ -44,6 +45,8 @@ describe('Pocket Pounce source contract', () => {
     assert.match(app, /cameraTarget/u);
     assert.match(app, /projectPoint/u);
     assert.match(app, /spawnDust/u);
+    assert.match(app, /platformSpawnPose/u);
+    assert.match(app, /buildPrismFaces/u);
     assert.match(scene, /export function sceneMotion/u);
     assert.match(scene, /export function cameraTarget/u);
     assert.match(renderer, /export function projectPoint/u);
