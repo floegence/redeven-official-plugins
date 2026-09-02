@@ -122,7 +122,7 @@ async function initialize(): Promise<void> {
     }
   } catch (error) {
     state.busy = undefined;
-    state.notice = { scope: "weather", text: friendlyError(error, "load"), error: true };
+    state.notice = { scope: "chooser", text: friendlyError(error, "load"), error: true };
     await render();
   }
 }
@@ -240,7 +240,7 @@ async function loadForecast(location: Location, options: { preserveVisible?: boo
     const message = preserveVisible && state.forecast
       ? translations().refreshFailed
       : friendlyError(error, "forecast");
-    state.notice = { scope: "weather", text: message, error: true };
+    state.notice = { scope: preserveVisible ? "weather" : "chooser", text: message, error: true };
   } finally {
     state.busy = undefined;
     await render();
@@ -258,13 +258,13 @@ function view() {
   const t = translations();
   return (
     <main key="weather-root" className="weather-app">
-      {state.chooserOpen ? locationChooser(t) : null}
+      {state.chooserOpen && state.forecast ? locationPicker(t, "popover") : null}
 
       {state.forecast && state.selected
         ? forecastDashboard(state.selected, state.forecast, t)
         : state.busy === "initial"
           ? loadingState(t)
-          : emptyState(t)}
+          : locationPicker(t, "onboarding")}
 
       <footer key="footer" className="footer">
         <span key="source">{t.poweredBy}</span>
@@ -274,17 +274,12 @@ function view() {
   );
 }
 
-function locationChooser(t: WeatherTranslations) {
+function locationPicker(t: WeatherTranslations, mode: "onboarding" | "popover") {
   const notice = state.notice?.scope === "chooser" ? state.notice : undefined;
+  const status = notice?.text ?? (state.busy === "forecast" ? t.loading : "");
   return (
-    <section key="location-chooser" className="location-chooser" aria-label={t.chooseLocation}>
-      <div key="chooser-heading" className="chooser-heading">
-        <div key="chooser-title-copy">
-          <span key="chooser-overline">{t.chooseLocation}</span>
-          <strong key="chooser-title">{state.selected?.name ?? t.majorCities}</strong>
-        </div>
-        <button key="chooser-close" className="chooser-close" type="button" aria-label={t.closeLocationPicker} data-redevplugin-action="toggle-location-chooser">×</button>
-      </div>
+    <section key={`location-${mode}`} className={`location-picker location-${mode}`} aria-label={t.chooseLocation}>
+      {mode === "onboarding" ? onboardingIntroduction(t) : pickerHeading(t)}
       <form key="search-form" className="search-form" data-redevplugin-action="search-location" autoComplete="off">
         <label key="search-label" className="sr-only" htmlFor="weather-query">{t.searchPlaceholder}</label>
         <input
@@ -306,11 +301,33 @@ function locationChooser(t: WeatherTranslations) {
         </button>
       </form>
       <p key="chooser-status" className={notice?.error ? "chooser-status error" : "chooser-status"} role="status">
-        {notice?.text ?? ""}
+        {status}
       </p>
       {state.favorites.length > 0 ? favoritePlaces(t) : <span key="favorites-empty" />}
       {state.results.length > 0 ? searchResults(t) : majorCities(t)}
     </section>
+  );
+}
+
+function onboardingIntroduction(t: WeatherTranslations) {
+  return (
+    <div key="onboarding-introduction" className="onboarding-introduction">
+      <span key="onboarding-overline" className="chooser-overline">{t.chooseLocation}</span>
+      <h2 key="onboarding-title">{t.onboardingTitle}</h2>
+      <p key="onboarding-body">{t.onboardingBody}</p>
+    </div>
+  );
+}
+
+function pickerHeading(t: WeatherTranslations) {
+  return (
+    <div key="chooser-heading" className="chooser-heading">
+      <div key="chooser-title-copy">
+        <span key="chooser-overline" className="chooser-overline">{t.chooseLocation}</span>
+        <strong key="chooser-title">{state.selected?.name ?? t.majorCities}</strong>
+      </div>
+      <button key="chooser-close" className="chooser-close" type="button" aria-label={t.closeLocationPicker} data-redevplugin-action="toggle-location-chooser">×</button>
+    </div>
   );
 }
 
@@ -470,22 +487,9 @@ function metric(key: string, label: string, value: string) {
 
 function loadingState(t: WeatherTranslations) {
   return (
-    <section key="loading-state" className="empty-state" aria-label={t.loading}>
-      {weatherCardControls(t)}
+    <section key="loading-state" className="loading-state" aria-label={t.loading}>
       <span key="loading-mark" className="loading-mark" aria-hidden="true" />
       <h2 key="loading-title">{t.loading}</h2>
-    </section>
-  );
-}
-
-function emptyState(t: WeatherTranslations) {
-  const notice = state.notice?.scope === "weather" ? state.notice : undefined;
-  return (
-    <section key="empty-state" className="empty-state">
-      {weatherCardControls(t)}
-      <span key="empty-symbol" className="empty-symbol" aria-hidden="true">○</span>
-      <h2 key="empty-title">{t.emptyTitle}</h2>
-      <p key="empty-body" role={notice?.error ? "alert" : undefined}>{notice?.text ?? t.emptyBody}</p>
     </section>
   );
 }

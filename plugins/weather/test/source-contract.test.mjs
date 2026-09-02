@@ -48,7 +48,7 @@ describe('Weather official plugin source contract', () => {
     assert.match(styles, /overflow:\s*hidden/u);
     assert.match(styles, /@media\s*\(max-height:\s*600px\)/u);
     assert.doesNotMatch(ui, /location-chooser-empty/u);
-    assert.match(ui, /state\.chooserOpen\s*\?\s*locationChooser\(t\)\s*:\s*null/u);
+    assert.match(ui, /state\.chooserOpen\s*&&\s*state\.forecast\s*\?\s*locationPicker\(t,\s*"popover"\)\s*:\s*null/u);
     assert.match(styles, /\.weather-app\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\) auto/su);
     assert.match(styles, /\.clock-column\s*\{[^}]*grid-template-rows:\s*repeat\(3, max-content\)[^}]*align-content:\s*center[^}]*row-gap:\s*clamp\(8px,/su);
     assert.match(styles, /\.place-copy\s*\{[^}]*display:\s*grid[^}]*gap:\s*clamp\(5px,/su);
@@ -75,6 +75,25 @@ describe('Weather official plugin source contract', () => {
     const dashboard = ui.match(/function forecastDashboard[\s\S]*?function forecastRow/u)?.[0];
     assert.ok(dashboard);
     assert.match(dashboard, /className="weather-hero"[\s\S]*weatherCardControls\(t\)[\s\S]*className="current-column"/u);
+  });
+
+  it('keeps the first visit actionable with one visible location-selection path', async () => {
+    const [ui, model, styles] = await Promise.all([
+      readFile(path.join(pluginRoot, 'ui', 'src', 'app.tsx'), 'utf8'),
+      readFile(path.join(pluginRoot, 'ui', 'src', 'weather-model.ts'), 'utf8'),
+      readFile(path.join(pluginRoot, 'ui', 'styles.css'), 'utf8'),
+    ]);
+    assert.match(ui, /function locationPicker\(t: WeatherTranslations, mode: "onboarding" \| "popover"\)/u);
+    assert.match(ui, /state\.busy === "initial"[\s\S]*loadingState\(t\)[\s\S]*locationPicker\(t, "onboarding"\)/u);
+    assert.match(ui, /mode === "onboarding" \? onboardingIntroduction\(t\) : pickerHeading\(t\)/u);
+    assert.match(ui, /state\.busy === "forecast"\s*\?\s*t\.loading/u);
+    assert.doesNotMatch(ui, /function emptyState|empty-symbol/u);
+    assert.doesNotMatch(model, /emptyTitle|emptyBody/u);
+    assert.match(model, /onboardingTitle: "Choose a city to begin"/u);
+    assert.match(model, /onboardingTitle: "先选择一个城市"/u);
+    assert.match(styles, /\.location-onboarding\s*\{/u);
+    assert.match(styles, /\.location-popover\s*\{/u);
+    assert.doesNotMatch(styles, /\.empty-state|\.empty-symbol/u);
   });
 
   it('uses brokered network and KV storage from the WASM worker', async () => {

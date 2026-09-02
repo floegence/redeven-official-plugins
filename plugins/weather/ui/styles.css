@@ -114,22 +114,57 @@ p {
   transform: rotate(180deg);
 }
 
-.location-chooser {
-  position: absolute;
-  z-index: 20;
-  top: clamp(54px, 8.5vh, 72px);
-  right: clamp(12px, 2.3vw, 24px);
+.location-picker {
   display: grid;
   grid-template-rows: auto auto auto auto minmax(0, 1fr);
   gap: 10px;
-  width: min(760px, calc(100% - 24px));
-  max-height: calc(100svh - clamp(66px, 11vh, 92px));
-  padding: 14px;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 18px;
   background: var(--surface-elevated);
+}
+
+.location-popover {
+  position: absolute;
+  z-index: 20;
+  top: clamp(54px, 8.5vh, 72px);
+  right: clamp(12px, 2.3vw, 24px);
+  width: min(760px, calc(100% - 24px));
+  max-height: calc(100svh - clamp(66px, 11vh, 92px));
+  padding: 14px;
   box-shadow: var(--shadow);
+}
+
+.location-onboarding {
+  align-self: center;
+  justify-self: center;
+  width: min(100%, 920px);
+  height: auto;
+  max-height: 100%;
+  padding: clamp(18px, 3.2vh, 30px) clamp(18px, 3.2vw, 34px);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 7%, var(--surface)), var(--surface) 45%);
+  box-shadow: var(--shadow);
+}
+
+.onboarding-introduction {
+  display: grid;
+  gap: 6px;
+  max-width: 680px;
+}
+
+.onboarding-introduction h2 {
+  font-size: clamp(22px, 3.5vh, 32px);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+.onboarding-introduction p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .chooser-heading {
@@ -366,6 +401,7 @@ p {
 .search-results ul {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-content: start;
   gap: 6px;
   min-height: 0;
 }
@@ -818,7 +854,7 @@ p {
 .current-position-9 { --current-position: 90%; }
 .current-position-10 { --current-position: 100%; }
 
-.empty-state {
+.loading-state {
   position: relative;
   display: grid;
   place-items: center;
@@ -826,40 +862,15 @@ p {
   height: 100%;
   padding: 28px 20px;
   overflow: hidden;
-  border: 1px dashed var(--border);
+  border: 1px solid var(--border);
   border-radius: 20px;
   background: var(--surface);
   text-align: center;
 }
 
-.empty-state > .weather-card-controls {
-  position: absolute;
-  top: 14px;
-  right: 16px;
-}
-
-.empty-state h2 {
+.loading-state h2 {
   margin-top: 12px;
   font-size: 21px;
-}
-
-.empty-state p {
-  max-width: 500px;
-  margin-top: 6px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.empty-symbol {
-  display: grid;
-  place-items: center;
-  width: 54px;
-  height: 54px;
-  border: 2px solid color-mix(in srgb, var(--accent) 34%, var(--border));
-  border-radius: 50%;
-  color: var(--accent);
-  font-size: 30px;
 }
 
 .loading-mark {
@@ -910,7 +921,7 @@ p {
     display: none;
   }
 
-  .location-chooser {
+  .location-popover {
     left: 12px;
     right: 12px;
     width: auto;
@@ -965,9 +976,14 @@ p {
     padding-left: 9px;
   }
 
-  .location-chooser {
+  .location-popover {
     right: 9px;
     left: 9px;
+  }
+
+  .location-onboarding {
+    padding-right: 14px;
+    padding-left: 14px;
   }
 
   .major-cities ul,
@@ -1077,11 +1093,17 @@ p {
     display: none;
   }
 
-  .location-chooser {
+  .location-popover {
     top: 44px;
     max-height: calc(100svh - 52px);
     gap: 7px;
     padding: 10px;
+  }
+
+  .location-onboarding {
+    gap: 7px;
+    padding-top: 12px;
+    padding-bottom: 12px;
   }
 
   .major-cities button {
