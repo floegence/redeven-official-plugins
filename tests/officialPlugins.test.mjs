@@ -35,7 +35,7 @@ describe('official plugin repository contract', () => {
     assert.equal(weather.release.stable_catalog.min_redevplugin_version, '3.0.18');
     assert.equal(mindMap.manifest.schema_version, 'redevplugin.manifest.v9');
     assert.equal(mindMap.manifest.plugin.plugin_id, 'com.redeven.official.mind-map');
-    assert.equal(mindMap.manifest.plugin.version, '1.0.19');
+    assert.equal(mindMap.manifest.plugin.version, '1.0.20');
     assert.deepEqual(mindMap.manifest.permissions, []);
     assert.deepEqual(mindMap.manifest.api.required_features, []);
     assert.equal(mindMap.manifest.workers[0].scope, 'user');
@@ -72,7 +72,7 @@ describe('official plugin repository contract', () => {
   it('resolves each global release tag to exactly one plugin', async () => {
     const sources = await loadAllPluginSources(repoRoot);
     assert.equal(resolvePluginForReleaseTag(sources, 'v1.0.14').name, 'weather');
-    assert.equal(resolvePluginForReleaseTag(sources, 'v1.0.19').name, 'mind-map');
+    assert.equal(resolvePluginForReleaseTag(sources, 'v1.0.20').name, 'mind-map');
     assert.throws(() => resolvePluginForReleaseTag(sources, 'v9.9.9'), /exactly one plugin/u);
 
     const duplicate = structuredClone(sources[0]);

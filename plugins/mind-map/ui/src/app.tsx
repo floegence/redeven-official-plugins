@@ -7,7 +7,7 @@ import {
   type PluginSurfaceContext,
   type PluginUIActionEvent,
 } from '@floegence/redevplugin-ui/plugin';
-import { layoutDocument, type DocumentLayout, type LayoutNode } from './layout.js';
+import { fitLayoutToViewport, layoutDocument, type DocumentLayout, type LayoutNode, type ViewportPadding } from './layout.js';
 import {
   MAX_IMPORT_BYTES,
   addChild,
@@ -103,6 +103,7 @@ let lastClick = { nodeID: '', time: 0 };
 const COPY = {
   en: {
     app: 'Mind Map', maps: 'Maps', newMap: 'New map', rename: 'Rename', duplicate: 'Duplicate', remove: 'Delete',
+    workspace: 'Workspace', documents: 'maps', topics: 'topics', selectedMap: 'Current map',
     undo: 'Undo', redo: 'Redo', bilateral: 'Both sides', right: 'Right only', child: 'Child', sibling: 'Sibling',
     collapse: 'Fold / unfold', importLabel: 'Import', exportLabel: 'Export', center: 'Center', loading: 'Loading workspace…',
     saved: 'Saved', saving: 'Saving…', unsaved: 'Unsaved changes', saveFailed: 'Save failed — changes remain here',
@@ -117,9 +118,11 @@ const COPY = {
     invalidImport: 'The JSON file is invalid or exceeds the supported limits.', operationFailed: 'The operation could not be completed.',
     rootCannotDelete: 'The central topic cannot be deleted.', recovered: 'Recovered copy', dropInside: 'Move inside',
     dropBefore: 'Move before', dropAfter: 'Move after', statusReady: 'Ready', zoomIn: 'Zoom in', zoomOut: 'Zoom out',
+    firstBranch: 'Press Tab to shape your first branch', canvasTools: 'Map editing tools', colors: 'Topic color',
   },
   zh: {
     app: '思维导图', maps: '导图', newMap: '新建', rename: '重命名', duplicate: '复制', remove: '删除',
+    workspace: '工作空间', documents: '张导图', topics: '个节点', selectedMap: '当前导图',
     undo: '撤销', redo: '重做', bilateral: '双向', right: '向右', child: '子节点', sibling: '同级节点',
     collapse: '折叠 / 展开', importLabel: '导入', exportLabel: '导出', center: '居中', loading: '正在载入工作区…',
     saved: '已保存', saving: '正在保存…', unsaved: '有未保存修改', saveFailed: '保存失败，修改仍保留在本地界面',
@@ -133,7 +136,8 @@ const COPY = {
     exportTitle: '导出当前导图', exportBody: '复制以下 JSON，可作为可移植备份。', close: '关闭',
     invalidImport: 'JSON 无效或超过支持范围。', operationFailed: '操作未能完成。', rootCannotDelete: '中心节点不能删除。',
     recovered: '恢复的副本', dropInside: '移入节点', dropBefore: '移到前面', dropAfter: '移到后面',
-    statusReady: '可编辑', zoomIn: '放大', zoomOut: '缩小',
+    statusReady: '可编辑', zoomIn: '放大', zoomOut: '缩小', firstBranch: '按 Tab 创建第一个分支',
+    canvasTools: '导图编辑工具', colors: '节点颜色',
   },
 } as const;
 
@@ -239,56 +243,75 @@ function view() {
     <main key="mind-map-root" className="mind-map-app">
       <aside key="document-sidebar" className="document-sidebar" aria-label={t.maps}>
         <header key="sidebar-heading" className="sidebar-heading">
-          <strong key="sidebar-title">{t.maps}</strong>
-          <button key="new-document" className="icon-button" type="button" title={t.newMap} aria-label={t.newMap} data-redevplugin-action="new-document">＋</button>
+          <span key="brand-mark" className="brand-mark" aria-hidden="true"><span key="brand-core"></span></span>
+          <span key="sidebar-title-stack" className="sidebar-title-stack">
+            <strong key="sidebar-title">{t.maps}</strong>
+            <small key="sidebar-count">{workspace.documents.length} {t.documents}</small>
+          </span>
+          <button key="new-document" className="icon-button create-map-button" type="button" title={t.newMap} aria-label={t.newMap} data-redevplugin-action="new-document"><span key="new-document-icon" className="tool-icon icon-add"></span></button>
         </header>
+        <div key="sidebar-section-label" className="sidebar-section-label"><span key="workspace-label">{t.workspace}</span></div>
         <ul key="document-list" className="document-list">
           {workspace.documents.map((item, index) => (
-            <li key={`document-item-${index}`}>
+            <li key={`document-item-${index}`} className={item.id === workspace.selected_document_id ? 'document-card is-active' : 'document-card'}>
               <button key={`document-${index}`} className={item.id === workspace.selected_document_id ? 'document-button is-active' : 'document-button'} type="button" value={item.id} aria-pressed={item.id === workspace.selected_document_id} data-redevplugin-action="select-document">
-                <span key={`document-label-${index}`}>{item.title}</span>
+                <span key={`document-glyph-${index}`} className={`document-glyph color-${item.nodes[0]?.color ?? 'accent'}`} aria-hidden="true"><span key={`document-glyph-core-${index}`}></span></span>
+                <span key={`document-copy-${index}`} className="document-copy">
+                  <strong key={`document-label-${index}`}>{item.title}</strong>
+                  <small key={`document-meta-${index}`}>{item.nodes.length} {t.topics}</small>
+                </span>
               </button>
+              {item.id === workspace.selected_document_id ? (
+                <div key={`document-actions-${index}`} className="document-actions" aria-label={t.selectedMap}>
+                  {sideActionButton('rename-document', 'rename', t.rename)}
+                  {sideActionButton('duplicate-document', 'duplicate', t.duplicate)}
+                  {sideActionButton('delete-document', 'delete', t.remove, workspace.documents.length <= 1)}
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>
         <footer key="sidebar-footer" className="sidebar-footer">
-          <button key="rename-document" className="tool-button" type="button" data-redevplugin-action="rename-document">{t.rename}</button>
-          <button key="duplicate-document" className="tool-button" type="button" data-redevplugin-action="duplicate-document">{t.duplicate}</button>
-          <button key="delete-document" className="tool-button" type="button" disabled={workspace.documents.length <= 1} data-redevplugin-action="delete-document">{t.remove}</button>
+          <span key="sidebar-shortcut-mark" className="sidebar-shortcut-mark">⌘</span>
+          <span key="sidebar-footnote">Tab · Enter · F2</span>
         </footer>
       </aside>
       <section key="editor-shell" className="editor-shell">
-        <header key="toolbar" className="toolbar" aria-label={t.app}>
-          <div key="history-tools" className="toolbar-group">
-            {toolButton('undo', '↶', t.undo, history.undo.length === 0)}
-            {toolButton('redo', '↷', t.redo, history.redo.length === 0)}
-          </div>
-          <div key="structure-tools" className="toolbar-group">
-            {toolButton('add-child', '＋', t.child)}
-            {toolButton('add-sibling', '≡＋', t.sibling)}
-            {toolButton('rename-node', '✎', t.rename)}
-            {toolButton('toggle-collapse', '⌁', t.collapse, !hasChildren(document, selected.id))}
-            {toolButton('delete-node', '⌫', t.remove, selected.parent_id === null)}
-          </div>
-          <div key="layout-tools" className="toolbar-group">
-            {toolButton('layout-bilateral', '↔', t.bilateral, false, document.layout === 'bilateral')}
-            {toolButton('layout-right', '→', t.right, false, document.layout === 'right')}
-          </div>
-          <div key="viewport-tools" className="toolbar-group">
-            {toolButton('zoom-out', '−', t.zoomOut)}
-            {toolButton('zoom-in', '＋', t.zoomIn)}
-            {toolButton('center-map', '◎', t.center)}
-          </div>
-          <div key="file-tools" className="toolbar-group">
-            {toolButton('import-document', '⇧', t.importLabel)}
-            {toolButton('export-document', '⇩', t.exportLabel)}
-          </div>
-          <span key="save-state" className={saveState === 'error' || saveState === 'conflict' ? 'save-state is-error' : 'save-state'} role="status">{saveLabel()}</span>
-        </header>
         <div key="canvas-shell" className="canvas-shell">
           <canvas key="map-canvas" className="map-canvas" data-redevplugin-canvas={CANVAS_ID} tabindex={0} autofocus={true} aria-label={t.app}></canvas>
-          <p key="canvas-hint" id="canvas-hint" className="canvas-hint">{t.hint}</p>
-          <div key="color-panel" className="color-panel" aria-label="Node color">
+          <header key="canvas-command-deck" className="canvas-command-deck">
+            <div key="canvas-context" className="canvas-context">
+              <small key="canvas-eyebrow">{t.selectedMap}</small>
+              <strong key="canvas-title">{document.title}</strong>
+            </div>
+            <nav key="command-bar" className="command-bar" aria-label={t.canvasTools}>
+              <div key="history-tools" className="command-cluster history-cluster">
+                {toolButton('undo', 'undo', t.undo, history.undo.length === 0)}
+                {toolButton('redo', 'redo', t.redo, history.redo.length === 0)}
+              </div>
+              <div key="structure-tools" className="command-cluster structure-cluster">
+                {toolButton('add-child', 'child', t.child)}
+                {toolButton('add-sibling', 'sibling', t.sibling)}
+                {toolButton('rename-node', 'rename', t.rename)}
+                {toolButton('toggle-collapse', 'collapse', t.collapse, !hasChildren(document, selected.id))}
+                {toolButton('delete-node', 'delete', t.remove, selected.parent_id === null)}
+              </div>
+              <div key="view-tools" className="command-cluster view-cluster">
+                {toolButton('layout-bilateral', 'bilateral', t.bilateral, false, document.layout === 'bilateral')}
+                {toolButton('layout-right', 'right', t.right, false, document.layout === 'right')}
+                {toolButton('zoom-out', 'minus', t.zoomOut)}
+                <span key="zoom-readout" className="zoom-readout">{Math.round(viewport.zoom * 100)}%</span>
+                {toolButton('zoom-in', 'add', t.zoomIn)}
+                {toolButton('center-map', 'center', t.center)}
+                {toolButton('import-document', 'import', t.importLabel)}
+                {toolButton('export-document', 'export', t.exportLabel)}
+              </div>
+            </nav>
+          </header>
+          <span key="save-state" className={saveState === 'error' || saveState === 'conflict' ? 'save-pill is-error' : saveState === 'saving' ? 'save-pill is-saving' : 'save-pill'} role="status"><span key="save-dot" className="save-dot"></span>{saveLabel()}</span>
+          <p key="canvas-hint" id="canvas-hint" className="shortcut-pill"><kbd key="tab-key">Tab</kbd><span key="tab-label">{t.child}</span><span key="hint-divider-1">·</span><kbd key="enter-key">Enter</kbd><span key="enter-label">{t.sibling}</span><span key="hint-divider-2">·</span><kbd key="f2-key">F2</kbd><span key="f2-label">{t.rename}</span></p>
+          <div key="color-panel" className="color-panel" aria-label={t.colors}>
+            <span key="color-label" className="color-label">{t.colors}</span>
             {NODE_COLORS.map((color) => (
               <button key={`color-${color}`} className={`color-button color-${color}`} type="button" value={color} aria-label={color} aria-pressed={selected.color === color} data-redevplugin-action="set-node-color"></button>
             ))}
@@ -303,8 +326,12 @@ function view() {
   );
 }
 
-function toolButton(action: string, symbol: string, label: string, disabled = false, pressed?: boolean) {
-  return <button key={`tool-${action}`} className="tool-button" type="button" title={label} aria-label={label} aria-pressed={pressed} disabled={disabled} data-redevplugin-action={action}>{symbol}<span key={`tool-${action}-label`}>{label}</span></button>;
+function toolButton(action: string, icon: string, label: string, disabled = false, pressed?: boolean) {
+  return <button key={`tool-${action}`} className="tool-button" type="button" title={label} aria-label={label} aria-pressed={pressed} disabled={disabled} data-redevplugin-action={action}><span key={`tool-${action}-icon`} className={`tool-icon icon-${icon}`}></span></button>;
+}
+
+function sideActionButton(action: string, icon: string, label: string, disabled = false) {
+  return <button key={`side-${action}`} className="side-action-button" type="button" title={label} aria-label={label} disabled={disabled} data-redevplugin-action={action}><span key={`side-${action}-icon`} className={`tool-icon icon-${icon}`}></span></button>;
 }
 
 function notice(key: string, message: string) {
@@ -490,6 +517,7 @@ function runMutation(mutator: (draft: MindMapWorkspace) => string | undefined, i
     workspace = draft;
     history.commit(workspace);
     ensureSelection(nextSelected);
+    revealSelection();
     markDirty(immediateSave);
     saveMessage = '';
     void render();
@@ -639,6 +667,7 @@ function handleCanvasInput(event: PluginCanvasInputEvent): void {
     cssHeight = event.cssHeight;
     devicePixelRatio = event.devicePixelRatio;
     configureCanvas();
+    revealSelection();
     draw();
     return;
   }
@@ -776,8 +805,7 @@ function configureCanvas(): void {
 function draw(): void {
   if (!context || !canvas || !visible) return;
   context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-  context.fillStyle = colors.canvas;
-  context.fillRect(0, 0, cssWidth, cssHeight);
+  drawCanvasAtmosphere();
   drawGrid();
   context.save();
   context.translate(cssWidth / 2 + viewport.x, cssHeight / 2 + viewport.y);
@@ -785,24 +813,47 @@ function draw(): void {
   const layout = layoutDocument(currentDocument());
   drawEdges(layout);
   drawNodes(layout);
+  if (currentDocument().nodes.length === 1) drawFirstBranchHint(layout);
   context.restore();
+}
+
+function drawCanvasAtmosphere(): void {
+  if (!context) return;
+  const background = context.createLinearGradient(0, 0, cssWidth, cssHeight);
+  background.addColorStop(0, mixColor(colors.canvas, colors.surface, 0.16));
+  background.addColorStop(0.54, colors.canvas);
+  background.addColorStop(1, mixColor(colors.canvas, colors.accent, 0.035));
+  context.fillStyle = background;
+  context.fillRect(0, 0, cssWidth, cssHeight);
+
+  const glowRadius = Math.max(cssWidth, cssHeight) * 0.62;
+  const glow = context.createRadialGradient(cssWidth * 0.54, cssHeight * 0.42, 0, cssWidth * 0.54, cssHeight * 0.42, glowRadius);
+  glow.addColorStop(0, withAlpha(colors.accent, 0.045));
+  glow.addColorStop(1, withAlpha(colors.accent, 0));
+  context.fillStyle = glow;
+  context.fillRect(0, 0, cssWidth, cssHeight);
 }
 
 function drawGrid(): void {
   if (!context) return;
-  const gap = Math.max(18, 28 * viewport.zoom);
+  const gap = Math.max(22, 32 * viewport.zoom);
   const offsetX = ((cssWidth / 2 + viewport.x) % gap + gap) % gap;
   const offsetY = ((cssHeight / 2 + viewport.y) % gap + gap) % gap;
-  context.fillStyle = withAlpha(colors.text_muted, 0.16);
+  context.fillStyle = withAlpha(colors.text_muted, 0.11);
+  context.beginPath();
   for (let x = offsetX; x < cssWidth; x += gap) {
-    for (let y = offsetY; y < cssHeight; y += gap) context.fillRect(x, y, 1, 1);
+    for (let y = offsetY; y < cssHeight; y += gap) {
+      context.moveTo(x + 0.75, y);
+      context.arc(x, y, 0.75, 0, Math.PI * 2);
+    }
   }
+  context.fill();
 }
 
 function drawEdges(layout: DocumentLayout): void {
   if (!context) return;
-  context.lineWidth = 2 / viewport.zoom;
-  context.strokeStyle = withAlpha(colors.text_muted, 0.38);
+  const document = currentDocument();
+  context.lineCap = 'round';
   for (const edge of layout.edges) {
     const from = layout.nodes.get(edge.from);
     const to = layout.nodes.get(edge.to);
@@ -810,6 +861,12 @@ function drawEdges(layout: DocumentLayout): void {
     const startX = from.x + (edge.side === 'right' ? from.width / 2 : -from.width / 2);
     const endX = to.x + (edge.side === 'right' ? -to.width / 2 : to.width / 2);
     const bend = Math.abs(endX - startX) * 0.48;
+    const color = branchColor(document, to.id);
+    const stroke = context.createLinearGradient(startX, from.y, endX, to.y);
+    stroke.addColorStop(0, withAlpha(color, from.depth === 0 ? 0.3 : 0.52));
+    stroke.addColorStop(1, withAlpha(color, 0.84));
+    context.lineWidth = (to.depth <= 1 ? 2.6 : 2) / viewport.zoom;
+    context.strokeStyle = stroke;
     context.beginPath();
     context.moveTo(startX, from.y);
     context.bezierCurveTo(startX + (edge.side === 'right' ? bend : -bend), from.y, endX - (edge.side === 'right' ? bend : -bend), to.y, endX, to.y);
@@ -826,36 +883,84 @@ function drawNodes(layout: DocumentLayout): void {
     const selected = node.id === selectedNodeID;
     const isDropParent = dropTarget?.parentID === node.id;
     context.save();
-    context.shadowColor = selected ? withAlpha(colors.focus, 0.28) : '#00000016';
-    context.shadowBlur = selected ? 16 : 10;
-    context.shadowOffsetY = 3;
+    if (selected) drawSelectionHalo(box);
+    const accent = branchColor(document, node.id);
+    context.shadowColor = selected ? withAlpha(colors.focus, 0.18) : withAlpha('#000000', box.depth === 0 ? 0.18 : 0.11);
+    context.shadowBlur = box.depth === 0 ? 24 : selected ? 18 : 12;
+    context.shadowOffsetY = box.depth === 0 ? 8 : 4;
     roundedRect(context, box.x - box.width / 2, box.y - box.height / 2, box.width, box.height, box.depth === 0 ? 14 : 11);
-    context.fillStyle = box.depth === 0 ? nodeColor(node.color) : colors.surface_elevated;
+    if (box.depth === 0) {
+      const rootFill = context.createLinearGradient(box.x - box.width / 2, box.y - box.height / 2, box.x + box.width / 2, box.y + box.height / 2);
+      rootFill.addColorStop(0, mixColor(nodeColor(node.color), '#ffffff', 0.14));
+      rootFill.addColorStop(1, mixColor(nodeColor(node.color), '#000000', 0.1));
+      context.fillStyle = rootFill;
+    } else {
+      context.fillStyle = mixColor(colors.surface_elevated, accent, box.depth === 1 ? 0.11 : 0.055);
+    }
     context.fill();
     context.shadowColor = 'transparent';
-    context.lineWidth = (selected ? 2.5 : 1) / viewport.zoom;
-    context.strokeStyle = isDropParent ? colors.success : selected ? colors.focus : withAlpha(nodeColor(node.color), 0.7);
+    context.lineWidth = (isDropParent ? 2.5 : 1) / viewport.zoom;
+    context.strokeStyle = isDropParent ? colors.success : box.depth === 0 ? withAlpha('#ffffff', 0.22) : withAlpha(accent, selected ? 0.58 : 0.23);
     context.stroke();
+
+    if (box.depth > 0) {
+      const railX = box.side === 'left' ? box.x + box.width / 2 - 5 : box.x - box.width / 2 + 2;
+      roundedRect(context, railX, box.y - Math.min(13, box.height / 2 - 7), 3, Math.min(26, box.height - 14), 2);
+      context.fillStyle = accent;
+      context.fill();
+    }
+
     context.fillStyle = box.depth === 0 ? contrastText(nodeColor(node.color)) : colors.text;
-    context.font = `${box.depth === 0 ? 700 : 600} ${box.depth === 0 ? 15 : 13}px system-ui, sans-serif`;
+    context.font = `${box.depth === 0 ? 720 : box.depth === 1 ? 650 : 580} ${box.depth === 0 ? 15.5 : box.depth === 1 ? 13.5 : 13}px system-ui, sans-serif`;
     context.textAlign = 'center';
     context.textBaseline = 'middle';
     context.fillText(fittedTitle(node.title, box.width - 30), box.x, box.y, box.width - 30);
     if (hasChildren(document, node.id)) {
       const badgeX = box.x + (box.side === 'left' && box.depth > 0 ? -box.width / 2 : box.width / 2);
       context.beginPath();
-      context.arc(badgeX, box.y, 8, 0, Math.PI * 2);
+      context.arc(badgeX, box.y, 7.5, 0, Math.PI * 2);
       context.fillStyle = colors.surface;
       context.fill();
-      context.strokeStyle = withAlpha(nodeColor(node.color), 0.85);
+      context.lineWidth = 1.25 / viewport.zoom;
+      context.strokeStyle = withAlpha(accent, 0.68);
       context.stroke();
-      context.fillStyle = colors.text_muted;
+      context.fillStyle = accent;
       context.font = '700 10px system-ui, sans-serif';
       context.fillText(node.collapsed ? '+' : '−', badgeX, box.y + 0.5);
     }
     context.restore();
   }
   if (dropTarget && pointer?.kind === 'node') drawDropLabel(layout);
+}
+
+function drawSelectionHalo(box: LayoutNode): void {
+  if (!context) return;
+  context.save();
+  context.shadowColor = withAlpha(colors.focus, 0.32);
+  context.shadowBlur = 16;
+  roundedRect(context, box.x - box.width / 2 - 4, box.y - box.height / 2 - 4, box.width + 8, box.height + 8, box.depth === 0 ? 17 : 14);
+  context.lineWidth = 1.5 / viewport.zoom;
+  context.strokeStyle = withAlpha(colors.focus, 0.48);
+  context.stroke();
+  context.restore();
+}
+
+function drawFirstBranchHint(layout: DocumentLayout): void {
+  if (!context) return;
+  const root = [...layout.nodes.values()].find((node) => node.depth === 0);
+  if (!root) return;
+  const label = text().firstBranch;
+  context.save();
+  context.font = '600 11px system-ui, sans-serif';
+  const width = context.measureText(label).width + 24;
+  roundedRect(context, root.x - width / 2, root.y + root.height / 2 + 18, width, 28, 14);
+  context.fillStyle = withAlpha(colors.surface_elevated, 0.82);
+  context.fill();
+  context.fillStyle = colors.text_muted;
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillText(label, root.x, root.y + root.height / 2 + 32);
+  context.restore();
 }
 
 function drawDropLabel(layout: DocumentLayout): void {
@@ -888,14 +993,33 @@ function screenToWorld(x: number, y: number): { x: number; y: number } {
 }
 
 function centerMap(renderUI = true): void {
-  viewport = { x: 0, y: 0, zoom: 1 };
+  viewport = fitLayoutToViewport(layoutDocument(currentDocument()), cssWidth, cssHeight, viewportPadding());
   draw();
   if (renderUI) void render();
+}
+
+function revealSelection(): void {
+  const box = layoutDocument(currentDocument()).nodes.get(selectedNodeID);
+  if (!box) return;
+  const padding = viewportPadding();
+  const left = cssWidth / 2 + viewport.x + (box.x - box.width / 2) * viewport.zoom;
+  const right = cssWidth / 2 + viewport.x + (box.x + box.width / 2) * viewport.zoom;
+  const top = cssHeight / 2 + viewport.y + (box.y - box.height / 2) * viewport.zoom;
+  const bottom = cssHeight / 2 + viewport.y + (box.y + box.height / 2) * viewport.zoom;
+  if (left < padding.left) viewport.x += padding.left - left;
+  else if (right > cssWidth - padding.right) viewport.x -= right - (cssWidth - padding.right);
+  if (top < padding.top) viewport.y += padding.top - top;
+  else if (bottom > cssHeight - padding.bottom) viewport.y -= bottom - (cssHeight - padding.bottom);
+}
+
+function viewportPadding(): ViewportPadding {
+  return { top: cssWidth < 520 ? 108 : 76, right: 28, bottom: 68, left: 28 };
 }
 
 function setZoom(value: number): void {
   viewport.zoom = Math.max(0.42, Math.min(2.4, value));
   draw();
+  void render();
 }
 
 function currentDocument(): MindMapDocument {
@@ -952,6 +1076,26 @@ function nodeColor(color: NodeColor): string {
   if (color === 'amber') return '#e6a23c';
   if (color === 'rose') return '#e9687d';
   return '#8d6de8';
+}
+
+function branchColor(document: MindMapDocument, nodeID: string): string {
+  let node = document.nodes.find((candidate) => candidate.id === nodeID);
+  if (!node) return colors.accent;
+  while (node.parent_id !== null) {
+    const parent = document.nodes.find((candidate) => candidate.id === node!.parent_id);
+    if (!parent || parent.parent_id === null) break;
+    node = parent;
+  }
+  return nodeColor(node.color);
+}
+
+function mixColor(left: string, right: string, rightAmount: number): string {
+  const leftValue = parseHexColor(left);
+  const rightValue = parseHexColor(right);
+  if (leftValue === undefined || rightValue === undefined) return left;
+  const amount = Math.max(0, Math.min(1, rightAmount));
+  const channel = (shift: number) => Math.round(((leftValue >> shift) & 255) * (1 - amount) + ((rightValue >> shift) & 255) * amount);
+  return `rgb(${channel(16)}, ${channel(8)}, ${channel(0)})`;
 }
 
 function contrastText(hex: string): string {

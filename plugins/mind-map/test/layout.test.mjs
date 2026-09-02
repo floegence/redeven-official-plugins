@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { addChild, createWorkspace } from '../ui/src/workspace-model.ts';
-import { layoutDocument } from '../ui/src/layout.ts';
+import { fitLayoutToViewport, layoutDocument } from '../ui/src/layout.ts';
 
 describe('Mind Map automatic layout', () => {
   it('keeps the root centered and distributes bilateral branches to both sides', () => {
@@ -50,5 +50,21 @@ describe('Mind Map automatic layout', () => {
     assert.equal(layout.nodes.has(branch.id), true);
     assert.equal(layout.nodes.has(leaf.id), false);
     assert.equal(document.nodes.length, 3);
+  });
+
+  it('fits visible content inside a compact editor viewport', () => {
+    const document = createWorkspace(5).documents[0];
+    document.layout = 'right';
+    const root = document.nodes[0];
+    addChild(document, root.id, 'A visible branch');
+    const layout = layoutDocument(document);
+    const viewport = fitLayoutToViewport(layout, 620, 554, { top: 76, right: 28, bottom: 68, left: 28 });
+    const boxes = [...layout.nodes.values()];
+    const left = Math.min(...boxes.map((box) => 310 + viewport.x + (box.x - box.width / 2) * viewport.zoom));
+    const right = Math.max(...boxes.map((box) => 310 + viewport.x + (box.x + box.width / 2) * viewport.zoom));
+    assert.ok(left >= 28);
+    assert.ok(right <= 592);
+    assert.ok(viewport.zoom <= 1);
+    assert.ok(viewport.zoom >= 0.42);
   });
 });

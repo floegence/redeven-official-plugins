@@ -12,6 +12,8 @@ export type LayoutNode = {
 
 export type LayoutEdge = { from: string; to: string; side: BranchSide };
 export type DocumentLayout = { nodes: Map<string, LayoutNode>; edges: LayoutEdge[] };
+export type ViewportPadding = { top: number; right: number; bottom: number; left: number };
+export type FittedViewport = { x: number; y: number; zoom: number };
 
 const HORIZONTAL_GAP = 88;
 const VERTICAL_GAP = 18;
@@ -31,6 +33,32 @@ export function layoutDocument(document: MindMapDocument): DocumentLayout {
     ];
   for (const group of groups) layoutSide(document, root, group.children, group.side, output);
   return output;
+}
+
+export function fitLayoutToViewport(
+  layout: DocumentLayout,
+  viewportWidth: number,
+  viewportHeight: number,
+  padding: ViewportPadding,
+): FittedViewport {
+  const nodes = [...layout.nodes.values()];
+  if (nodes.length === 0) return { x: 0, y: 0, zoom: 1 };
+  const minX = Math.min(...nodes.map((node) => node.x - node.width / 2));
+  const maxX = Math.max(...nodes.map((node) => node.x + node.width / 2));
+  const minY = Math.min(...nodes.map((node) => node.y - node.height / 2));
+  const maxY = Math.max(...nodes.map((node) => node.y + node.height / 2));
+  const availableWidth = Math.max(1, viewportWidth - padding.left - padding.right);
+  const availableHeight = Math.max(1, viewportHeight - padding.top - padding.bottom);
+  const contentWidth = Math.max(1, maxX - minX);
+  const contentHeight = Math.max(1, maxY - minY);
+  const zoom = Math.max(0.42, Math.min(1, availableWidth / contentWidth, availableHeight / contentHeight));
+  const visibleCenterX = padding.left + availableWidth / 2;
+  const visibleCenterY = padding.top + availableHeight / 2;
+  return {
+    x: visibleCenterX - viewportWidth / 2 - ((minX + maxX) / 2) * zoom,
+    y: visibleCenterY - viewportHeight / 2 - ((minY + maxY) / 2) * zoom,
+    zoom,
+  };
 }
 
 function layoutSide(

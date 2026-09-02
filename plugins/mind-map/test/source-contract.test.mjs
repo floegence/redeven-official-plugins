@@ -35,12 +35,29 @@ describe('Mind Map source contract', () => {
     assert.match(notice, /No third-party visual, audio, or font assets/u);
   });
 
-  it('keeps every toolbar action available without horizontal scrolling in compact surfaces', async () => {
-    const css = await readFile(path.join(root, 'ui', 'styles.css'), 'utf8');
-    assert.match(css, /\.editor-shell \{ container: editor \/ inline-size;/u);
-    assert.match(css, /@container editor \(max-width: 900px\)[\s\S]*\.toolbar \{[^}]*overflow-x: hidden/u);
-    assert.match(css, /\.toolbar \.tool-button \{[^}]*width: 32px/u);
-    assert.match(css, /\.toolbar \.tool-button span, \.save-state \{ display: none; \}/u);
+  it('uses compact spatial-editor chrome without horizontal toolbar scrolling', async () => {
+    const [app, css] = await Promise.all([
+      readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8'),
+      readFile(path.join(root, 'ui', 'styles.css'), 'utf8'),
+    ]);
+    assert.match(app, /className="canvas-command-deck"/u);
+    assert.match(app, /className="command-cluster/u);
+    assert.match(app, /'save-pill is-error'.*'save-pill is-saving'.*'save-pill'/u);
+    assert.match(app, /className="shortcut-pill"/u);
+    assert.match(app, /className=\{`tool-icon icon-\$\{icon\}`\}/u);
+    assert.doesNotMatch(css, /container: mind-map \/ inline-size/u);
+    assert.doesNotMatch(css, /@container mind-map/u);
+    assert.match(css, /@media \(max-width: 760px\)/u);
+    assert.doesNotMatch(css, /overflow-x:\s*(?:auto|scroll)/u);
+    assert.doesNotMatch(app, /className="toolbar"/u);
+  });
+
+  it('renders a contemporary canvas hierarchy with branch color and selection depth', async () => {
+    const app = await readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8');
+    assert.match(app, /function drawCanvasAtmosphere/u);
+    assert.match(app, /createLinearGradient/u);
+    assert.match(app, /function drawSelectionHalo/u);
+    assert.match(app, /function branchColor/u);
   });
 
   it('builds release WASM in the pinned Linux environment', async () => {
