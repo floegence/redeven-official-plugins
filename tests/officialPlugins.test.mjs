@@ -26,7 +26,7 @@ describe('official plugin repository contract', () => {
     assert.equal(weather.name, 'weather');
     assert.equal(weather.manifest.schema_version, 'redevplugin.manifest.v9');
     assert.equal(weather.manifest.plugin.plugin_id, 'com.redeven.official.weather');
-    assert.equal(weather.manifest.plugin.version, '1.0.9');
+    assert.equal(weather.manifest.plugin.version, '1.0.14');
     assert.deepEqual(weather.manifest.permissions, ['network.client']);
     assert.deepEqual(weather.manifest.api.required_features, ['net.http.v1']);
     assert.equal(weather.manifest.presentation.icon.path, 'ui/assets/weather-plugin.png');
@@ -65,7 +65,7 @@ describe('official plugin repository contract', () => {
 
   it('resolves each global release tag to exactly one plugin', async () => {
     const sources = await loadAllPluginSources(repoRoot);
-    assert.equal(resolvePluginForReleaseTag(sources, 'v1.0.9').name, 'weather');
+    assert.equal(resolvePluginForReleaseTag(sources, 'v1.0.14').name, 'weather');
     assert.equal(resolvePluginForReleaseTag(sources, 'v1.0.13').name, 'pocket-pounce');
     assert.throws(() => resolvePluginForReleaseTag(sources, 'v9.9.9'), /exactly one plugin/u);
 
@@ -115,6 +115,6 @@ describe('official plugin repository contract', () => {
     assert.doesNotMatch(tracked, /(?:plugins|releases)\/containers\//u);
     assert.doesNotMatch(tracked, /\.redevplugin$/mu);
     const weatherReleaseInputs = [...tracked.matchAll(/^releases\/weather\/([^/]+)\//gmu)].map((match) => match[1]);
-    assert.deepEqual([...new Set(weatherReleaseInputs)], ['1.0.9']);
+    assert.deepEqual([...new Set(weatherReleaseInputs)], ['1.0.14']);
   });
 });

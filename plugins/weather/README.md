@@ -41,7 +41,7 @@ npm test
 npm run build
 ```
 
-Version `1.0.9` is the stable release-train version. Build the unsigned official
+Version `1.0.14` is the stable release-train version. Build the unsigned official
 package from the repository root with:
 
 ```bash
