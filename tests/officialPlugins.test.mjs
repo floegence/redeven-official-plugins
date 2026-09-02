@@ -124,5 +124,7 @@ describe('official plugin repository contract', () => {
     assert.doesNotMatch(tracked, /\.redevplugin$/mu);
     const weatherReleaseInputs = [...tracked.matchAll(/^releases\/weather\/([^/]+)\//gmu)].map((match) => match[1]);
     assert.deepEqual([...new Set(weatherReleaseInputs)], ['1.0.14']);
+    const mindMapReleaseInputs = [...tracked.matchAll(/^releases\/mind-map\/([^/]+)\//gmu)].map((match) => match[1]);
+    assert.deepEqual([...new Set(mindMapReleaseInputs)], ['1.0.17']);
   });
 });
