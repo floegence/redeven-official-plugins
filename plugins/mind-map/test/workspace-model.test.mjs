@@ -16,6 +16,7 @@ import {
   moveNode,
   redoHistory,
   renameNode,
+  setNodeColor,
   toggleCollapsed,
   undoHistory,
   validateWorkspace,
@@ -87,6 +88,27 @@ describe('Mind Map workspace model', () => {
     assert.equal(deleteNode(document, root.id), false);
     assert.equal(deleteNode(document, parent.id), true);
     assert.equal(document.nodes.length, 1);
+  });
+
+  it('keeps every node color independent at arbitrary depth', () => {
+    const workspace = createWorkspace(41);
+    const document = workspace.documents[0];
+    const root = document.nodes[0];
+    const child = addChild(document, root.id, 'Child');
+    const grandchild = addChild(document, child.id, 'Grandchild');
+    const greatGrandchild = addChild(document, grandchild.id, 'Great grandchild');
+
+    assert.equal(setNodeColor(document, child.id, 'rose'), true);
+    assert.equal(setNodeColor(document, grandchild.id, 'green'), true);
+    assert.equal(setNodeColor(document, greatGrandchild.id, 'rose'), true);
+    assert.equal(child.color, 'rose');
+    assert.equal(grandchild.color, 'green');
+    assert.equal(greatGrandchild.color, 'rose');
+
+    assert.equal(setNodeColor(document, grandchild.id, 'violet'), true);
+    assert.equal(child.color, 'rose');
+    assert.equal(grandchild.color, 'violet');
+    assert.equal(greatGrandchild.color, 'rose');
   });
 
   it('supports document creation, duplication, deletion, and a permanent final document', () => {

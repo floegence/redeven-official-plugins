@@ -7,6 +7,11 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const cargo = process.platform === 'win32' ? 'cargo.exe' : 'cargo';
 const releaseWorker = String(process.env.MIND_MAP_RELEASE_WASM ?? '').trim();
+const iconAssets = [
+  'add.png', 'minus.png', 'undo.png', 'redo.png', 'child.png', 'sibling.png',
+  'rename.png', 'collapse.png', 'delete.png', 'bilateral.png', 'right.png',
+  'center.png', 'import.png', 'export.png', 'duplicate.png', 'network.png',
+];
 
 await rm(resolve(root, 'dist'), { recursive: true, force: true });
 run(npm, ['run', 'build:ui']);
@@ -24,6 +29,7 @@ if (releaseWorker) {
 }
 
 await mkdir(resolve(root, 'dist/ui/assets'), { recursive: true });
+await mkdir(resolve(root, 'dist/ui/assets/icons'), { recursive: true });
 await mkdir(resolve(root, 'dist/workers'), { recursive: true });
 await mkdir(resolve(root, 'dist/licenses'), { recursive: true });
 await Promise.all([
@@ -32,7 +38,12 @@ await Promise.all([
   copyFile(resolve(root, 'ui/styles.css'), resolve(root, 'dist/ui/assets/styles.css')),
   copyFile(resolve(root, 'assets/mind-map.png'), resolve(root, 'dist/ui/assets/mind-map.png')),
   copyFile(resolve(root, 'THIRD_PARTY_NOTICES.txt'), resolve(root, 'dist/licenses/THIRD_PARTY_NOTICES.txt')),
+  copyFile(resolve(root, 'node_modules/lucide-static/LICENSE'), resolve(root, 'dist/licenses/LUCIDE-LICENSE.txt')),
   copyFile(workerSource, resolve(root, 'dist/workers/mind-map.wasm')),
+  ...iconAssets.map((asset) => copyFile(
+    resolve(root, 'assets/icons', asset),
+    resolve(root, 'dist/ui/assets/icons', asset),
+  )),
 ]);
 
 function run(command, args) {

@@ -8,6 +8,17 @@ import {
   type PluginUIActionEvent,
 } from '@floegence/redevplugin-ui/plugin';
 import { fitLayoutToViewport, layoutDocument, type DocumentLayout, type LayoutNode, type ViewportPadding } from './layout.js';
+import {
+  CONTEXT_MENU_HEIGHT,
+  CONTEXT_MENU_WIDTH,
+  DEFAULT_SIDEBAR_WIDTH,
+  MAX_SIDEBAR_WIDTH,
+  MIN_SIDEBAR_WIDTH,
+  SIDEBAR_WIDTH_STEP,
+  normalizeSidebarWidth,
+  placeContextMenu,
+  sidebarWidthClass,
+} from './editor-ui.js';
 import { loadWithRetry } from './startup-load.js';
 import {
   MAX_IMPORT_BYTES,
@@ -52,6 +63,7 @@ type Modal =
   | { kind: 'export'; text: string };
 type Viewport = { x: number; y: number; zoom: number };
 type DropTarget = { parentID: string; order: number; side?: BranchSide; label: string };
+type NodeContextMenu = { nodeID: string; x: number; y: number; hover: number };
 type PointerGesture = {
   pointerID: number;
   kind: 'pan' | 'node';
@@ -94,8 +106,10 @@ let cssWidth = 960;
 let cssHeight = 600;
 let devicePixelRatio = 1;
 let viewport: Viewport = { x: 0, y: 0, zoom: 1 };
+let sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
 let pointer: PointerGesture | undefined;
 let dropTarget: DropTarget | undefined;
+let nodeContextMenu: NodeContextMenu | undefined;
 let visible = true;
 let disposed = false;
 let surfaceDisposing = false;
@@ -127,6 +141,7 @@ const COPY = {
     rootCannotDelete: 'The central topic cannot be deleted.', recovered: 'Recovered copy', dropInside: 'Move inside',
     dropBefore: 'Move before', dropAfter: 'Move after', statusReady: 'Ready', zoomIn: 'Zoom in', zoomOut: 'Zoom out',
     firstBranch: 'Press Tab to shape your first branch', canvasTools: 'Map editing tools', colors: 'Topic color',
+    nodeActions: 'Topic actions', resizeSidebar: 'Resize map sidebar',
   },
   zh: {
     app: '思维导图', maps: '导图', newMap: '新建', rename: '重命名', duplicate: '复制', remove: '删除',
@@ -148,6 +163,7 @@ const COPY = {
     recovered: '恢复的副本', dropInside: '移入节点', dropBefore: '移到前面', dropAfter: '移到后面',
     statusReady: '可编辑', zoomIn: '放大', zoomOut: '缩小', firstBranch: '按 Tab 创建第一个分支',
     canvasTools: '导图编辑工具', colors: '节点颜色',
+    nodeActions: '节点操作', resizeSidebar: '调整导图侧边栏宽度',
   },
 } as const;
 
@@ -171,6 +187,7 @@ bridge.onAction('center-map', () => centerMap());
 bridge.onAction('import-document', () => openModal({ kind: 'import', text: '' }));
 bridge.onAction('export-document', () => openModal({ kind: 'export', text: exportDocument(currentDocument()) }));
 bridge.onAction('set-node-color', (event) => setSelectedColor(String(event.value ?? '')));
+bridge.onAction('resize-sidebar', (event) => resizeSidebar(String(event.value ?? '')));
 bridge.onAction('cancel-modal', () => closeModal());
 bridge.onAction('submit-modal', (event) => submitModal(event));
 bridge.onAction('reload-conflict', () => void reloadLatest());
@@ -188,6 +205,7 @@ bridge.onLifecycle(async (event) => {
     visible = false;
     pointer = undefined;
     dropTarget = undefined;
+    nodeContextMenu = undefined;
     await flushSave();
     return;
   }
@@ -254,22 +272,22 @@ function view() {
   const selected = document.nodes.find((node) => node.id === selectedNodeID) ?? document.nodes[0];
   const t = text();
   return (
-    <main key="mind-map-root" className={loadState === 'ready' ? 'mind-map-app' : 'mind-map-app is-starting'}>
+    <main key="mind-map-root" className={`${loadState === 'ready' ? 'mind-map-app' : 'mind-map-app is-starting'} ${sidebarWidthClass(sidebarWidth)}`}>
       <aside key="document-sidebar" className="document-sidebar" aria-label={t.maps}>
         <header key="sidebar-heading" className="sidebar-heading">
-          <span key="brand-mark" className="brand-mark" aria-hidden="true"><span key="brand-core"></span></span>
+          <span key="brand-mark" className="brand-mark" aria-hidden="true"><span key="brand-core" className="brand-icon lucide-icon icon-network"></span></span>
           <span key="sidebar-title-stack" className="sidebar-title-stack">
             <strong key="sidebar-title">{t.maps}</strong>
             <small key="sidebar-count">{workspace.documents.length} {t.documents}</small>
           </span>
-          <button key="new-document" className="icon-button create-map-button" type="button" title={t.newMap} aria-label={t.newMap} data-redevplugin-action="new-document"><span key="new-document-icon" className="tool-icon icon-add"></span></button>
+          <button key="new-document" className="icon-button create-map-button" type="button" title={t.newMap} aria-label={t.newMap} data-redevplugin-action="new-document"><span key="new-document-icon" className="tool-icon lucide-icon icon-add"></span></button>
         </header>
         <div key="sidebar-section-label" className="sidebar-section-label"><span key="workspace-label">{t.workspace}</span></div>
         <ul key="document-list" className="document-list">
           {workspace.documents.map((item, index) => (
             <li key={`document-item-${index}`} className={item.id === workspace.selected_document_id ? 'document-card is-active' : 'document-card'}>
               <button key={`document-${index}`} className={item.id === workspace.selected_document_id ? 'document-button is-active' : 'document-button'} type="button" value={item.id} aria-pressed={item.id === workspace.selected_document_id} data-redevplugin-action="select-document">
-                <span key={`document-glyph-${index}`} className={`document-glyph color-${item.nodes[0]?.color ?? 'accent'}`} aria-hidden="true"><span key={`document-glyph-core-${index}`}></span></span>
+                <span key={`document-glyph-${index}`} className={`document-glyph color-${item.nodes[0]?.color ?? 'accent'}`} aria-hidden="true"><span key={`document-glyph-core-${index}`} className="document-glyph-icon lucide-icon icon-network"></span></span>
                 <span key={`document-copy-${index}`} className="document-copy">
                   <strong key={`document-label-${index}`}>{item.title}</strong>
                   <small key={`document-meta-${index}`}>{item.nodes.length} {t.topics}</small>
@@ -289,6 +307,8 @@ function view() {
           <span key="sidebar-shortcut-mark" className="sidebar-shortcut-mark">⌘</span>
           <span key="sidebar-footnote">Tab · Enter · F2</span>
         </footer>
+        <span key="sidebar-resizer-handle" className="sidebar-resizer-handle" aria-hidden="true"></span>
+        <input key="sidebar-resizer" className="sidebar-resizer" type="range" name="sidebar-width" min={MIN_SIDEBAR_WIDTH} max={MAX_SIDEBAR_WIDTH} step={SIDEBAR_WIDTH_STEP} value={sidebarWidth} aria-label={t.resizeSidebar} title={t.resizeSidebar} data-redevplugin-action="resize-sidebar"></input>
       </aside>
       <section key="editor-shell" className="editor-shell">
         <div key="canvas-shell" className="canvas-shell">
@@ -341,11 +361,11 @@ function view() {
 }
 
 function toolButton(action: string, icon: string, label: string, disabled = false, pressed?: boolean) {
-  return <button key={`tool-${action}`} className="tool-button" type="button" title={label} aria-label={label} aria-pressed={pressed} disabled={disabled} data-redevplugin-action={action}><span key={`tool-${action}-icon`} className={`tool-icon icon-${icon}`}></span></button>;
+  return <button key={`tool-${action}`} className="tool-button" type="button" title={label} aria-label={label} aria-pressed={pressed} disabled={disabled} data-redevplugin-action={action}><span key={`tool-${action}-icon`} className={`tool-icon lucide-icon icon-${icon}`}></span></button>;
 }
 
 function sideActionButton(action: string, icon: string, label: string, disabled = false) {
-  return <button key={`side-${action}`} className="side-action-button" type="button" title={label} aria-label={label} disabled={disabled} data-redevplugin-action={action}><span key={`side-${action}-icon`} className={`tool-icon icon-${icon}`}></span></button>;
+  return <button key={`side-${action}`} className="side-action-button" type="button" title={label} aria-label={label} disabled={disabled} data-redevplugin-action={action}><span key={`side-${action}-icon`} className={`tool-icon lucide-icon icon-${icon}`}></span></button>;
 }
 
 function startupOverlay() {
@@ -535,8 +555,17 @@ function setSelectedColor(value: string): void {
   runMutation((draft) => setNodeColor(selectedDocument(draft), selectedNodeID, value as NodeColor) ? selectedNodeID : undefined);
 }
 
+function resizeSidebar(value: string): void {
+  const next = normalizeSidebarWidth(Number(value));
+  if (next === sidebarWidth) return;
+  sidebarWidth = next;
+  nodeContextMenu = undefined;
+  void render();
+}
+
 function runMutation(mutator: (draft: MindMapWorkspace) => string | undefined, immediateSave = false): void {
   if (loadState !== 'ready') return;
+  nodeContextMenu = undefined;
   try {
     const draft = clone(workspace);
     const nextSelected = mutator(draft);
@@ -559,6 +588,7 @@ function runMutation(mutator: (draft: MindMapWorkspace) => string | undefined, i
 
 function undo(): void {
   if (loadState !== 'ready') return;
+  nodeContextMenu = undefined;
   const next = undoHistory(history, workspace);
   if (next === workspace) return;
   workspace = next;
@@ -570,6 +600,7 @@ function undo(): void {
 
 function redo(): void {
   if (loadState !== 'ready') return;
+  nodeContextMenu = undefined;
   const next = redoHistory(history, workspace);
   if (next === workspace) return;
   workspace = next;
@@ -762,6 +793,11 @@ function handleCanvasInput(event: PluginCanvasInputEvent): void {
 }
 
 function handleKey(event: Extract<PluginCanvasInputEvent, { type: 'key' }>): void {
+  if (event.code === 'Escape' && nodeContextMenu) {
+    nodeContextMenu = undefined;
+    draw();
+    return;
+  }
   const command = event.metaKey || event.ctrlKey;
   if (command && event.code === 'KeyZ') {
     if (event.shiftKey) redo(); else undo();
@@ -781,6 +817,25 @@ function handleKey(event: Extract<PluginCanvasInputEvent, { type: 'key' }>): voi
 function handlePointer(event: PluginCanvasPointerEvent): void {
   const world = screenToWorld(event.x, event.y);
   if (event.event === 'pointerdown') {
+    if (event.button === 2) {
+      pointer = undefined;
+      dropTarget = undefined;
+      const hit = hitNode(world.x, world.y);
+      if (!hit) {
+        nodeContextMenu = undefined;
+      } else {
+        selectedNodeID = hit.id;
+        nodeContextMenu = { nodeID: hit.id, ...placeContextMenu(event.x, event.y, cssWidth, cssHeight), hover: -1 };
+        void render();
+      }
+      draw();
+      return;
+    }
+    if (event.button !== 0) return;
+    if (nodeContextMenu) {
+      if (activateNodeContextMenu(event.x, event.y)) return;
+      nodeContextMenu = undefined;
+    }
     const hit = hitNode(world.x, world.y);
     if (hit) {
       selectedNodeID = hit.id;
@@ -795,6 +850,14 @@ function handlePointer(event: PluginCanvasPointerEvent): void {
         pointerID: event.pointerId, kind: 'pan', startX: event.x, startY: event.y,
         startPanX: viewport.x, startPanY: viewport.y, moved: false,
       };
+    }
+    return;
+  }
+  if (event.event === 'pointermove' && nodeContextMenu && !pointer) {
+    const nextHover = nodeContextMenuHit(event.x, event.y);
+    if (nextHover !== nodeContextMenu.hover) {
+      nodeContextMenu.hover = nextHover;
+      draw();
     }
     return;
   }
@@ -833,6 +896,141 @@ function handlePointer(event: PluginCanvasPointerEvent): void {
     dropTarget = undefined;
     draw();
   }
+}
+
+function nodeContextMenuItems(nodeID = nodeContextMenu?.nodeID ?? selectedNodeID): Array<{ label: string; shortcut: string; disabled: boolean; danger?: boolean }> {
+  const document = currentDocument();
+  const node = document.nodes.find((candidate) => candidate.id === nodeID) ?? document.nodes[0];
+  const root = node.parent_id === null;
+  const t = text();
+  return [
+    { label: t.child, shortcut: 'Tab', disabled: false },
+    { label: t.sibling, shortcut: 'Enter', disabled: root },
+    { label: t.rename, shortcut: 'F2', disabled: false },
+    { label: t.collapse, shortcut: '', disabled: !hasChildren(document, node.id) },
+    { label: t.remove, shortcut: '⌫', disabled: root, danger: true },
+  ];
+}
+
+function nodeContextMenuHit(x: number, y: number): number {
+  if (!nodeContextMenu) return -1;
+  const localX = x - nodeContextMenu.x;
+  const localY = y - nodeContextMenu.y;
+  if (localX < 0 || localY < 0 || localX > CONTEXT_MENU_WIDTH || localY > CONTEXT_MENU_HEIGHT) return -1;
+  if (localY >= 36 && localY < 206) return Math.floor((localY - 36) / 34);
+  if (localY >= 238 && localY <= 270) {
+    for (let index = 0; index < NODE_COLORS.length; index += 1) {
+      const centerX = 26 + index * 28;
+      if (Math.hypot(localX - centerX, localY - 254) <= 13) return 100 + index;
+    }
+  }
+  return 99;
+}
+
+function activateNodeContextMenu(x: number, y: number): boolean {
+  const hit = nodeContextMenuHit(x, y);
+  if (hit < 0) return false;
+  selectedNodeID = nodeContextMenu?.nodeID ?? selectedNodeID;
+  if (hit >= 100) {
+    const color = NODE_COLORS[hit - 100];
+    nodeContextMenu = undefined;
+    if (color) setSelectedColor(color);
+    return true;
+  }
+  const item = nodeContextMenuItems()[hit];
+  if (!item || item.disabled) return true;
+  nodeContextMenu = undefined;
+  if (hit === 0) addSelectedChild();
+  else if (hit === 1) addSelectedSibling();
+  else if (hit === 2) requestRenameNode();
+  else if (hit === 3) runMutation((draft) => toggleCollapsed(selectedDocument(draft), selectedNodeID) ? selectedNodeID : undefined);
+  else if (hit === 4) requestDeleteNode();
+  return true;
+}
+
+function drawNodeContextMenu(): void {
+  if (!context || !nodeContextMenu) return;
+  const document = currentDocument();
+  const node = document.nodes.find((candidate) => candidate.id === nodeContextMenu!.nodeID);
+  if (!node) return;
+  const menu = nodeContextMenu;
+  const items = nodeContextMenuItems();
+  context.save();
+  context.shadowColor = withAlpha('#000000', 0.3);
+  context.shadowBlur = 34;
+  context.shadowOffsetY = 14;
+  roundedRect(context, menu.x, menu.y, CONTEXT_MENU_WIDTH, CONTEXT_MENU_HEIGHT, 16);
+  context.fillStyle = withAlpha(colors.surface_elevated, 0.98);
+  context.fill();
+  context.shadowColor = 'transparent';
+  context.lineWidth = 1;
+  context.strokeStyle = withAlpha(colors.border, 0.9);
+  context.stroke();
+
+  context.font = '700 11px system-ui, sans-serif';
+  context.fillStyle = colors.text_muted;
+  context.textAlign = 'left';
+  context.textBaseline = 'middle';
+  context.fillText(fittedTitle(node.title, CONTEXT_MENU_WIDTH - 28), menu.x + 14, menu.y + 18, CONTEXT_MENU_WIDTH - 28);
+
+  context.beginPath();
+  context.moveTo(menu.x + 10, menu.y + 35.5);
+  context.lineTo(menu.x + CONTEXT_MENU_WIDTH - 10, menu.y + 35.5);
+  context.strokeStyle = withAlpha(colors.border, 0.62);
+  context.stroke();
+
+  items.forEach((item, index) => {
+    const rowY = menu.y + 36 + index * 34;
+    if (menu.hover === index && !item.disabled) {
+      roundedRect(context!, menu.x + 6, rowY + 3, CONTEXT_MENU_WIDTH - 12, 28, 8);
+      context!.fillStyle = item.danger ? withAlpha(colors.danger, 0.11) : withAlpha(colors.accent, 0.11);
+      context!.fill();
+    }
+    context!.globalAlpha = item.disabled ? 0.32 : 1;
+    context!.font = '620 12px system-ui, sans-serif';
+    context!.fillStyle = item.danger ? colors.danger : colors.text;
+    context!.textAlign = 'left';
+    context!.fillText(item.label, menu.x + 14, rowY + 17);
+    if (item.shortcut) {
+      context!.font = '600 9px ui-monospace, monospace';
+      context!.fillStyle = colors.text_muted;
+      context!.textAlign = 'right';
+      context!.fillText(item.shortcut, menu.x + CONTEXT_MENU_WIDTH - 14, rowY + 17);
+    }
+    context!.globalAlpha = 1;
+  });
+
+  context.beginPath();
+  context.moveTo(menu.x + 10, menu.y + 211.5);
+  context.lineTo(menu.x + CONTEXT_MENU_WIDTH - 10, menu.y + 211.5);
+  context.strokeStyle = withAlpha(colors.border, 0.62);
+  context.stroke();
+  context.font = '650 9px system-ui, sans-serif';
+  context.fillStyle = colors.text_muted;
+  context.textAlign = 'left';
+  context.fillText(text().colors, menu.x + 14, menu.y + 226);
+  NODE_COLORS.forEach((color, index) => {
+    const centerX = menu.x + 26 + index * 28;
+    const centerY = menu.y + 254;
+    if (menu.hover === 100 + index) {
+      context!.beginPath();
+      context!.arc(centerX, centerY, 11, 0, Math.PI * 2);
+      context!.fillStyle = withAlpha(nodeColor(color), 0.2);
+      context!.fill();
+    }
+    context!.beginPath();
+    context!.arc(centerX, centerY, 7, 0, Math.PI * 2);
+    context!.fillStyle = nodeColor(color);
+    context!.fill();
+    if (node.color === color) {
+      context!.beginPath();
+      context!.arc(centerX, centerY, 10, 0, Math.PI * 2);
+      context!.lineWidth = 1.5;
+      context!.strokeStyle = colors.focus;
+      context!.stroke();
+    }
+  });
+  context.restore();
 }
 
 function findDropTarget(draggedID: string, x: number, y: number): DropTarget | undefined {
@@ -896,6 +1094,7 @@ function draw(): void {
   drawNodes(layout);
   if (currentDocument().nodes.length === 1) drawFirstBranchHint(layout);
   context.restore();
+  if (nodeContextMenu) drawNodeContextMenu();
 }
 
 function drawCanvasAtmosphere(): void {
@@ -938,15 +1137,18 @@ function drawEdges(layout: DocumentLayout): void {
   for (const edge of layout.edges) {
     const from = layout.nodes.get(edge.from);
     const to = layout.nodes.get(edge.to);
-    if (!from || !to) continue;
+    const fromNode = document.nodes.find((node) => node.id === edge.from);
+    const toNode = document.nodes.find((node) => node.id === edge.to);
+    if (!from || !to || !fromNode || !toNode) continue;
     const startX = from.x + (edge.side === 'right' ? from.width / 2 : -from.width / 2);
     const endX = to.x + (edge.side === 'right' ? -to.width / 2 : to.width / 2);
     const bend = Math.abs(endX - startX) * 0.48;
-    const color = branchColor(document, to.id);
+    const fromColor = nodeColor(fromNode.color);
+    const toColor = nodeColor(toNode.color);
     const stroke = context.createLinearGradient(startX, from.y, endX, to.y);
-    stroke.addColorStop(0, withAlpha(color, from.depth === 0 ? 0.3 : 0.52));
-    stroke.addColorStop(1, withAlpha(color, 0.84));
-    context.lineWidth = (to.depth <= 1 ? 2.6 : 2) / viewport.zoom;
+    stroke.addColorStop(0, withAlpha(fromColor, from.depth === 0 ? 0.34 : 0.58));
+    stroke.addColorStop(1, withAlpha(toColor, to.depth <= 1 ? 0.88 : 0.72));
+    context.lineWidth = (to.depth === 1 ? 2.6 : to.depth === 2 ? 1.8 : 1.45) / viewport.zoom;
     context.strokeStyle = stroke;
     context.beginPath();
     context.moveTo(startX, from.y);
@@ -965,34 +1167,36 @@ function drawNodes(layout: DocumentLayout): void {
     const isDropParent = dropTarget?.parentID === node.id;
     context.save();
     if (selected) drawSelectionHalo(box);
-    const accent = branchColor(document, node.id);
-    context.shadowColor = selected ? withAlpha(colors.focus, 0.18) : withAlpha('#000000', box.depth === 0 ? 0.18 : 0.11);
-    context.shadowBlur = box.depth === 0 ? 24 : selected ? 18 : 12;
-    context.shadowOffsetY = box.depth === 0 ? 8 : 4;
-    roundedRect(context, box.x - box.width / 2, box.y - box.height / 2, box.width, box.height, box.depth === 0 ? 14 : 11);
+    const accent = nodeColor(node.color);
+    context.shadowColor = selected ? withAlpha(colors.focus, 0.18) : withAlpha('#000000', box.depth === 0 ? 0.18 : box.depth === 1 ? 0.1 : 0.045);
+    context.shadowBlur = box.depth === 0 ? 24 : selected ? 16 : box.depth === 1 ? 10 : 5;
+    context.shadowOffsetY = box.depth === 0 ? 8 : box.depth === 1 ? 4 : 2;
+    roundedRect(context, box.x - box.width / 2, box.y - box.height / 2, box.width, box.height, box.depth === 0 ? 14 : box.depth === 1 ? 11 : 8);
     if (box.depth === 0) {
       const rootFill = context.createLinearGradient(box.x - box.width / 2, box.y - box.height / 2, box.x + box.width / 2, box.y + box.height / 2);
       rootFill.addColorStop(0, mixColor(nodeColor(node.color), '#ffffff', 0.14));
       rootFill.addColorStop(1, mixColor(nodeColor(node.color), '#000000', 0.1));
       context.fillStyle = rootFill;
-    } else {
-      context.fillStyle = mixColor(colors.surface_elevated, accent, box.depth === 1 ? 0.11 : 0.055);
-    }
+    } else if (box.depth === 1) context.fillStyle = mixColor(colors.surface_elevated, accent, 0.13);
+    else if (box.depth === 2) context.fillStyle = mixColor(colors.surface_elevated, accent, 0.052);
+    else context.fillStyle = mixColor(colors.canvas, accent, 0.035);
     context.fill();
     context.shadowColor = 'transparent';
     context.lineWidth = (isDropParent ? 2.5 : 1) / viewport.zoom;
-    context.strokeStyle = isDropParent ? colors.success : box.depth === 0 ? withAlpha('#ffffff', 0.22) : withAlpha(accent, selected ? 0.58 : 0.23);
+    context.strokeStyle = isDropParent ? colors.success : box.depth === 0 ? withAlpha('#ffffff', 0.22) : withAlpha(accent, selected ? 0.62 : box.depth === 1 ? 0.26 : 0.16);
     context.stroke();
 
     if (box.depth > 0) {
-      const railX = box.side === 'left' ? box.x + box.width / 2 - 5 : box.x - box.width / 2 + 2;
-      roundedRect(context, railX, box.y - Math.min(13, box.height / 2 - 7), 3, Math.min(26, box.height - 14), 2);
+      const railWidth = box.depth === 1 ? 3 : 2;
+      const railX = box.side === 'left' ? box.x + box.width / 2 - railWidth - 2 : box.x - box.width / 2 + 2;
+      const railHeight = box.depth === 1 ? Math.min(24, box.height - 14) : Math.min(16, box.height - 14);
+      roundedRect(context, railX, box.y - railHeight / 2, railWidth, railHeight, 2);
       context.fillStyle = accent;
       context.fill();
     }
 
     context.fillStyle = box.depth === 0 ? contrastText(nodeColor(node.color)) : colors.text;
-    context.font = `${box.depth === 0 ? 720 : box.depth === 1 ? 650 : 580} ${box.depth === 0 ? 15.5 : box.depth === 1 ? 13.5 : 13}px system-ui, sans-serif`;
+    context.font = `${box.depth === 0 ? 720 : box.depth === 1 ? 660 : 560} ${box.depth === 0 ? 15.5 : box.depth === 1 ? 13.5 : 12}px system-ui, sans-serif`;
     context.textAlign = 'center';
     context.textBaseline = 'middle';
     context.fillText(fittedTitle(node.title, box.width - 30), box.x, box.y, box.width - 30);
@@ -1019,7 +1223,7 @@ function drawSelectionHalo(box: LayoutNode): void {
   context.save();
   context.shadowColor = withAlpha(colors.focus, 0.32);
   context.shadowBlur = 16;
-  roundedRect(context, box.x - box.width / 2 - 4, box.y - box.height / 2 - 4, box.width + 8, box.height + 8, box.depth === 0 ? 17 : 14);
+  roundedRect(context, box.x - box.width / 2 - 4, box.y - box.height / 2 - 4, box.width + 8, box.height + 8, box.depth === 0 ? 17 : box.depth === 1 ? 14 : 11);
   context.lineWidth = 1.5 / viewport.zoom;
   context.strokeStyle = withAlpha(colors.focus, 0.48);
   context.stroke();
@@ -1177,17 +1381,6 @@ function nodeColor(color: NodeColor): string {
   if (color === 'amber') return '#e6a23c';
   if (color === 'rose') return '#e9687d';
   return '#8d6de8';
-}
-
-function branchColor(document: MindMapDocument, nodeID: string): string {
-  let node = document.nodes.find((candidate) => candidate.id === nodeID);
-  if (!node) return colors.accent;
-  while (node.parent_id !== null) {
-    const parent = document.nodes.find((candidate) => candidate.id === node!.parent_id);
-    if (!parent || parent.parent_id === null) break;
-    node = parent;
-  }
-  return nodeColor(node.color);
 }
 
 function mixColor(left: string, right: string, rightAmount: number): string {

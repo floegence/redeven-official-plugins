@@ -16,8 +16,10 @@ export type ViewportPadding = { top: number; right: number; bottom: number; left
 export type FittedViewport = { x: number; y: number; zoom: number };
 
 const HORIZONTAL_GAP = 88;
-const VERTICAL_GAP = 18;
-const NODE_HEIGHT = 46;
+const VERTICAL_GAP = 20;
+const ROOT_NODE_HEIGHT = 54;
+const BRANCH_NODE_HEIGHT = 44;
+const TOPIC_NODE_HEIGHT = 36;
 
 export function layoutDocument(document: MindMapDocument): DocumentLayout {
   const root = document.nodes.find((node) => node.parent_id === null);
@@ -88,9 +90,10 @@ function placeSubtree(
   side: BranchSide,
   output: DocumentLayout,
 ): void {
-  const width = nodeWidth(node.title, depth === 0);
+  const width = nodeWidth(node.title, depth);
+  const height = nodeHeight(depth);
   const x = (side === 'right' ? 1 : -1) * (depth * (188 + HORIZONTAL_GAP));
-  output.nodes.set(node.id, { id: node.id, x, y: centerY, width, height: NODE_HEIGHT, depth, side });
+  output.nodes.set(node.id, { id: node.id, x, y: centerY, width, height, depth, side });
   if (node.collapsed) return;
   const children = childrenOf(document, node.id);
   if (children.length === 0) return;
@@ -106,11 +109,13 @@ function placeSubtree(
 }
 
 function subtreeHeight(document: MindMapDocument, node: MindMapNode): number {
-  if (node.collapsed) return NODE_HEIGHT;
+  const depth = nodeDepth(document, node.id);
+  const height = nodeHeight(depth);
+  if (node.collapsed) return height;
   const children = childrenOf(document, node.id);
-  if (children.length === 0) return NODE_HEIGHT;
+  if (children.length === 0) return height;
   return Math.max(
-    NODE_HEIGHT,
+    height,
     children.reduce((sum, child) => sum + subtreeHeight(document, child), 0) + VERTICAL_GAP * (children.length - 1),
   );
 }
@@ -120,10 +125,29 @@ function childrenOf(document: MindMapDocument, parentID: string): MindMapNode[] 
 }
 
 function boxFor(node: MindMapNode, x: number, y: number, depth: number, side: BranchSide, root = false): LayoutNode {
-  return { id: node.id, x, y, width: nodeWidth(node.title, root), height: root ? 54 : NODE_HEIGHT, depth, side };
+  return { id: node.id, x, y, width: nodeWidth(node.title, depth), height: root ? ROOT_NODE_HEIGHT : nodeHeight(depth), depth, side };
 }
 
-function nodeWidth(title: string, root: boolean): number {
+function nodeWidth(title: string, depth: number): number {
   const estimated = [...title].reduce((width, char) => width + ((char.codePointAt(0) ?? 0) <= 0x7f ? 7.5 : 14), 38);
-  return Math.min(root ? 236 : 216, Math.max(root ? 160 : 132, estimated));
+  if (depth === 0) return Math.min(236, Math.max(160, estimated));
+  if (depth === 1) return Math.min(216, Math.max(136, estimated));
+  return Math.min(188, Math.max(112, estimated - 12));
+}
+
+function nodeHeight(depth: number): number {
+  if (depth === 0) return ROOT_NODE_HEIGHT;
+  if (depth === 1) return BRANCH_NODE_HEIGHT;
+  return TOPIC_NODE_HEIGHT;
+}
+
+function nodeDepth(document: MindMapDocument, nodeID: string): number {
+  let depth = 0;
+  let node = document.nodes.find((candidate) => candidate.id === nodeID);
+  while (node && node.parent_id !== null) {
+    depth += 1;
+    const parentID: string = node.parent_id;
+    node = document.nodes.find((candidate) => candidate.id === parentID);
+  }
+  return depth;
 }

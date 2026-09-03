@@ -1,6 +1,6 @@
 {
   "name": "@redeven/official-mind-map-plugin",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "esbuild": "0.25.5",
+    "lucide-static": "1.39.0",
     "typescript": "5.9.3"
   }
 }

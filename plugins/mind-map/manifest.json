@@ -7,7 +7,7 @@
   "plugin": {
     "plugin_id": "com.redeven.official.mind-map",
     "display_name": "Mind Map",
-    "version": "1.0.21"
+    "version": "1.0.22"
   },
   "api": {
     "major": 1,

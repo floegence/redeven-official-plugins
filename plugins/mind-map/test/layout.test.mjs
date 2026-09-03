@@ -52,6 +52,24 @@ describe('Mind Map automatic layout', () => {
     assert.equal(document.nodes.length, 3);
   });
 
+  it('gives root, branch, and deeper topics distinct visual geometry', () => {
+    const document = createWorkspace(42).documents[0];
+    const root = document.nodes[0];
+    const branch = addChild(document, root.id, 'Branch');
+    const child = addChild(document, branch.id, 'Child');
+    const leaf = addChild(document, child.id, 'Leaf');
+    const layout = layoutDocument(document);
+
+    const rootBox = layout.nodes.get(root.id);
+    const branchBox = layout.nodes.get(branch.id);
+    const childBox = layout.nodes.get(child.id);
+    const leafBox = layout.nodes.get(leaf.id);
+    assert.ok(rootBox.height > branchBox.height);
+    assert.ok(branchBox.height > childBox.height);
+    assert.equal(childBox.height, leafBox.height);
+    assert.ok(branchBox.width >= childBox.width);
+  });
+
   it('fits visible content inside a compact editor viewport', () => {
     const document = createWorkspace(5).documents[0];
     document.layout = 'right';

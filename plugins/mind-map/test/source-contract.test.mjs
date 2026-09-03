@@ -24,15 +24,21 @@ describe('Mind Map source contract', () => {
     assert.equal(manifest.storage.stores.length, 1);
   });
 
-  it('ships no external assets, URLs, fonts, or audio', async () => {
-    const [app, css, notice] = await Promise.all([
+  it('ships no remote assets, fonts, or audio and attributes Lucide icons', async () => {
+    const [app, css, notice, packageJSON, build] = await Promise.all([
       readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8'),
       readFile(path.join(root, 'ui', 'styles.css'), 'utf8'),
       readFile(path.join(root, 'THIRD_PARTY_NOTICES.txt'), 'utf8'),
+      readFile(path.join(root, 'package.json'), 'utf8'),
+      readFile(path.join(root, 'scripts', 'build.mjs'), 'utf8'),
     ]);
     assert.doesNotMatch(`${app}\n${css}`, /https?:\/\//u);
     assert.doesNotMatch(`${app}\n${css}`, /@font-face|\.mp3|\.wav|\.ogg/iu);
-    assert.match(notice, /No third-party visual, audio, or font assets/u);
+    assert.match(packageJSON, /"lucide-static": "1\.39\.0"/u);
+    assert.match(build, /assets\/icons/u);
+    assert.match(css, /icons\/add\.png/u);
+    assert.match(notice, /Lucide Icons/u);
+    assert.match(notice, /ISC License/u);
   });
 
   it('uses compact spatial-editor chrome without horizontal toolbar scrolling', async () => {
@@ -44,7 +50,7 @@ describe('Mind Map source contract', () => {
     assert.match(app, /className="command-cluster/u);
     assert.match(app, /'save-pill is-error'.*'save-pill is-saving'.*'save-pill'/u);
     assert.match(app, /className="shortcut-pill"/u);
-    assert.match(app, /className=\{`tool-icon icon-\$\{icon\}`\}/u);
+    assert.match(app, /className=\{`tool-icon lucide-icon icon-\$\{icon\}`\}/u);
     assert.doesNotMatch(css, /container: mind-map \/ inline-size/u);
     assert.doesNotMatch(css, /@container mind-map/u);
     assert.match(css, /@media \(max-width: 760px\)/u);
@@ -52,12 +58,30 @@ describe('Mind Map source contract', () => {
     assert.doesNotMatch(app, /className="toolbar"/u);
   });
 
-  it('renders a contemporary canvas hierarchy with branch color and selection depth', async () => {
-    const app = await readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8');
+  it('renders a contemporary canvas hierarchy with independent node colors and selection depth', async () => {
+    const [app, layout] = await Promise.all([
+      readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8'),
+      readFile(path.join(root, 'ui', 'src', 'layout.ts'), 'utf8'),
+    ]);
     assert.match(app, /function drawCanvasAtmosphere/u);
     assert.match(app, /createLinearGradient/u);
     assert.match(app, /function drawSelectionHalo/u);
-    assert.match(app, /function branchColor/u);
+    assert.doesNotMatch(app, /function branchColor/u);
+    assert.match(app, /nodeColor\(node\.color\)/u);
+    assert.match(layout, /function nodeHeight\(depth: number\)/u);
+  });
+
+  it('supports a bounded node context menu and one resizable compact sidebar', async () => {
+    const [app, css] = await Promise.all([
+      readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8'),
+      readFile(path.join(root, 'ui', 'styles.css'), 'utf8'),
+    ]);
+    assert.match(app, /event\.button === 2/u);
+    assert.match(app, /function drawNodeContextMenu/u);
+    assert.match(app, /data-redevplugin-action="resize-sidebar"/u);
+    assert.match(css, /\.sidebar-resizer/u);
+    assert.match(css, /\.document-actions\s*\{[^}]*position:\s*absolute/su);
+    assert.doesNotMatch(css, /\.document-card\.is-active::before/u);
   });
 
   it('fails closed until the saved workspace is confirmed after a runtime restart', async () => {
