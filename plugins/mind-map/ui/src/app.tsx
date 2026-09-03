@@ -7,7 +7,15 @@ import {
   type PluginSurfaceContext,
   type PluginUIActionEvent,
 } from '@floegence/redevplugin-ui/plugin';
-import { fitLayoutToViewport, layoutDocument, type DocumentLayout, type LayoutNode, type ViewportPadding } from './layout.js';
+import {
+  edgeAnchor,
+  fitLayoutToViewport,
+  layoutDocument,
+  topicUnderline,
+  type DocumentLayout,
+  type LayoutNode,
+  type ViewportPadding,
+} from './layout.js';
 import {
   CONTEXT_MENU_HEIGHT,
   CONTEXT_MENU_WIDTH,
@@ -1143,19 +1151,26 @@ function drawEdges(layout: DocumentLayout): void {
     const fromNode = document.nodes.find((node) => node.id === edge.from);
     const toNode = document.nodes.find((node) => node.id === edge.to);
     if (!from || !to || !fromNode || !toNode) continue;
-    const startX = from.x + (edge.side === 'right' ? from.width / 2 : -from.width / 2);
-    const endX = to.x + (edge.side === 'right' ? -to.width / 2 : to.width / 2);
-    const bend = Math.abs(endX - startX) * 0.48;
+    const start = edgeAnchor(from, edge.side, 'source');
+    const end = edgeAnchor(to, edge.side, 'target');
+    const bend = Math.abs(end.x - start.x) * 0.48;
     const fromColor = nodeColor(fromNode.color);
     const toColor = nodeColor(toNode.color);
-    const stroke = context.createLinearGradient(startX, from.y, endX, to.y);
+    const stroke = context.createLinearGradient(start.x, start.y, end.x, end.y);
     stroke.addColorStop(0, withAlpha(fromColor, from.depth === 0 ? 0.34 : 0.58));
     stroke.addColorStop(1, withAlpha(toColor, to.depth <= 1 ? 0.88 : 0.72));
     context.lineWidth = (to.depth === 1 ? 2.6 : to.depth === 2 ? 1.8 : 1.45) / viewport.zoom;
     context.strokeStyle = stroke;
     context.beginPath();
-    context.moveTo(startX, from.y);
-    context.bezierCurveTo(startX + (edge.side === 'right' ? bend : -bend), from.y, endX - (edge.side === 'right' ? bend : -bend), to.y, endX, to.y);
+    context.moveTo(start.x, start.y);
+    context.bezierCurveTo(
+      start.x + (edge.side === 'right' ? bend : -bend),
+      start.y,
+      end.x - (edge.side === 'right' ? bend : -bend),
+      end.y,
+      end.x,
+      end.y,
+    );
     context.stroke();
   }
 }
@@ -1171,42 +1186,25 @@ function drawNodes(layout: DocumentLayout): void {
     context.save();
     if (selected) drawSelectionHalo(box);
     const accent = nodeColor(node.color);
-    context.shadowColor = selected ? withAlpha(colors.focus, 0.18) : withAlpha('#000000', box.depth === 0 ? 0.18 : box.depth === 1 ? 0.1 : 0.045);
-    context.shadowBlur = box.depth === 0 ? 24 : selected ? 16 : box.depth === 1 ? 10 : 5;
-    context.shadowOffsetY = box.depth === 0 ? 8 : box.depth === 1 ? 4 : 2;
-    roundedRect(context, box.x - box.width / 2, box.y - box.height / 2, box.width, box.height, box.depth === 0 ? 14 : box.depth === 1 ? 11 : 8);
-    if (box.depth === 0) {
-      const rootFill = context.createLinearGradient(box.x - box.width / 2, box.y - box.height / 2, box.x + box.width / 2, box.y + box.height / 2);
-      rootFill.addColorStop(0, mixColor(nodeColor(node.color), '#ffffff', 0.14));
-      rootFill.addColorStop(1, mixColor(nodeColor(node.color), '#000000', 0.1));
-      context.fillStyle = rootFill;
-    } else if (box.depth === 1) context.fillStyle = mixColor(colors.surface_elevated, accent, 0.13);
-    else if (box.depth === 2) context.fillStyle = mixColor(colors.surface_elevated, accent, 0.052);
-    else context.fillStyle = mixColor(colors.canvas, accent, 0.035);
-    context.fill();
-    context.shadowColor = 'transparent';
-    context.lineWidth = (isDropParent ? 2.5 : 1) / viewport.zoom;
-    context.strokeStyle = isDropParent ? colors.success : box.depth === 0 ? withAlpha('#ffffff', 0.22) : withAlpha(accent, selected ? 0.62 : box.depth === 1 ? 0.26 : 0.16);
-    context.stroke();
+    if (box.depth >= 2) drawTopicNode(box, accent, selected, isDropParent);
+    else drawBlockNode(box, node, accent, selected, isDropParent);
 
-    if (box.depth > 0) {
-      const railWidth = box.depth === 1 ? 3 : 2;
-      const railX = box.side === 'left' ? box.x + box.width / 2 - railWidth - 2 : box.x - box.width / 2 + 2;
-      const railHeight = box.depth === 1 ? Math.min(24, box.height - 14) : Math.min(16, box.height - 14);
-      roundedRect(context, railX, box.y - railHeight / 2, railWidth, railHeight, 2);
-      context.fillStyle = accent;
-      context.fill();
-    }
-
-    context.fillStyle = box.depth === 0 ? contrastText(nodeColor(node.color)) : colors.text;
-    context.font = `${box.depth === 0 ? 720 : box.depth === 1 ? 660 : 560} ${box.depth === 0 ? 15.5 : box.depth === 1 ? 13.5 : 12}px system-ui, sans-serif`;
+    context.fillStyle = box.depth === 0
+      ? contrastText(accent)
+      : box.depth === 1
+        ? colors.text
+        : mixColor(colors.text, accent, 0.22);
+    context.font = `${box.depth === 0 ? 720 : box.depth === 1 ? 660 : box.depth === 2 ? 590 : 540} ${box.depth === 0 ? 15.5 : box.depth === 1 ? 13.5 : box.depth === 2 ? 12.5 : 12}px system-ui, sans-serif`;
     context.textAlign = 'center';
     context.textBaseline = 'middle';
-    context.fillText(fittedTitle(node.title, box.width - 30), box.x, box.y, box.width - 30);
+    const titleWidth = box.depth >= 2 ? box.width - 18 : box.width - 30;
+    context.fillText(fittedTitle(node.title, titleWidth), box.x, box.y + (box.depth >= 2 ? -2 : 0), titleWidth);
     if (hasChildren(document, node.id)) {
-      const badgeX = box.x + (box.side === 'left' && box.depth > 0 ? -box.width / 2 : box.width / 2);
+      const topicAnchor = box.depth >= 2 ? edgeAnchor(box, box.side, 'source') : undefined;
+      const badgeX = topicAnchor?.x ?? box.x + (box.side === 'left' && box.depth > 0 ? -box.width / 2 : box.width / 2);
+      const badgeY = topicAnchor?.y ?? box.y;
       context.beginPath();
-      context.arc(badgeX, box.y, 7.5, 0, Math.PI * 2);
+      context.arc(badgeX, badgeY, 7.5, 0, Math.PI * 2);
       context.fillStyle = colors.surface;
       context.fill();
       context.lineWidth = 1.25 / viewport.zoom;
@@ -1214,21 +1212,80 @@ function drawNodes(layout: DocumentLayout): void {
       context.stroke();
       context.fillStyle = accent;
       context.font = '700 10px system-ui, sans-serif';
-      context.fillText(node.collapsed ? '+' : '−', badgeX, box.y + 0.5);
+      context.fillText(node.collapsed ? '+' : '−', badgeX, badgeY + 0.5);
     }
     context.restore();
   }
   if (dropTarget && pointer?.kind === 'node') drawDropLabel(layout);
 }
 
+function drawBlockNode(box: LayoutNode, node: MindMapNode, accent: string, selected: boolean, isDropParent: boolean): void {
+  if (!context) return;
+  context.shadowColor = selected ? withAlpha(colors.focus, 0.18) : withAlpha('#000000', box.depth === 0 ? 0.18 : 0.1);
+  context.shadowBlur = box.depth === 0 ? 24 : selected ? 16 : 10;
+  context.shadowOffsetY = box.depth === 0 ? 8 : 4;
+  roundedRect(context, box.x - box.width / 2, box.y - box.height / 2, box.width, box.height, box.depth === 0 ? 14 : 11);
+  if (box.depth === 0) {
+    const rootFill = context.createLinearGradient(box.x - box.width / 2, box.y - box.height / 2, box.x + box.width / 2, box.y + box.height / 2);
+    rootFill.addColorStop(0, mixColor(nodeColor(node.color), '#ffffff', 0.14));
+    rootFill.addColorStop(1, mixColor(nodeColor(node.color), '#000000', 0.1));
+    context.fillStyle = rootFill;
+  } else {
+    context.fillStyle = mixColor(colors.surface_elevated, accent, 0.13);
+  }
+  context.fill();
+  context.shadowColor = 'transparent';
+  context.lineWidth = (isDropParent ? 2.5 : 1) / viewport.zoom;
+  context.strokeStyle = isDropParent
+    ? colors.success
+    : box.depth === 0
+      ? withAlpha('#ffffff', 0.22)
+      : withAlpha(accent, selected ? 0.62 : 0.26);
+  context.stroke();
+
+  if (box.depth === 1) {
+    const railWidth = 3;
+    const railX = box.side === 'left' ? box.x + box.width / 2 - railWidth - 2 : box.x - box.width / 2 + 2;
+    const railHeight = Math.min(24, box.height - 14);
+    roundedRect(context, railX, box.y - railHeight / 2, railWidth, railHeight, 2);
+    context.fillStyle = accent;
+    context.fill();
+  }
+}
+
+function drawTopicNode(box: LayoutNode, accent: string, selected: boolean, isDropParent: boolean): void {
+  if (!context) return;
+  const underline = topicUnderline(box);
+  if (isDropParent) {
+    context.save();
+    context.setLineDash([4 / viewport.zoom, 3 / viewport.zoom]);
+    roundedRect(context, box.x - box.width / 2, box.y - box.height / 2, box.width, box.height, 7);
+    context.lineWidth = 1.5 / viewport.zoom;
+    context.strokeStyle = withAlpha(colors.success, 0.82);
+    context.stroke();
+    context.restore();
+  }
+  context.save();
+  context.shadowColor = selected ? withAlpha(accent, 0.34) : 'transparent';
+  context.shadowBlur = selected ? 8 : 0;
+  context.lineWidth = (isDropParent ? 2.8 : selected ? 2.4 : box.depth === 2 ? 2 : 1.6) / viewport.zoom;
+  context.strokeStyle = isDropParent ? colors.success : withAlpha(accent, selected ? 0.96 : 0.78);
+  context.beginPath();
+  context.moveTo(underline.startX, underline.y);
+  context.lineTo(underline.endX, underline.y);
+  context.stroke();
+  context.restore();
+}
+
 function drawSelectionHalo(box: LayoutNode): void {
   if (!context) return;
   context.save();
-  context.shadowColor = withAlpha(colors.focus, 0.32);
-  context.shadowBlur = 16;
+  context.shadowColor = withAlpha(colors.focus, box.depth >= 2 ? 0.18 : 0.32);
+  context.shadowBlur = box.depth >= 2 ? 8 : 16;
   roundedRect(context, box.x - box.width / 2 - 4, box.y - box.height / 2 - 4, box.width + 8, box.height + 8, box.depth === 0 ? 17 : box.depth === 1 ? 14 : 11);
-  context.lineWidth = 1.5 / viewport.zoom;
-  context.strokeStyle = withAlpha(colors.focus, 0.48);
+  context.lineWidth = (box.depth >= 2 ? 1.25 : 1.5) / viewport.zoom;
+  if (box.depth >= 2) context.setLineDash([4 / viewport.zoom, 3 / viewport.zoom]);
+  context.strokeStyle = withAlpha(colors.focus, box.depth >= 2 ? 0.62 : 0.48);
   context.stroke();
   context.restore();
 }

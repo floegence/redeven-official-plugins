@@ -14,6 +14,14 @@ The interface, icon, layout algorithm, renderer, and worker are original. The
 plugin contains no third-party visual, audio, or font assets and requests no
 network access.
 
+## Design references
+
+The node hierarchy was evaluated against the established line-style patterns
+in [simple-mind-map](https://github.com/wanglin2/mind-map) and
+[Mind Elixir](https://github.com/SSShooter/mind-elixir-core), both MIT-licensed.
+They were used as interaction and visual references only; no source code or
+assets from either project are included.
+
 ## Build and test
 
 ```bash

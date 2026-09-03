@@ -1,19 +1,19 @@
 {
   "schema_version": "redeven.official_plugin_source_release.v1",
   "channel": "stable",
-  "source_version": "1.0.23",
-  "release_train_tag": "v1.0.23",
+  "source_version": "1.0.24",
+  "release_train_tag": "v1.0.24",
   "package_assets": {
     "ui/assets/mind-map.png": "assets/mind-map.png"
   },
   "stable_catalog": {
-    "version": "1.0.23",
+    "version": "1.0.24",
     "min_redeven_version": "1.0.0",
     "min_redevplugin_version": "3.0.18",
     "default_surface_id": "mind-map.editor",
     "repository": "floegence/redeven-official-plugins",
-    "artifact_name": "mind-map-1.0.23.redevplugin",
-    "release_ref_asset_name": "mind-map-1.0.23.release-ref.json",
+    "artifact_name": "mind-map-1.0.24.redevplugin",
+    "release_ref_asset_name": "mind-map-1.0.24.release-ref.json",
     "trust_root_asset_name": "root.public.json"
   }
 }

@@ -58,7 +58,7 @@ describe('Mind Map source contract', () => {
     assert.doesNotMatch(app, /className="toolbar"/u);
   });
 
-  it('renders a contemporary canvas hierarchy with independent node colors and selection depth', async () => {
+  it('renders a contemporary canvas hierarchy with independent colors and line-style deep topics', async () => {
     const [app, layout] = await Promise.all([
       readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8'),
       readFile(path.join(root, 'ui', 'src', 'layout.ts'), 'utf8'),
@@ -66,6 +66,12 @@ describe('Mind Map source contract', () => {
     assert.match(app, /function drawCanvasAtmosphere/u);
     assert.match(app, /createLinearGradient/u);
     assert.match(app, /function drawSelectionHalo/u);
+    assert.match(app, /function drawTopicNode/u);
+    assert.match(app, /topicUnderline\(box\)/u);
+    assert.match(app, /edgeAnchor\(from, edge\.side, 'source'\)/u);
+    assert.match(app, /edgeAnchor\(to, edge\.side, 'target'\)/u);
+    assert.doesNotMatch(app, /box\.depth === 2\) context\.fillStyle/u);
+    assert.doesNotMatch(app, /const railWidth = box\.depth === 1 \? 3 : 2/u);
     assert.doesNotMatch(app, /function branchColor/u);
     assert.match(app, /nodeColor\(node\.color\)/u);
     assert.match(layout, /function nodeHeight\(depth: number\)/u);

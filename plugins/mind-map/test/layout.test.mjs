@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { addChild, createWorkspace } from '../ui/src/workspace-model.ts';
-import { fitLayoutToViewport, layoutDocument } from '../ui/src/layout.ts';
+import { edgeAnchor, fitLayoutToViewport, layoutDocument, nodeVisualKind, topicUnderline } from '../ui/src/layout.ts';
 
 describe('Mind Map automatic layout', () => {
   it('keeps the root centered and distributes bilateral branches to both sides', () => {
@@ -68,6 +68,36 @@ describe('Mind Map automatic layout', () => {
     assert.ok(branchBox.height > childBox.height);
     assert.equal(childBox.height, leafBox.height);
     assert.ok(branchBox.width >= childBox.width);
+  });
+
+  it('uses block nodes only for the root and first-level branches', () => {
+    assert.equal(nodeVisualKind(0), 'root');
+    assert.equal(nodeVisualKind(1), 'branch');
+    assert.equal(nodeVisualKind(2), 'topic');
+    assert.equal(nodeVisualKind(8), 'topic');
+  });
+
+  it('keeps deep topic hit areas while placing a full-width underline below the text', () => {
+    const rightTopic = { id: 'right', x: 320, y: 48, width: 140, height: 36, depth: 2, side: 'right' };
+    const leftTopic = { ...rightTopic, id: 'left', x: -320, side: 'left' };
+    const rightLine = topicUnderline(rightTopic);
+    const leftLine = topicUnderline(leftTopic);
+
+    assert.deepEqual(rightLine, { startX: 256, endX: 384, y: 62 });
+    assert.deepEqual(leftLine, { startX: -384, endX: -256, y: 62 });
+    assert.equal(rightLine.endX - rightLine.startX, rightTopic.width - 12);
+    assert.equal(leftLine.endX - leftLine.startX, leftTopic.width - 12);
+    assert.equal(rightTopic.height, 36);
+  });
+
+  it('joins deep-node edges to the inner and outer ends of the underline', () => {
+    const rightTopic = { id: 'right', x: 320, y: 48, width: 140, height: 36, depth: 2, side: 'right' };
+    const leftTopic = { ...rightTopic, id: 'left', x: -320, side: 'left' };
+
+    assert.deepEqual(edgeAnchor(rightTopic, 'right', 'target'), { x: 256, y: 62 });
+    assert.deepEqual(edgeAnchor(rightTopic, 'right', 'source'), { x: 384, y: 62 });
+    assert.deepEqual(edgeAnchor(leftTopic, 'left', 'target'), { x: -256, y: 62 });
+    assert.deepEqual(edgeAnchor(leftTopic, 'left', 'source'), { x: -384, y: 62 });
   });
 
   it('fits visible content inside a compact editor viewport', () => {

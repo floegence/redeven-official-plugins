@@ -14,6 +14,10 @@ export type LayoutEdge = { from: string; to: string; side: BranchSide };
 export type DocumentLayout = { nodes: Map<string, LayoutNode>; edges: LayoutEdge[] };
 export type ViewportPadding = { top: number; right: number; bottom: number; left: number };
 export type FittedViewport = { x: number; y: number; zoom: number };
+export type NodeVisualKind = 'root' | 'branch' | 'topic';
+export type EdgeEndpoint = 'source' | 'target';
+export type Point = { x: number; y: number };
+export type Underline = { startX: number; endX: number; y: number };
 
 const HORIZONTAL_GAP = 88;
 const VERTICAL_GAP = 20;
@@ -61,6 +65,34 @@ export function fitLayoutToViewport(
     y: visibleCenterY - viewportHeight / 2 - ((minY + maxY) / 2) * zoom,
     zoom,
   };
+}
+
+export function nodeVisualKind(depth: number): NodeVisualKind {
+  if (depth === 0) return 'root';
+  if (depth === 1) return 'branch';
+  return 'topic';
+}
+
+export function topicUnderline(node: LayoutNode): Underline {
+  const inset = 6;
+  return {
+    startX: node.x - node.width / 2 + inset,
+    endX: node.x + node.width / 2 - inset,
+    y: node.y + node.height / 2 - 4,
+  };
+}
+
+export function edgeAnchor(node: LayoutNode, side: BranchSide, endpoint: EdgeEndpoint): Point {
+  const right = side === 'right';
+  if (nodeVisualKind(node.depth) === 'topic') {
+    const underline = topicUnderline(node);
+    const sourceX = right ? underline.endX : underline.startX;
+    const targetX = right ? underline.startX : underline.endX;
+    return { x: endpoint === 'source' ? sourceX : targetX, y: underline.y };
+  }
+  const sourceX = node.x + (right ? node.width / 2 : -node.width / 2);
+  const targetX = node.x + (right ? -node.width / 2 : node.width / 2);
+  return { x: endpoint === 'source' ? sourceX : targetX, y: node.y };
 }
 
 function layoutSide(
