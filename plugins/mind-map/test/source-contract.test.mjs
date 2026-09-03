@@ -92,6 +92,32 @@ describe('Mind Map source contract', () => {
     assert.doesNotMatch(css, /\.document-card\.is-active::before/u);
   });
 
+  it('uses commercial map editing interactions without a node rename dialog', async () => {
+    const [app, editorUI] = await Promise.all([
+      readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8'),
+      readFile(path.join(root, 'ui', 'src', 'editor-ui.ts'), 'utf8'),
+    ]);
+    assert.doesNotMatch(app, /kind: 'rename-node'/u);
+    assert.doesNotMatch(app, /case 'rename-node'/u);
+    assert.match(app, /className=\{`\$\{placement\.className\}/u);
+    assert.match(app, /data-redevplugin-action="edit-node-title"/u);
+    assert.match(app, /data-redevplugin-action="commit-node-title"/u);
+    assert.match(app, /data-redevplugin-escape-action="cancel-node-title"/u);
+    assert.match(app, /event\.isComposing/u);
+    assert.match(app, /event\.type === 'wheel'/u);
+    assert.match(app, /zoomViewportAtPoint/u);
+    assert.match(editorUI, /normalizeWheelDelta/u);
+  });
+
+  it('gives the subtree expander priority over node drag selection', async () => {
+    const app = await readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8');
+    const expanderHit = app.indexOf('const expander = hitExpander');
+    const nodeHit = app.indexOf('const hit = hitNode', expanderHit);
+    assert.ok(expanderHit >= 0);
+    assert.ok(nodeHit > expanderHit);
+    assert.match(app, /toggleCollapsed\(selectedDocument\(draft\), expander\.id\)/u);
+  });
+
   it('fails closed until the saved workspace is confirmed after a runtime restart', async () => {
     const [app, startup] = await Promise.all([
       readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8'),

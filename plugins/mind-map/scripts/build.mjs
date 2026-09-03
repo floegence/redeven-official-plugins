@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir, readFile, rm } from 'node:fs/promises';
+import { access, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,10 +32,11 @@ await mkdir(resolve(root, 'dist/ui/assets'), { recursive: true });
 await mkdir(resolve(root, 'dist/ui/assets/icons'), { recursive: true });
 await mkdir(resolve(root, 'dist/workers'), { recursive: true });
 await mkdir(resolve(root, 'dist/licenses'), { recursive: true });
+const styles = await readFile(resolve(root, 'ui/styles.css'), 'utf8');
 await Promise.all([
   copyFile(resolve(root, 'manifest.json'), resolve(root, 'dist/manifest.json')),
   copyFile(resolve(root, 'ui/index.html'), resolve(root, 'dist/ui/index.html')),
-  copyFile(resolve(root, 'ui/styles.css'), resolve(root, 'dist/ui/assets/styles.css')),
+  writeFile(resolve(root, 'dist/ui/assets/styles.css'), `${styles}\n${nodeEditorPlacementCSS()}`, 'utf8'),
   copyFile(resolve(root, 'assets/mind-map.png'), resolve(root, 'dist/ui/assets/mind-map.png')),
   copyFile(resolve(root, 'THIRD_PARTY_NOTICES.txt'), resolve(root, 'dist/licenses/THIRD_PARTY_NOTICES.txt')),
   copyFile(resolve(root, 'node_modules/lucide-static/LICENSE'), resolve(root, 'dist/licenses/LUCIDE-LICENSE.txt')),
@@ -49,4 +50,16 @@ await Promise.all([
 function run(command, args) {
   const result = spawnSync(command, args, { cwd: root, stdio: 'inherit' });
   if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
+function nodeEditorPlacementCSS() {
+  const rules = [];
+  for (let value = 0; value <= 4096; value += 4) {
+    rules.push(`.node-editor-x-${value}{left:${value}px}`);
+    rules.push(`.node-editor-y-${value}{top:${value}px}`);
+  }
+  for (let value = 112; value <= 344; value += 8) {
+    rules.push(`.node-editor-w-${value}{width:${value}px}`);
+  }
+  return `${rules.join('\n')}\n`;
 }

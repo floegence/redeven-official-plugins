@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { addChild, createWorkspace } from '../ui/src/workspace-model.ts';
-import { edgeAnchor, fitLayoutToViewport, layoutDocument, nodeVisualKind, topicUnderline } from '../ui/src/layout.ts';
+import { edgeAnchor, expanderCenter, fitLayoutToViewport, layoutDocument, nodeVisualKind, topicUnderline } from '../ui/src/layout.ts';
 
 describe('Mind Map automatic layout', () => {
   it('keeps the root centered and distributes bilateral branches to both sides', () => {
@@ -98,6 +98,16 @@ describe('Mind Map automatic layout', () => {
     assert.deepEqual(edgeAnchor(rightTopic, 'right', 'source'), { x: 384, y: 62 });
     assert.deepEqual(edgeAnchor(leftTopic, 'left', 'target'), { x: -256, y: 62 });
     assert.deepEqual(edgeAnchor(leftTopic, 'left', 'source'), { x: -384, y: 62 });
+  });
+
+  it('uses one outer anchor for drawing and hitting subtree expanders', () => {
+    const rightBranch = { id: 'right-branch', x: 320, y: 48, width: 140, height: 44, depth: 1, side: 'right' };
+    const leftBranch = { ...rightBranch, id: 'left-branch', x: -320, side: 'left' };
+    const rightTopic = { ...rightBranch, id: 'right-topic', height: 36, depth: 3 };
+
+    assert.deepEqual(expanderCenter(rightBranch), { x: 390, y: 48 });
+    assert.deepEqual(expanderCenter(leftBranch), { x: -390, y: 48 });
+    assert.deepEqual(expanderCenter(rightTopic), { x: 384, y: 62 });
   });
 
   it('fits visible content inside a compact editor viewport', () => {

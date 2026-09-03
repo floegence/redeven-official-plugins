@@ -95,6 +95,16 @@ export function edgeAnchor(node: LayoutNode, side: BranchSide, endpoint: EdgeEnd
   return { x: endpoint === 'source' ? sourceX : targetX, y: node.y };
 }
 
+export function expanderCenter(node: LayoutNode): Point {
+  if (nodeVisualKind(node.depth) === 'topic') {
+    return edgeAnchor(node, node.side, 'source');
+  }
+  return {
+    x: node.x + (node.side === 'left' && node.depth > 0 ? -node.width / 2 : node.width / 2),
+    y: node.y,
+  };
+}
+
 function layoutSide(
   document: MindMapDocument,
   root: MindMapNode,

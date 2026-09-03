@@ -3,12 +3,14 @@ import {
   PluginBridgeError,
   type PluginCanvasInputEvent,
   type PluginCanvasPointerEvent,
+  type PluginCanvasWheelEvent,
   type PluginMethodResult,
   type PluginSurfaceContext,
   type PluginUIActionEvent,
 } from '@floegence/redevplugin-ui/plugin';
 import {
   edgeAnchor,
+  expanderCenter,
   fitLayoutToViewport,
   layoutDocument,
   topicUnderline,
@@ -23,9 +25,12 @@ import {
   MAX_SIDEBAR_WIDTH,
   MIN_SIDEBAR_WIDTH,
   SIDEBAR_WIDTH_STEP,
+  nodeEditorPlacement,
   normalizeSidebarWidth,
   placeContextMenu,
   sidebarWidthClass,
+  wheelZoomTarget,
+  zoomViewportAtPoint,
 } from './editor-ui.js';
 import { loadWithRetry } from './startup-load.js';
 import {
@@ -64,7 +69,6 @@ type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'conflict';
 type Modal =
   | { kind: 'new-document'; title: string }
   | { kind: 'rename-document'; title: string }
-  | { kind: 'rename-node'; title: string }
   | { kind: 'delete-document'; title: string }
   | { kind: 'delete-node'; title: string; count: number }
   | { kind: 'import'; text: string }
@@ -72,6 +76,7 @@ type Modal =
 type Viewport = { x: number; y: number; zoom: number };
 type DropTarget = { parentID: string; order: number; side?: BranchSide; label: string };
 type NodeContextMenu = { nodeID: string; x: number; y: number; hover: number };
+type NodeTitleEditor = { nodeID: string; draft: string; isComposing: boolean };
 type PointerGesture = {
   pointerID: number;
   kind: 'pan' | 'node';
@@ -106,6 +111,7 @@ let dirty = false;
 let editVersion = 0;
 let selectedNodeID = selectedDocument(workspace).nodes[0].id;
 let modal: Modal | undefined;
+let nodeTitleEditor: NodeTitleEditor | undefined;
 let locale: Locale = 'en';
 let colors = DEFAULT_COLORS;
 let canvas: OffscreenCanvas | undefined;
@@ -123,6 +129,7 @@ let disposed = false;
 let surfaceDisposing = false;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let loadRetryTimer: ReturnType<typeof setTimeout> | undefined;
+let zoomRenderTimer: ReturnType<typeof setTimeout> | undefined;
 let loadRetryResolve: ((shouldContinue: boolean) => void) | undefined;
 let saveInFlight: Promise<boolean> | undefined;
 let renderQueue = Promise.resolve();
@@ -199,6 +206,9 @@ bridge.onAction('narrow-sidebar', () => adjustSidebar(-SIDEBAR_WIDTH_STEP));
 bridge.onAction('widen-sidebar', () => adjustSidebar(SIDEBAR_WIDTH_STEP));
 bridge.onAction('cancel-modal', () => closeModal());
 bridge.onAction('submit-modal', (event) => submitModal(event));
+bridge.onAction('edit-node-title', (event) => updateNodeTitleEdit(event));
+bridge.onAction('commit-node-title', (event) => commitNodeTitleEdit(event));
+bridge.onAction('cancel-node-title', (event) => cancelNodeTitleEdit(event));
 bridge.onAction('reload-conflict', () => void reloadLatest());
 bridge.onAction('recover-conflict', () => void recoverLocalCopy());
 bridge.onAction('retry-save', () => void flushSave());
@@ -212,6 +222,7 @@ bridge.onLifecycle(async (event) => {
   }
   if (event.type === 'hidden') {
     visible = false;
+    commitNodeTitleEdit();
     pointer = undefined;
     dropTarget = undefined;
     nodeContextMenu = undefined;
@@ -221,8 +232,10 @@ bridge.onLifecycle(async (event) => {
   if (event.type === 'dispose') {
     visible = false;
     surfaceDisposing = true;
+    commitNodeTitleEdit();
     clearSaveTimer();
     clearLoadRetryWait();
+    clearZoomRenderTimer();
     await flushSave();
     disposed = true;
     canvas = undefined;
@@ -324,6 +337,7 @@ function view() {
       <section key="editor-shell" className="editor-shell">
         <div key="canvas-shell" className="canvas-shell">
           <canvas key="map-canvas" className="map-canvas" data-redevplugin-canvas={CANVAS_ID} tabindex={0} autofocus={true} aria-label={t.app}></canvas>
+          {loadState === 'ready' && nodeTitleEditor ? nodeTitleEditorView() : null}
           <header key="canvas-command-deck" className="canvas-command-deck">
             <div key="canvas-context" className="canvas-context">
               <small key="canvas-eyebrow">{t.selectedMap}</small>
@@ -415,6 +429,33 @@ function errorNotice() {
   );
 }
 
+function nodeTitleEditorView() {
+  const editor = nodeTitleEditor;
+  if (!editor) return null;
+  const document = currentDocument();
+  const node = document.nodes.find((candidate) => candidate.id === editor.nodeID);
+  const box = layoutDocument(document).nodes.get(editor.nodeID);
+  if (!node || !box) return null;
+  const placement = nodeEditorPlacement(box, viewport, cssWidth, cssHeight);
+  return (
+    <form key={`node-title-editor-${node.id}`} className={`${placement.className} color-${node.color}`} autocomplete="off" data-redevplugin-action="commit-node-title">
+      <input
+        key={`node-title-input-${node.id}`}
+        type="text"
+        name="value"
+        value={editor.draft}
+        placeholder={node.title}
+        maxlength={120}
+        autocomplete="off"
+        autofocus={true}
+        aria-label={text().topic}
+        data-redevplugin-action="edit-node-title"
+        data-redevplugin-escape-action="cancel-node-title"
+      ></input>
+    </form>
+  );
+}
+
 function modalView(current: Modal) {
   const t = text();
   const details = modalDetails(current);
@@ -429,7 +470,7 @@ function modalView(current: Modal) {
           ? <textarea key="modal-value" name="value" maxlength={MAX_IMPORT_BYTES} readonly={current.kind === 'export'} autofocus={true} aria-label={details.label}>{current.text}</textarea>
           : isDelete
             ? null
-            : <input key="modal-value" type="text" name="value" value={current.title} maxlength={current.kind === 'rename-node' ? 120 : 80} autocomplete="off" autofocus={true} aria-label={details.label}></input>}
+            : <input key="modal-value" type="text" name="value" value={current.title} maxlength={80} autocomplete="off" autofocus={true} aria-label={details.label}></input>}
         <div key="modal-actions" className="modal-actions">
           <button key="cancel-modal" className="tool-button" type="button" data-redevplugin-action="cancel-modal">{current.kind === 'export' ? t.close : t.cancel}</button>
           {current.kind === 'export' ? null : <button key="submit-modal" className={isDelete ? 'danger-button' : 'primary-button'} type="submit">{details.action}</button>}
@@ -444,7 +485,6 @@ function modalDetails(current: Modal): { title: string; body: string; label: str
   switch (current.kind) {
     case 'new-document': return { title: t.newTitle, body: '', label: t.mapName, action: t.create };
     case 'rename-document': return { title: t.renameMap, body: '', label: t.mapName, action: t.save };
-    case 'rename-node': return { title: t.renameNode, body: '', label: t.topic, action: t.save };
     case 'delete-document': return { title: t.deleteMapTitle, body: t.deleteMapBody, label: '', action: t.confirmDelete };
     case 'delete-node': return { title: t.deleteNodeTitle, body: `${t.deleteNodeBody} (${current.count})`, label: '', action: t.confirmDelete };
     case 'import': return { title: t.importTitle, body: t.importBody, label: t.importTitle, action: t.importAction };
@@ -460,8 +500,6 @@ function submitModal(event: PluginUIActionEvent): void {
       runMutation((draft) => addDocument(draft, value || undefined).nodes[0].id, true);
     } else if (modal.kind === 'rename-document') {
       runMutation((draft) => renameDocument(selectedDocument(draft), value) ? selectedNodeID : undefined);
-    } else if (modal.kind === 'rename-node') {
-      runMutation((draft) => renameNode(selectedDocument(draft), selectedNodeID, value) ? selectedNodeID : undefined);
     } else if (modal.kind === 'delete-document') {
       runMutation((draft) => {
         deleteDocument(draft, draft.selected_document_id);
@@ -488,6 +526,7 @@ function submitModal(event: PluginUIActionEvent): void {
 
 function openModal(next: Modal): void {
   if (loadState !== 'ready') return;
+  commitNodeTitleEdit();
   modal = next;
   void render();
 }
@@ -502,6 +541,7 @@ async function selectMap(event: PluginUIActionEvent): Promise<void> {
   if (loadState !== 'ready') return;
   const id = String(event.value ?? '');
   if (!workspace.documents.some((document) => document.id === id) || id === workspace.selected_document_id) return;
+  commitNodeTitleEdit();
   await flushSave();
   workspace = clone(workspace);
   workspace.selected_document_id = id;
@@ -538,16 +578,66 @@ function requestDeleteNode(): void {
 }
 
 function requestRenameNode(): void {
-  const node = currentDocument().nodes.find((candidate) => candidate.id === selectedNodeID);
-  if (node) openModal({ kind: 'rename-node', title: node.title });
+  beginNodeTitleEdit(selectedNodeID);
 }
 
 function addSelectedChild(): void {
-  runMutation((draft) => addChild(selectedDocument(draft), selectedNodeID).id);
+  let createdID = '';
+  runMutation((draft) => {
+    createdID = addChild(selectedDocument(draft), selectedNodeID).id;
+    return createdID;
+  });
+  if (createdID) beginNodeTitleEdit(createdID, true);
 }
 
 function addSelectedSibling(): void {
-  runMutation((draft) => addSibling(selectedDocument(draft), selectedNodeID).id);
+  let createdID = '';
+  runMutation((draft) => {
+    createdID = addSibling(selectedDocument(draft), selectedNodeID).id;
+    return createdID;
+  });
+  if (createdID) beginNodeTitleEdit(createdID, true);
+}
+
+function beginNodeTitleEdit(nodeID: string, clear = false): void {
+  if (loadState !== 'ready' || modal) return;
+  const node = currentDocument().nodes.find((candidate) => candidate.id === nodeID);
+  if (!node) return;
+  selectedNodeID = node.id;
+  pointer = undefined;
+  dropTarget = undefined;
+  nodeContextMenu = undefined;
+  nodeTitleEditor = { nodeID: node.id, draft: clear ? '' : node.title, isComposing: false };
+  revealSelection();
+  void render();
+  draw();
+}
+
+function updateNodeTitleEdit(event: PluginUIActionEvent): void {
+  if (!nodeTitleEditor || (event.event !== 'input' && event.event !== 'change')) return;
+  nodeTitleEditor.draft = String(event.value ?? '').slice(0, 120);
+  nodeTitleEditor.isComposing = event.isComposing;
+  if (event.event === 'change' && !event.isComposing) commitNodeTitleEdit();
+}
+
+function commitNodeTitleEdit(event?: PluginUIActionEvent): void {
+  const editor = nodeTitleEditor;
+  if (!editor || event?.isComposing || editor.isComposing) return;
+  if (event?.form_data) editor.draft = String(event.form_data.value ?? editor.draft).slice(0, 120);
+  nodeTitleEditor = undefined;
+  const before = workspace;
+  runMutation((draft) => renameNode(selectedDocument(draft), editor.nodeID, editor.draft) ? editor.nodeID : undefined);
+  if (workspace === before) {
+    void render();
+    draw();
+  }
+}
+
+function cancelNodeTitleEdit(event?: PluginUIActionEvent): void {
+  if (!nodeTitleEditor || event?.isComposing || nodeTitleEditor.isComposing) return;
+  nodeTitleEditor = undefined;
+  void render();
+  draw();
 }
 
 function setLayout(layout: MindMapDocument['layout']): void {
@@ -736,6 +826,7 @@ function applyLoadedWorkspace(response: LoadResponse): void {
   dirty = false;
   saveMessage = '';
   modal = undefined;
+  nodeTitleEditor = undefined;
   centerMap(false);
 }
 
@@ -790,6 +881,7 @@ function handleCanvasInput(event: PluginCanvasInputEvent): void {
     configureCanvas();
     revealSelection();
     draw();
+    if (nodeTitleEditor) void render();
     return;
   }
   if (loadState !== 'ready' || modal) return;
@@ -801,6 +893,14 @@ function handleCanvasInput(event: PluginCanvasInputEvent): void {
   }
   if (event.type === 'key' && event.event === 'keydown' && !event.repeat) handleKey(event);
   if (event.type === 'pointer') handlePointer(event);
+  if (event.type === 'wheel') handleWheel(event);
+}
+
+function handleWheel(event: PluginCanvasWheelEvent): void {
+  const nextZoom = wheelZoomTarget(viewport.zoom, event.deltaY, event.deltaMode, cssHeight);
+  if (nextZoom === viewport.zoom) return;
+  nodeContextMenu = undefined;
+  setZoom(nextZoom, event.x, event.y, false);
 }
 
 function handleKey(event: Extract<PluginCanvasInputEvent, { type: 'key' }>): void {
@@ -828,6 +928,8 @@ function handleKey(event: Extract<PluginCanvasInputEvent, { type: 'key' }>): voi
 function handlePointer(event: PluginCanvasPointerEvent): void {
   const world = screenToWorld(event.x, event.y);
   if (event.event === 'pointerdown') {
+    if (nodeTitleEditor?.isComposing) return;
+    commitNodeTitleEdit();
     if (event.button === 2) {
       pointer = undefined;
       dropTarget = undefined;
@@ -846,6 +948,15 @@ function handlePointer(event: PluginCanvasPointerEvent): void {
     if (nodeContextMenu) {
       if (activateNodeContextMenu(event.x, event.y)) return;
       nodeContextMenu = undefined;
+    }
+    const expander = hitExpander(world.x, world.y);
+    if (expander) {
+      pointer = undefined;
+      dropTarget = undefined;
+      selectedNodeID = expander.id;
+      lastClick = { nodeID: '', time: 0 };
+      runMutation((draft) => toggleCollapsed(selectedDocument(draft), expander.id) ? expander.id : undefined);
+      return;
     }
     const hit = hitNode(world.x, world.y);
     if (hit) {
@@ -1189,22 +1300,22 @@ function drawNodes(layout: DocumentLayout): void {
     if (box.depth >= 2) drawTopicNode(box, accent, selected, isDropParent);
     else drawBlockNode(box, node, accent, selected, isDropParent);
 
-    context.fillStyle = box.depth === 0
-      ? contrastText(accent)
-      : box.depth === 1
-        ? colors.text
-        : mixColor(colors.text, accent, 0.22);
-    context.font = `${box.depth === 0 ? 720 : box.depth === 1 ? 660 : box.depth === 2 ? 590 : 540} ${box.depth === 0 ? 15.5 : box.depth === 1 ? 13.5 : box.depth === 2 ? 12.5 : 12}px system-ui, sans-serif`;
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    const titleWidth = box.depth >= 2 ? box.width - 18 : box.width - 30;
-    context.fillText(fittedTitle(node.title, titleWidth), box.x, box.y + (box.depth >= 2 ? -2 : 0), titleWidth);
+    if (nodeTitleEditor?.nodeID !== node.id) {
+      context.fillStyle = box.depth === 0
+        ? contrastText(accent)
+        : box.depth === 1
+          ? colors.text
+          : mixColor(colors.text, accent, 0.22);
+      context.font = `${box.depth === 0 ? 720 : box.depth === 1 ? 660 : box.depth === 2 ? 590 : 540} ${box.depth === 0 ? 15.5 : box.depth === 1 ? 13.5 : box.depth === 2 ? 12.5 : 12}px system-ui, sans-serif`;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      const titleWidth = box.depth >= 2 ? box.width - 18 : box.width - 30;
+      context.fillText(fittedTitle(node.title, titleWidth), box.x, box.y + (box.depth >= 2 ? -2 : 0), titleWidth);
+    }
     if (hasChildren(document, node.id)) {
-      const topicAnchor = box.depth >= 2 ? edgeAnchor(box, box.side, 'source') : undefined;
-      const badgeX = topicAnchor?.x ?? box.x + (box.side === 'left' && box.depth > 0 ? -box.width / 2 : box.width / 2);
-      const badgeY = topicAnchor?.y ?? box.y;
+      const badge = expanderCenter(box);
       context.beginPath();
-      context.arc(badgeX, badgeY, 7.5, 0, Math.PI * 2);
+      context.arc(badge.x, badge.y, 7.5, 0, Math.PI * 2);
       context.fillStyle = colors.surface;
       context.fill();
       context.lineWidth = 1.25 / viewport.zoom;
@@ -1212,7 +1323,7 @@ function drawNodes(layout: DocumentLayout): void {
       context.stroke();
       context.fillStyle = accent;
       context.font = '700 10px system-ui, sans-serif';
-      context.fillText(node.collapsed ? '+' : '−', badgeX, badgeY + 0.5);
+      context.fillText(node.collapsed ? '+' : '−', badge.x, badge.y + 0.5);
     }
     context.restore();
   }
@@ -1330,6 +1441,17 @@ function hitNode(x: number, y: number, excludedID?: string): LayoutNode | undefi
   return nodes.find((box) => box.id !== excludedID && x >= box.x - box.width / 2 && x <= box.x + box.width / 2 && y >= box.y - box.height / 2 && y <= box.y + box.height / 2);
 }
 
+function hitExpander(x: number, y: number): LayoutNode | undefined {
+  const document = currentDocument();
+  const radius = 13 / viewport.zoom;
+  const nodes = [...layoutDocument(document).nodes.values()].reverse();
+  return nodes.find((box) => {
+    if (!hasChildren(document, box.id)) return false;
+    const center = expanderCenter(box);
+    return Math.hypot(x - center.x, y - center.y) <= radius;
+  });
+}
+
 function screenToWorld(x: number, y: number): { x: number; y: number } {
   return {
     x: (x - cssWidth / 2 - viewport.x) / viewport.zoom,
@@ -1361,11 +1483,16 @@ function viewportPadding(): ViewportPadding {
   return { top: cssWidth < 520 ? 108 : 76, right: 28, bottom: 68, left: 28 };
 }
 
-function setZoom(value: number): void {
+function setZoom(value: number, anchorX = cssWidth / 2, anchorY = cssHeight / 2, renderImmediately = true): void {
   if (loadState !== 'ready') return;
-  viewport.zoom = Math.max(0.42, Math.min(2.4, value));
+  viewport = zoomViewportAtPoint(viewport, value, anchorX, anchorY, cssWidth, cssHeight);
   draw();
-  void render();
+  if (renderImmediately) {
+    clearZoomRenderTimer();
+    void render();
+  } else {
+    scheduleZoomRender();
+  }
 }
 
 function currentDocument(): MindMapDocument {
@@ -1408,6 +1535,19 @@ function render(): Promise<void> {
 function clearSaveTimer(): void {
   if (saveTimer !== undefined) clearTimeout(saveTimer);
   saveTimer = undefined;
+}
+
+function scheduleZoomRender(): void {
+  if (zoomRenderTimer !== undefined) return;
+  zoomRenderTimer = setTimeout(() => {
+    zoomRenderTimer = undefined;
+    if (!disposed) void render();
+  }, 48);
+}
+
+function clearZoomRenderTimer(): void {
+  if (zoomRenderTimer !== undefined) clearTimeout(zoomRenderTimer);
+  zoomRenderTimer = undefined;
 }
 
 function waitForLoadRetry(delayMs: number): Promise<boolean> {

@@ -319,6 +319,47 @@ button:disabled { cursor: not-allowed; opacity: .34; }
 .canvas-shell { position: absolute; inset: 0; min-width: 0; min-height: 0; overflow: hidden; background: var(--redevplugin-color-canvas); }
 .map-canvas { display: block; width: 100%; height: 100%; border: 0; outline: none; touch-action: none; }
 .map-canvas:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--redevplugin-color-focus) 70%, transparent); }
+.node-title-editor {
+  position: absolute;
+  z-index: 6;
+  margin: 0;
+  transform: translate(-50%, -50%);
+}
+.node-title-editor input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 2px solid color-mix(in srgb, var(--node-color) 76%, var(--redevplugin-color-focus));
+  border-radius: 10px;
+  outline: none;
+  background: color-mix(in srgb, var(--redevplugin-color-surface-elevated) 94%, var(--node-color));
+  color: var(--redevplugin-color-text);
+  box-shadow: 0 8px 24px color-mix(in srgb, #000000 14%, transparent), 0 0 0 4px color-mix(in srgb, var(--node-color) 12%, transparent);
+  font-size: 13.5px;
+  font-weight: 660;
+  line-height: 1;
+  text-align: center;
+}
+.node-title-editor.is-root input {
+  height: 44px;
+  border-radius: 13px;
+  background: var(--node-color);
+  color: var(--redevplugin-color-accent-text);
+  font-size: 15.5px;
+  font-weight: 720;
+}
+.node-title-editor.is-topic input {
+  height: 34px;
+  padding: 0 8px;
+  border-width: 0 0 2px;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--redevplugin-color-canvas) 92%, transparent);
+  box-shadow: 0 5px 12px color-mix(in srgb, #000000 6%, transparent);
+  color: color-mix(in srgb, var(--redevplugin-color-text) 78%, var(--node-color));
+  font-size: 12.5px;
+  font-weight: 590;
+}
+.node-title-editor input::selection { background: color-mix(in srgb, var(--node-color) 26%, transparent); }
 
 .canvas-command-deck {
   position: absolute;
