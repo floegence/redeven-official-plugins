@@ -78,7 +78,9 @@ describe('Mind Map source contract', () => {
     ]);
     assert.match(app, /event\.button === 2/u);
     assert.match(app, /function drawNodeContextMenu/u);
-    assert.match(app, /data-redevplugin-action="resize-sidebar"/u);
+    assert.match(app, /data-redevplugin-action="narrow-sidebar"/u);
+    assert.match(app, /data-redevplugin-action="widen-sidebar"/u);
+    assert.doesNotMatch(app, /type="range"/u);
     assert.match(css, /\.sidebar-resizer/u);
     assert.match(css, /\.document-actions\s*\{[^}]*position:\s*absolute/su);
     assert.doesNotMatch(css, /\.document-card\.is-active::before/u);

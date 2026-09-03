@@ -141,7 +141,7 @@ const COPY = {
     rootCannotDelete: 'The central topic cannot be deleted.', recovered: 'Recovered copy', dropInside: 'Move inside',
     dropBefore: 'Move before', dropAfter: 'Move after', statusReady: 'Ready', zoomIn: 'Zoom in', zoomOut: 'Zoom out',
     firstBranch: 'Press Tab to shape your first branch', canvasTools: 'Map editing tools', colors: 'Topic color',
-    nodeActions: 'Topic actions', resizeSidebar: 'Resize map sidebar',
+    nodeActions: 'Topic actions', narrowSidebar: 'Narrow map sidebar', widenSidebar: 'Widen map sidebar',
   },
   zh: {
     app: '思维导图', maps: '导图', newMap: '新建', rename: '重命名', duplicate: '复制', remove: '删除',
@@ -163,7 +163,7 @@ const COPY = {
     recovered: '恢复的副本', dropInside: '移入节点', dropBefore: '移到前面', dropAfter: '移到后面',
     statusReady: '可编辑', zoomIn: '放大', zoomOut: '缩小', firstBranch: '按 Tab 创建第一个分支',
     canvasTools: '导图编辑工具', colors: '节点颜色',
-    nodeActions: '节点操作', resizeSidebar: '调整导图侧边栏宽度',
+    nodeActions: '节点操作', narrowSidebar: '收窄导图侧边栏', widenSidebar: '加宽导图侧边栏',
   },
 } as const;
 
@@ -187,7 +187,8 @@ bridge.onAction('center-map', () => centerMap());
 bridge.onAction('import-document', () => openModal({ kind: 'import', text: '' }));
 bridge.onAction('export-document', () => openModal({ kind: 'export', text: exportDocument(currentDocument()) }));
 bridge.onAction('set-node-color', (event) => setSelectedColor(String(event.value ?? '')));
-bridge.onAction('resize-sidebar', (event) => resizeSidebar(String(event.value ?? '')));
+bridge.onAction('narrow-sidebar', () => adjustSidebar(-SIDEBAR_WIDTH_STEP));
+bridge.onAction('widen-sidebar', () => adjustSidebar(SIDEBAR_WIDTH_STEP));
 bridge.onAction('cancel-modal', () => closeModal());
 bridge.onAction('submit-modal', (event) => submitModal(event));
 bridge.onAction('reload-conflict', () => void reloadLatest());
@@ -307,8 +308,10 @@ function view() {
           <span key="sidebar-shortcut-mark" className="sidebar-shortcut-mark">⌘</span>
           <span key="sidebar-footnote">Tab · Enter · F2</span>
         </footer>
-        <span key="sidebar-resizer-handle" className="sidebar-resizer-handle" aria-hidden="true"></span>
-        <input key="sidebar-resizer" className="sidebar-resizer" type="range" name="sidebar-width" min={MIN_SIDEBAR_WIDTH} max={MAX_SIDEBAR_WIDTH} step={SIDEBAR_WIDTH_STEP} value={sidebarWidth} aria-label={t.resizeSidebar} title={t.resizeSidebar} data-redevplugin-action="resize-sidebar"></input>
+        <div key="sidebar-resizer" className="sidebar-resizer" aria-label={`${t.narrowSidebar} / ${t.widenSidebar}`}>
+          <button key="narrow-sidebar" className="sidebar-resize-button" type="button" title={t.narrowSidebar} aria-label={t.narrowSidebar} disabled={sidebarWidth <= MIN_SIDEBAR_WIDTH} data-redevplugin-action="narrow-sidebar"><span key="narrow-sidebar-icon" className="sidebar-resize-icon lucide-icon icon-minus"></span></button>
+          <button key="widen-sidebar" className="sidebar-resize-button" type="button" title={t.widenSidebar} aria-label={t.widenSidebar} disabled={sidebarWidth >= MAX_SIDEBAR_WIDTH} data-redevplugin-action="widen-sidebar"><span key="widen-sidebar-icon" className="sidebar-resize-icon lucide-icon icon-add"></span></button>
+        </div>
       </aside>
       <section key="editor-shell" className="editor-shell">
         <div key="canvas-shell" className="canvas-shell">
@@ -555,8 +558,8 @@ function setSelectedColor(value: string): void {
   runMutation((draft) => setNodeColor(selectedDocument(draft), selectedNodeID, value as NodeColor) ? selectedNodeID : undefined);
 }
 
-function resizeSidebar(value: string): void {
-  const next = normalizeSidebarWidth(Number(value));
+function adjustSidebar(delta: number): void {
+  const next = normalizeSidebarWidth(sidebarWidth + delta);
   if (next === sidebarWidth) return;
   sidebarWidth = next;
   nodeContextMenu = undefined;

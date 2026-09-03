@@ -262,36 +262,48 @@ button:disabled { cursor: not-allowed; opacity: .34; }
 .sidebar-resizer {
   position: absolute;
   z-index: 4;
-  top: 0;
-  right: -5px;
-  width: 10px;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  opacity: 0;
-  cursor: col-resize;
-  appearance: none;
-  writing-mode: vertical-lr;
-}
-.sidebar-resizer-handle {
-  position: absolute;
-  z-index: 3;
   top: 50%;
-  right: 0;
-  width: 3px;
-  height: 48px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--redevplugin-color-border) 72%, transparent);
-  opacity: .35;
-  pointer-events: none;
-  transform: translate(50%, -50%);
-  transition: opacity .16s ease, background .16s ease;
+  right: -13px;
+  display: grid;
+  width: 26px;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid color-mix(in srgb, var(--redevplugin-color-border) 82%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--redevplugin-color-surface-elevated) 94%, transparent);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--redevplugin-color-text) 11%, transparent);
+  opacity: .72;
+  transform: translateY(-50%);
+  transition: opacity .16s ease, border-color .16s ease, box-shadow .16s ease;
 }
-.document-sidebar:hover .sidebar-resizer-handle,
-.document-sidebar:focus-within .sidebar-resizer-handle {
-  background: var(--redevplugin-color-accent);
-  opacity: .8;
+.document-sidebar:hover .sidebar-resizer,
+.document-sidebar:focus-within .sidebar-resizer {
+  border-color: color-mix(in srgb, var(--redevplugin-color-accent) 45%, var(--redevplugin-color-border));
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--redevplugin-color-text) 14%, transparent);
+  opacity: 1;
 }
+.sidebar-resize-button {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--redevplugin-color-text-muted);
+  cursor: pointer;
+}
+.sidebar-resize-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--redevplugin-color-accent) 11%, transparent);
+  color: var(--redevplugin-color-accent);
+}
+.sidebar-resize-button:focus-visible {
+  outline: 2px solid var(--redevplugin-color-focus);
+  outline-offset: 1px;
+}
+.sidebar-resize-button:disabled { opacity: .3; cursor: default; }
+.sidebar-resize-icon { width: 12px; height: 12px; }
 .sidebar-shortcut-mark {
   display: grid;
   width: 20px;
@@ -534,7 +546,7 @@ button:disabled { cursor: not-allowed; opacity: .34; }
   .document-button { grid-template-columns: 1fr; justify-items: center; padding: 6px; }
   .document-copy { display: none; }
   .document-card.is-active .document-button { padding-right: 6px; }
-  .document-actions, .sidebar-resizer, .sidebar-resizer-handle { display: none; }
+  .document-actions, .sidebar-resizer { display: none; }
   .canvas-command-deck { top: 10px; right: 10px; left: 10px; }
   .command-bar { gap: 4px; }
   .command-cluster { gap: 1px; padding: 3px; border-radius: 12px; }
