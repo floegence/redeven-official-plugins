@@ -6,6 +6,7 @@ import {
   type PluginCanvasWheelEvent,
   type PluginMethodResult,
   type PluginSurfaceContext,
+  type PluginSurfaceKeyboardEvent,
   type PluginUIActionEvent,
 } from '@floegence/redevplugin-ui/plugin';
 import {
@@ -28,6 +29,7 @@ import {
   nodeEditorPlacement,
   normalizeSidebarWidth,
   placeContextMenu,
+  preserveNodeScreenPosition,
   sidebarWidthClass,
   wheelZoomTarget,
   zoomViewportAtPoint,
@@ -35,6 +37,7 @@ import {
 import { loadWithRetry } from './startup-load.js';
 import {
   MAX_IMPORT_BYTES,
+  MAX_TITLE_UTF8_BYTES,
   addChild,
   addDocument,
   addSibling,
@@ -45,11 +48,14 @@ import {
   duplicateDocument,
   exportDocument,
   importDocument,
+  isValidNodeTextDraft,
   moveNode,
   nodeAndDescendantCount,
   redoHistory,
   renameDocument,
   renameNode,
+  parseWorkspaceDSL,
+  serializeWorkspaceDSL,
   selectedDocument,
   setNodeColor,
   toggleCollapsed,
@@ -81,17 +87,19 @@ type PointerGesture = {
   pointerID: number;
   kind: 'pan' | 'node';
   nodeID?: string;
+  keepsEditor?: boolean;
   startX: number;
   startY: number;
   startPanX: number;
   startPanY: number;
   moved: boolean;
 };
-type LoadResponse = { revision: number; saved_at: string | null; workspace: MindMapWorkspace };
+type LoadResponse = { revision: number; saved_at: string | null; workspace_dsl: string };
 type SaveResponse = { revision: number; saved_at: string };
 
 const bridge = new PluginBridgeClient({ timeoutMs: 20_000 });
 const CANVAS_ID = 'map';
+const NODE_TITLE_INPUT_KEY = 'node-title-input';
 const NODE_COLORS: readonly NodeColor[] = ['accent', 'blue', 'green', 'amber', 'rose', 'violet'];
 const DEFAULT_COLORS: PluginSurfaceContext['appearance']['colors'] = {
   canvas: '#f6f7fb', surface: '#ffffff', surface_elevated: '#ffffff', text: '#202532',
@@ -129,7 +137,7 @@ let disposed = false;
 let surfaceDisposing = false;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let loadRetryTimer: ReturnType<typeof setTimeout> | undefined;
-let zoomRenderTimer: ReturnType<typeof setTimeout> | undefined;
+let viewportRenderTimer: ReturnType<typeof setTimeout> | undefined;
 let loadRetryResolve: ((shouldContinue: boolean) => void) | undefined;
 let saveInFlight: Promise<boolean> | undefined;
 let renderQueue = Promise.resolve();
@@ -149,10 +157,10 @@ const COPY = {
     newTitle: 'Create a mind map', renameMap: 'Rename mind map', renameNode: 'Rename topic', mapName: 'Map name',
     topic: 'Topic', cancel: 'Cancel', create: 'Create', save: 'Save', confirmDelete: 'Delete', deleteMapTitle: 'Delete this mind map?',
     deleteNodeTitle: 'Delete this branch?', deleteMapBody: 'This cannot be undone after the workspace is saved.',
-    deleteNodeBody: 'The selected topic and all topics below it will be removed.', importTitle: 'Import mind map JSON',
-    importBody: 'Paste a mind-map.document.v1 file. Imported IDs are regenerated.', importAction: 'Import as new map',
-    exportTitle: 'Export current mind map', exportBody: 'Copy this JSON and keep it as a portable backup.', close: 'Close',
-    invalidImport: 'The JSON file is invalid or exceeds the supported limits.', operationFailed: 'The operation could not be completed.',
+    deleteNodeBody: 'The selected topic and all topics below it will be removed.', importTitle: 'Import mind map DSL',
+    importBody: 'Paste a mind-map 1 document. Legacy mind-map.document.v1 JSON is migrated once.', importAction: 'Import as new map',
+    exportTitle: 'Export current mind map', exportBody: 'Copy this DSL and keep it as a portable backup.', close: 'Close',
+    invalidImport: 'The DSL is invalid or exceeds the supported limits.', operationFailed: 'The operation could not be completed.',
     rootCannotDelete: 'The central topic cannot be deleted.', recovered: 'Recovered copy', dropInside: 'Move inside',
     dropBefore: 'Move before', dropAfter: 'Move after', statusReady: 'Ready', zoomIn: 'Zoom in', zoomOut: 'Zoom out',
     firstBranch: 'Press Tab to shape your first branch', canvasTools: 'Map editing tools', colors: 'Topic color',
@@ -171,10 +179,10 @@ const COPY = {
     newTitle: '新建思维导图', renameMap: '重命名导图', renameNode: '重命名节点', mapName: '导图名称',
     topic: '节点标题', cancel: '取消', create: '创建', save: '保存', confirmDelete: '确认删除', deleteMapTitle: '删除这张导图？',
     deleteNodeTitle: '删除整个分支？', deleteMapBody: '工作区保存后，此操作无法撤销。',
-    deleteNodeBody: '选中节点及其全部子节点都会被删除。', importTitle: '导入思维导图 JSON',
-    importBody: '粘贴 mind-map.document.v1 文件。导入后会重新生成全部 ID。', importAction: '作为新导图导入',
-    exportTitle: '导出当前导图', exportBody: '复制以下 JSON，可作为可移植备份。', close: '关闭',
-    invalidImport: 'JSON 无效或超过支持范围。', operationFailed: '操作未能完成。', rootCannotDelete: '中心节点不能删除。',
+    deleteNodeBody: '选中节点及其全部子节点都会被删除。', importTitle: '导入思维导图 DSL',
+    importBody: '粘贴 mind-map 1 文档；旧版 mind-map.document.v1 JSON 仅迁移一次。', importAction: '作为新导图导入',
+    exportTitle: '导出当前导图', exportBody: '复制以下 DSL，可作为可移植备份。', close: '关闭',
+    invalidImport: 'DSL 无效或超过支持范围。', operationFailed: '操作未能完成。', rootCannotDelete: '中心节点不能删除。',
     recovered: '恢复的副本', dropInside: '移入节点', dropBefore: '移到前面', dropAfter: '移到后面',
     statusReady: '可编辑', zoomIn: '放大', zoomOut: '缩小', firstBranch: '按 Tab 创建第一个分支',
     canvasTools: '导图编辑工具', colors: '节点颜色',
@@ -194,7 +202,7 @@ bridge.onAction('layout-right', () => setLayout('right'));
 bridge.onAction('add-child', () => addSelectedChild());
 bridge.onAction('add-sibling', () => addSelectedSibling());
 bridge.onAction('rename-node', () => requestRenameNode());
-bridge.onAction('toggle-collapse', () => runMutation((draft) => toggleCollapsed(selectedDocument(draft), selectedNodeID) ? selectedNodeID : undefined));
+bridge.onAction('toggle-collapse', () => toggleSubtree(selectedNodeID));
 bridge.onAction('delete-node', () => requestDeleteNode());
 bridge.onAction('zoom-in', () => setZoom(viewport.zoom * 1.16));
 bridge.onAction('zoom-out', () => setZoom(viewport.zoom / 1.16));
@@ -214,6 +222,7 @@ bridge.onAction('recover-conflict', () => void recoverLocalCopy());
 bridge.onAction('retry-save', () => void flushSave());
 bridge.onAction('retry-workspace-load', () => void retryInitialLoad());
 bridge.onCanvasInput(CANVAS_ID, handleCanvasInput);
+bridge.onKeyboardInput(handleKeyboardInput);
 bridge.onLifecycle(async (event) => {
   if (event.type === 'visible') {
     visible = true;
@@ -235,7 +244,7 @@ bridge.onLifecycle(async (event) => {
     commitNodeTitleEdit();
     clearSaveTimer();
     clearLoadRetryWait();
-    clearZoomRenderTimer();
+    clearViewportRenderTimer();
     await flushSave();
     disposed = true;
     canvas = undefined;
@@ -247,6 +256,18 @@ void initialize().catch((error) => void showFatal(error));
 
 async function initialize(): Promise<void> {
   await bridge.ready();
+  await bridge.setKeyboardBindings([{
+    id: 'commit-node-title',
+    event: 'keydown',
+    code: 'Enter',
+    repeat: false,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    targetKey: NODE_TITLE_INPUT_KEY,
+    targetKind: 'editable',
+  }]);
   bridge.onContext((next) => {
     colors = next.appearance.colors;
     const nextLocale: Locale = next.locale.language_tag.toLowerCase().startsWith('zh') ? 'zh' : 'en';
@@ -434,24 +455,23 @@ function nodeTitleEditorView() {
   if (!editor) return null;
   const document = currentDocument();
   const node = document.nodes.find((candidate) => candidate.id === editor.nodeID);
-  const box = layoutDocument(document).nodes.get(editor.nodeID);
+  const box = currentLayout().nodes.get(editor.nodeID);
   if (!node || !box) return null;
   const placement = nodeEditorPlacement(box, viewport, cssWidth, cssHeight);
   return (
     <form key={`node-title-editor-${node.id}`} className={`${placement.className} color-${node.color}`} autocomplete="off" data-redevplugin-action="commit-node-title">
-      <input
-        key={`node-title-input-${node.id}`}
-        type="text"
+      <textarea
+        key={NODE_TITLE_INPUT_KEY}
         name="value"
         value={editor.draft}
         placeholder={node.title}
-        maxlength={120}
+        maxlength={MAX_TITLE_UTF8_BYTES}
         autocomplete="off"
         autofocus={true}
         aria-label={text().topic}
         data-redevplugin-action="edit-node-title"
         data-redevplugin-escape-action="cancel-node-title"
-      ></input>
+      ></textarea>
     </form>
   );
 }
@@ -607,7 +627,10 @@ function beginNodeTitleEdit(nodeID: string, clear = false): void {
   pointer = undefined;
   dropTarget = undefined;
   nodeContextMenu = undefined;
+  const before = currentLayout().nodes.get(node.id);
   nodeTitleEditor = { nodeID: node.id, draft: clear ? '' : node.title, isComposing: false };
+  const after = currentLayout().nodes.get(node.id);
+  if (before && after) viewport = preserveNodeScreenPosition(viewport, before, after);
   revealSelection();
   void render();
   draw();
@@ -615,15 +638,30 @@ function beginNodeTitleEdit(nodeID: string, clear = false): void {
 
 function updateNodeTitleEdit(event: PluginUIActionEvent): void {
   if (!nodeTitleEditor || (event.event !== 'input' && event.event !== 'change')) return;
-  nodeTitleEditor.draft = String(event.value ?? '').slice(0, 120);
+  const keepEditor = event.event === 'change' && pointer?.kind === 'pan' && pointer.keepsEditor;
+  const before = currentLayout().nodes.get(nodeTitleEditor.nodeID);
+  const next = String(event.value ?? '').replace(new RegExp('\\r\\n?', 'gu'), '\n');
   nodeTitleEditor.isComposing = event.isComposing;
-  if (event.event === 'change' && !event.isComposing) commitNodeTitleEdit();
+  if (!isValidNodeTextDraft(next)) {
+    void render();
+    return;
+  }
+  nodeTitleEditor.draft = next;
+  const after = currentLayout().nodes.get(nodeTitleEditor.nodeID);
+  if (before && after) viewport = preserveNodeScreenPosition(viewport, before, after);
+  revealSelection();
+  void render();
+  draw();
+  if (event.event === 'change' && !event.isComposing && !keepEditor) commitNodeTitleEdit();
 }
 
 function commitNodeTitleEdit(event?: PluginUIActionEvent): void {
   const editor = nodeTitleEditor;
   if (!editor || event?.isComposing || editor.isComposing) return;
-  if (event?.form_data) editor.draft = String(event.form_data.value ?? editor.draft).slice(0, 120);
+  if (event?.form_data) {
+    const next = String(event.form_data.value ?? editor.draft).replace(new RegExp('\\r\\n?', 'gu'), '\n');
+    if (isValidNodeTextDraft(next)) editor.draft = next;
+  }
   nodeTitleEditor = undefined;
   const before = workspace;
   runMutation((draft) => renameNode(selectedDocument(draft), editor.nodeID, editor.draft) ? editor.nodeID : undefined);
@@ -635,9 +673,23 @@ function commitNodeTitleEdit(event?: PluginUIActionEvent): void {
 
 function cancelNodeTitleEdit(event?: PluginUIActionEvent): void {
   if (!nodeTitleEditor || event?.isComposing || nodeTitleEditor.isComposing) return;
+  const nodeID = nodeTitleEditor.nodeID;
+  const before = currentLayout().nodes.get(nodeID);
   nodeTitleEditor = undefined;
+  const after = currentLayout().nodes.get(nodeID);
+  if (before && after) viewport = preserveNodeScreenPosition(viewport, before, after);
   void render();
   draw();
+}
+
+function toggleSubtree(nodeID: string): void {
+  if (nodeTitleEditor?.isComposing) return;
+  commitNodeTitleEdit();
+  runMutation(
+    (draft) => toggleCollapsed(selectedDocument(draft), nodeID) ? nodeID : undefined,
+    false,
+    nodeID,
+  );
 }
 
 function setLayout(layout: MindMapDocument['layout']): void {
@@ -664,10 +716,15 @@ function adjustSidebar(delta: number): void {
   void render();
 }
 
-function runMutation(mutator: (draft: MindMapWorkspace) => string | undefined, immediateSave = false): void {
+function runMutation(
+  mutator: (draft: MindMapWorkspace) => string | undefined,
+  immediateSave = false,
+  anchorNodeID?: string,
+): void {
   if (loadState !== 'ready') return;
   nodeContextMenu = undefined;
   try {
+    const anchorBefore = anchorNodeID ? currentLayout().nodes.get(anchorNodeID) : undefined;
     const draft = clone(workspace);
     const nextSelected = mutator(draft);
     validateWorkspace(draft);
@@ -675,6 +732,8 @@ function runMutation(mutator: (draft: MindMapWorkspace) => string | undefined, i
     workspace = draft;
     history.commit(workspace);
     ensureSelection(nextSelected);
+    const anchorAfter = anchorNodeID ? currentLayout().nodes.get(anchorNodeID) : undefined;
+    if (anchorBefore && anchorAfter) viewport = preserveNodeScreenPosition(viewport, anchorBefore, anchorAfter);
     revealSelection();
     markDirty(immediateSave);
     saveMessage = '';
@@ -749,7 +808,7 @@ async function saveOnce(): Promise<boolean> {
     try {
       const response = await bridge.call<PluginMethodResult<SaveResponse>>('mindmap.workspace.save', {
         expected_revision: expectedRevision,
-        workspace: snapshot,
+        workspace_dsl: serializeWorkspaceDSL(snapshot),
       });
       revision = response.data.revision;
       savedAt = response.data.saved_at;
@@ -796,7 +855,7 @@ async function loadWorkspaceAtStartup(): Promise<boolean> {
     return false;
   }
   try {
-    validateWorkspace(response.data.workspace);
+    parseWorkspaceDSL(response.data.workspace_dsl);
   } catch {
     loadState = 'error';
     loadMessage = text().loadFailed;
@@ -818,7 +877,7 @@ async function retryInitialLoad(): Promise<void> {
 }
 
 function applyLoadedWorkspace(response: LoadResponse): void {
-  workspace = clone(response.workspace);
+  workspace = parseWorkspaceDSL(response.workspace_dsl);
   revision = response.revision;
   savedAt = response.saved_at;
   history = createHistory(workspace);
@@ -834,7 +893,7 @@ async function reloadLatest(): Promise<void> {
   if (loadState !== 'ready') return;
   try {
     const response = await bridge.call<PluginMethodResult<LoadResponse>>('mindmap.workspace.load', {});
-    validateWorkspace(response.data.workspace);
+    parseWorkspaceDSL(response.data.workspace_dsl);
     applyLoadedWorkspace(response.data);
     saveState = 'saved';
   } catch (error) {
@@ -850,8 +909,7 @@ async function recoverLocalCopy(): Promise<void> {
   const localDocument = clone(currentDocument());
   try {
     const response = await bridge.call<PluginMethodResult<LoadResponse>>('mindmap.workspace.load', {});
-    validateWorkspace(response.data.workspace);
-    const remote = clone(response.data.workspace);
+    const remote = parseWorkspaceDSL(response.data.workspace_dsl);
     const recovered = importDocument(exportDocument(localDocument), remote, Date.now());
     renameDocument(recovered, `${localDocument.title} — ${text().recovered}`);
     workspace = remote;
@@ -891,7 +949,6 @@ function handleCanvasInput(event: PluginCanvasInputEvent): void {
     draw();
     return;
   }
-  if (event.type === 'key' && event.event === 'keydown' && !event.repeat) handleKey(event);
   if (event.type === 'pointer') handlePointer(event);
   if (event.type === 'wheel') handleWheel(event);
 }
@@ -903,7 +960,17 @@ function handleWheel(event: PluginCanvasWheelEvent): void {
   setZoom(nextZoom, event.x, event.y, false);
 }
 
-function handleKey(event: Extract<PluginCanvasInputEvent, { type: 'key' }>): void {
+function handleKeyboardInput(event: PluginSurfaceKeyboardEvent): void {
+  if (loadState !== 'ready' || modal || event.event !== 'keydown' || event.repeat || event.isComposing) return;
+  if (nodeTitleEditor) {
+    if (event.bindingId === 'commit-node-title') commitNodeTitleEdit();
+    return;
+  }
+  if (event.targetKind !== 'canvas') return;
+  handleKey(event);
+}
+
+function handleKey(event: PluginSurfaceKeyboardEvent): void {
   if (event.code === 'Escape' && nodeContextMenu) {
     nodeContextMenu = undefined;
     draw();
@@ -929,8 +996,8 @@ function handlePointer(event: PluginCanvasPointerEvent): void {
   const world = screenToWorld(event.x, event.y);
   if (event.event === 'pointerdown') {
     if (nodeTitleEditor?.isComposing) return;
-    commitNodeTitleEdit();
     if (event.button === 2) {
+      commitNodeTitleEdit();
       pointer = undefined;
       dropTarget = undefined;
       const hit = hitNode(world.x, world.y);
@@ -951,15 +1018,17 @@ function handlePointer(event: PluginCanvasPointerEvent): void {
     }
     const expander = hitExpander(world.x, world.y);
     if (expander) {
+      commitNodeTitleEdit();
       pointer = undefined;
       dropTarget = undefined;
       selectedNodeID = expander.id;
       lastClick = { nodeID: '', time: 0 };
-      runMutation((draft) => toggleCollapsed(selectedDocument(draft), expander.id) ? expander.id : undefined);
+      toggleSubtree(expander.id);
       return;
     }
     const hit = hitNode(world.x, world.y);
     if (hit) {
+      commitNodeTitleEdit();
       selectedNodeID = hit.id;
       pointer = {
         pointerID: event.pointerId, kind: 'node', nodeID: hit.id, startX: event.x, startY: event.y,
@@ -970,7 +1039,7 @@ function handlePointer(event: PluginCanvasPointerEvent): void {
     } else {
       pointer = {
         pointerID: event.pointerId, kind: 'pan', startX: event.x, startY: event.y,
-        startPanX: viewport.x, startPanY: viewport.y, moved: false,
+        startPanX: viewport.x, startPanY: viewport.y, moved: false, keepsEditor: nodeTitleEditor !== undefined,
       };
     }
     return;
@@ -990,6 +1059,7 @@ function handlePointer(event: PluginCanvasPointerEvent): void {
     if (pointer.kind === 'pan') {
       viewport.x = pointer.startPanX + event.x - pointer.startX;
       viewport.y = pointer.startPanY + event.y - pointer.startY;
+      if (pointer.keepsEditor) scheduleViewportRender();
     } else if (pointer.moved && pointer.nodeID && !isRoot(pointer.nodeID)) {
       dropTarget = findDropTarget(pointer.nodeID, world.x, world.y);
     }
@@ -999,6 +1069,7 @@ function handlePointer(event: PluginCanvasPointerEvent): void {
   if (event.event === 'pointerup') {
     const finished = pointer;
     pointer = undefined;
+    if (finished.kind === 'pan' && !finished.moved && finished.keepsEditor) commitNodeTitleEdit();
     if (finished.kind === 'node' && finished.nodeID) {
       if (finished.moved && dropTarget && !isRoot(finished.nodeID)) {
         const target = dropTarget;
@@ -1065,7 +1136,7 @@ function activateNodeContextMenu(x: number, y: number): boolean {
   if (hit === 0) addSelectedChild();
   else if (hit === 1) addSelectedSibling();
   else if (hit === 2) requestRenameNode();
-  else if (hit === 3) runMutation((draft) => toggleCollapsed(selectedDocument(draft), selectedNodeID) ? selectedNodeID : undefined);
+  else if (hit === 3) toggleSubtree(selectedNodeID);
   else if (hit === 4) requestDeleteNode();
   return true;
 }
@@ -1093,7 +1164,7 @@ function drawNodeContextMenu(): void {
   context.fillStyle = colors.text_muted;
   context.textAlign = 'left';
   context.textBaseline = 'middle';
-  context.fillText(fittedTitle(node.title, CONTEXT_MENU_WIDTH - 28), menu.x + 14, menu.y + 18, CONTEXT_MENU_WIDTH - 28);
+  context.fillText(node.title.split('\n')[0], menu.x + 14, menu.y + 18, CONTEXT_MENU_WIDTH - 28);
 
   context.beginPath();
   context.moveTo(menu.x + 10, menu.y + 35.5);
@@ -1174,7 +1245,7 @@ function findDropTarget(draggedID: string, x: number, y: number): DropTarget | u
 }
 
 function selectDirectional(code: string): void {
-  const layout = layoutDocument(currentDocument());
+  const layout = currentLayout();
   const current = layout.nodes.get(selectedNodeID);
   if (!current) return;
   const direction = code === 'ArrowLeft' ? { x: -1, y: 0 } : code === 'ArrowRight' ? { x: 1, y: 0 } : code === 'ArrowUp' ? { x: 0, y: -1 } : { x: 0, y: 1 };
@@ -1211,7 +1282,7 @@ function draw(): void {
   context.save();
   context.translate(cssWidth / 2 + viewport.x, cssHeight / 2 + viewport.y);
   context.scale(viewport.zoom, viewport.zoom);
-  const layout = layoutDocument(currentDocument());
+  const layout = currentLayout();
   drawEdges(layout);
   drawNodes(layout);
   if (currentDocument().nodes.length === 1) drawFirstBranchHint(layout);
@@ -1306,11 +1377,13 @@ function drawNodes(layout: DocumentLayout): void {
         : box.depth === 1
           ? colors.text
           : mixColor(colors.text, accent, 0.22);
-      context.font = `${box.depth === 0 ? 720 : box.depth === 1 ? 660 : box.depth === 2 ? 590 : 540} ${box.depth === 0 ? 15.5 : box.depth === 1 ? 13.5 : box.depth === 2 ? 12.5 : 12}px system-ui, sans-serif`;
+      context.font = box.text.font;
       context.textAlign = 'center';
       context.textBaseline = 'middle';
-      const titleWidth = box.depth >= 2 ? box.width - 18 : box.width - 30;
-      context.fillText(fittedTitle(node.title, titleWidth), box.x, box.y + (box.depth >= 2 ? -2 : 0), titleWidth);
+      const firstLineY = box.y + (box.depth >= 2 ? -2 : 0) - ((box.text.lines.length - 1) * box.text.lineHeight) / 2;
+      for (const [lineIndex, line] of box.text.lines.entries()) {
+        context.fillText(line, box.x, firstLineY + lineIndex * box.text.lineHeight);
+      }
     }
     if (hasChildren(document, node.id)) {
       const badge = expanderCenter(box);
@@ -1437,14 +1510,14 @@ function drawDropLabel(layout: DocumentLayout): void {
 }
 
 function hitNode(x: number, y: number, excludedID?: string): LayoutNode | undefined {
-  const nodes = [...layoutDocument(currentDocument()).nodes.values()].reverse();
+  const nodes = [...currentLayout().nodes.values()].reverse();
   return nodes.find((box) => box.id !== excludedID && x >= box.x - box.width / 2 && x <= box.x + box.width / 2 && y >= box.y - box.height / 2 && y <= box.y + box.height / 2);
 }
 
 function hitExpander(x: number, y: number): LayoutNode | undefined {
   const document = currentDocument();
-  const radius = 13 / viewport.zoom;
-  const nodes = [...layoutDocument(document).nodes.values()].reverse();
+  const radius = 18 / viewport.zoom;
+  const nodes = [...currentLayout().nodes.values()].reverse();
   return nodes.find((box) => {
     if (!hasChildren(document, box.id)) return false;
     const center = expanderCenter(box);
@@ -1460,15 +1533,24 @@ function screenToWorld(x: number, y: number): { x: number; y: number } {
 }
 
 function centerMap(renderUI = true): void {
-  viewport = fitLayoutToViewport(layoutDocument(currentDocument()), cssWidth, cssHeight, viewportPadding());
+  viewport = fitLayoutToViewport(currentLayout(), cssWidth, cssHeight, viewportPadding());
   draw();
   if (renderUI) void render();
 }
 
 function revealSelection(): void {
-  const box = layoutDocument(currentDocument()).nodes.get(selectedNodeID);
+  let box = currentLayout().nodes.get(selectedNodeID);
   if (!box) return;
   const padding = viewportPadding();
+  const availableWidth = Math.max(1, cssWidth - padding.left - padding.right);
+  const availableHeight = Math.max(1, cssHeight - padding.top - padding.bottom);
+  const fittingZoom = Math.min(viewport.zoom, availableWidth / box.width, availableHeight / box.height);
+  if (fittingZoom < viewport.zoom) {
+    const anchorX = cssWidth / 2 + viewport.x + box.x * viewport.zoom;
+    const anchorY = cssHeight / 2 + viewport.y + box.y * viewport.zoom;
+    viewport = zoomViewportAtPoint(viewport, fittingZoom, anchorX, anchorY, cssWidth, cssHeight);
+    box = currentLayout().nodes.get(selectedNodeID) ?? box;
+  }
   const left = cssWidth / 2 + viewport.x + (box.x - box.width / 2) * viewport.zoom;
   const right = cssWidth / 2 + viewport.x + (box.x + box.width / 2) * viewport.zoom;
   const top = cssHeight / 2 + viewport.y + (box.y - box.height / 2) * viewport.zoom;
@@ -1479,6 +1561,20 @@ function revealSelection(): void {
   else if (bottom > cssHeight - padding.bottom) viewport.y -= bottom - (cssHeight - padding.bottom);
 }
 
+function currentLayout(): DocumentLayout {
+  const editing = nodeTitleEditor ? { nodeID: nodeTitleEditor.nodeID, title: nodeTitleEditor.draft } : undefined;
+  return layoutDocument(currentDocument(), editing, measureCanvasText);
+}
+
+function measureCanvasText(value: string, font: string): number {
+  if (!context) return [...value].length * 8;
+  context.save();
+  context.font = font;
+  const width = context.measureText(value).width;
+  context.restore();
+  return width;
+}
+
 function viewportPadding(): ViewportPadding {
   return { top: cssWidth < 520 ? 108 : 76, right: 28, bottom: 68, left: 28 };
 }
@@ -1486,12 +1582,13 @@ function viewportPadding(): ViewportPadding {
 function setZoom(value: number, anchorX = cssWidth / 2, anchorY = cssHeight / 2, renderImmediately = true): void {
   if (loadState !== 'ready') return;
   viewport = zoomViewportAtPoint(viewport, value, anchorX, anchorY, cssWidth, cssHeight);
+  if (nodeTitleEditor) revealSelection();
   draw();
   if (renderImmediately) {
-    clearZoomRenderTimer();
+    clearViewportRenderTimer();
     void render();
   } else {
-    scheduleZoomRender();
+    scheduleViewportRender();
   }
 }
 
@@ -1537,17 +1634,17 @@ function clearSaveTimer(): void {
   saveTimer = undefined;
 }
 
-function scheduleZoomRender(): void {
-  if (zoomRenderTimer !== undefined) return;
-  zoomRenderTimer = setTimeout(() => {
-    zoomRenderTimer = undefined;
+function scheduleViewportRender(): void {
+  if (viewportRenderTimer !== undefined) return;
+  viewportRenderTimer = setTimeout(() => {
+    viewportRenderTimer = undefined;
     if (!disposed) void render();
   }, 48);
 }
 
-function clearZoomRenderTimer(): void {
-  if (zoomRenderTimer !== undefined) clearTimeout(zoomRenderTimer);
-  zoomRenderTimer = undefined;
+function clearViewportRenderTimer(): void {
+  if (viewportRenderTimer !== undefined) clearTimeout(viewportRenderTimer);
+  viewportRenderTimer = undefined;
 }
 
 function waitForLoadRetry(delayMs: number): Promise<boolean> {
@@ -1597,13 +1694,6 @@ function contrastText(hex: string): string {
   if (value === undefined) return colors.accent_text;
   const luminance = ((value >> 16) * 299 + ((value >> 8) & 255) * 587 + (value & 255) * 114) / 1000;
   return luminance > 170 ? '#202532' : '#ffffff';
-}
-
-function fittedTitle(title: string, width: number): string {
-  if (!context || context.measureText(title).width <= width) return title;
-  const characters = [...title];
-  while (characters.length > 1 && context.measureText(`${characters.join('')}…`).width > width) characters.pop();
-  return `${characters.join('')}…`;
 }
 
 function roundedRect(target: OffscreenCanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {

@@ -26,17 +26,17 @@ describe('Mind Map automatic layout', () => {
     assert.ok([...layout.nodes.values()].filter((box) => box.id !== root.id).every((box) => box.x > 0));
   });
 
-  it('allocates non-overlapping vertical spans for large sibling groups', () => {
+  it('allocates non-overlapping vertical spans for multiline sibling groups', () => {
     const document = createWorkspace(3).documents[0];
     document.layout = 'right';
     const root = document.nodes[0];
     for (let index = 0; index < 20; index += 1) {
-      const branch = addChild(document, root.id, `Branch ${index}`);
-      addChild(document, branch.id, `Leaf ${index}`);
+      const branch = addChild(document, root.id, `Branch ${index}\nwith an explicit second line`);
+      addChild(document, branch.id, `Leaf ${index}\nwith a second line\nand a third line`);
     }
     const boxes = [...layoutDocument(document).nodes.values()].filter((box) => box.depth === 1).sort((a, b) => a.y - b.y);
     for (let index = 1; index < boxes.length; index += 1) {
-      assert.ok(boxes[index].y - boxes[index - 1].y >= 64);
+      assert.ok(boxes[index].y - boxes[index - 1].y >= (boxes[index].height + boxes[index - 1].height) / 2 + 20);
     }
   });
 
@@ -68,6 +68,28 @@ describe('Mind Map automatic layout', () => {
     assert.ok(branchBox.height > childBox.height);
     assert.equal(childBox.height, leafBox.height);
     assert.ok(branchBox.width >= childBox.width);
+  });
+
+  it('uses an editing title in the single shared layout result', () => {
+    const document = createWorkspace(43).documents[0];
+    const root = document.nodes[0];
+    const normal = layoutDocument(document).nodes.get(root.id);
+    const editing = layoutDocument(document, { nodeID: root.id, title: 'A long live editing title\nwith another line' }).nodes.get(root.id);
+    assert.ok(editing.height > normal.height);
+    assert.ok(editing.width >= normal.width);
+    assert.deepEqual(editing.text.lines, ['A long live editing title', 'with another line']);
+  });
+
+  it('keeps the horizontal gap outside real multiline node bounds', () => {
+    const document = createWorkspace(44).documents[0];
+    document.layout = 'right';
+    const root = document.nodes[0];
+    root.title = 'A root title that grows to its full measured width';
+    const branch = addChild(document, root.id, 'A branch title that also grows across the available width');
+    const layout = layoutDocument(document);
+    const rootBox = layout.nodes.get(root.id);
+    const branchBox = layout.nodes.get(branch.id);
+    assert.equal(branchBox.x - branchBox.width / 2 - (rootBox.x + rootBox.width / 2), 88);
   });
 
   it('uses block nodes only for the root and first-level branches', () => {
@@ -123,6 +145,14 @@ describe('Mind Map automatic layout', () => {
     assert.ok(left >= 28);
     assert.ok(right <= 592);
     assert.ok(viewport.zoom <= 1);
-    assert.ok(viewport.zoom >= 0.42);
+    assert.ok(viewport.zoom >= 0.32);
+  });
+
+  it('uses the shared minimum zoom when fitting very large content', () => {
+    const layout = {
+      nodes: new Map([['large', { id: 'large', x: 0, y: 0, width: 4_000, height: 4_000, depth: 0, side: 'right' }]]),
+      edges: [],
+    };
+    assert.equal(fitLayoutToViewport(layout, 800, 600, { top: 76, right: 28, bottom: 68, left: 28 }).zoom, 0.32);
   });
 });

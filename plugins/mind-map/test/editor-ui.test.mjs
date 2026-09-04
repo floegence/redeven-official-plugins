@@ -9,6 +9,7 @@ import {
   normalizeSidebarWidth,
   normalizeWheelDelta,
   placeContextMenu,
+  preserveNodeScreenPosition,
   wheelZoomTarget,
   zoomViewportAtPoint,
 } from '../ui/src/editor-ui.ts';
@@ -33,7 +34,7 @@ describe('Mind Map editor UI geometry', () => {
     assert.equal(normalizeWheelDelta(2, 1, 800), 32);
     assert.equal(normalizeWheelDelta(1, 2, 800), 240);
     assert.equal(normalizeWheelDelta(-10_000, 0, 800), -240);
-    assert.equal(clampZoom(0.1), 0.42);
+    assert.equal(clampZoom(0.1), 0.32);
     assert.equal(clampZoom(8), 2.4);
     assert.ok(wheelZoomTarget(1, -120, 0, 800) > 1);
     assert.ok(wheelZoomTarget(1, 120, 0, 800) < 1);
@@ -56,7 +57,7 @@ describe('Mind Map editor UI geometry', () => {
     assert.ok(Math.abs(after.y - before.y) < 1e-9);
   });
 
-  it('places a lightweight editor over the selected node with bounded geometry', () => {
+  it('places the editor on the exact node geometry without independent clamping', () => {
     const placement = nodeEditorPlacement(
       { x: 0, y: 0, width: 160, height: 54, depth: 0 },
       { x: 0, y: 0, zoom: 1 },
@@ -66,8 +67,9 @@ describe('Mind Map editor UI geometry', () => {
     assert.deepEqual(placement, {
       centerX: 480,
       centerY: 300,
-      width: 176,
-      className: 'node-title-editor is-root node-editor-x-480 node-editor-y-300 node-editor-w-176',
+      width: 160,
+      height: 54,
+      className: 'node-title-editor is-root node-editor-x-480 node-editor-y-300 node-editor-w-160 node-editor-h-54 node-editor-z-1000',
     });
 
     const bounded = nodeEditorPlacement(
@@ -76,9 +78,31 @@ describe('Mind Map editor UI geometry', () => {
       640,
       480,
     );
-    assert.ok(bounded.centerX <= 460);
-    assert.ok(bounded.centerY >= 28);
-    assert.ok(bounded.width <= 344);
+    assert.equal(bounded.centerX, 4_320);
+    assert.equal(bounded.centerY, -3_760);
+    assert.equal(bounded.width, 800);
+    assert.equal(bounded.height, 72);
     assert.match(bounded.className, /is-topic/u);
+    assert.match(bounded.className, /node-editor-z-2000/u);
+  });
+
+  it('uses one quantized zoom for the editor box and its typography', () => {
+    const placement = nodeEditorPlacement(
+      { x: 0, y: 0, width: 320, height: 220, depth: 1 },
+      { x: 0, y: 0, zoom: 0.42149 },
+      800,
+      600,
+    );
+    assert.equal(placement.width, 134);
+    assert.equal(placement.height, 92);
+    assert.match(placement.className, /node-editor-z-421/u);
+  });
+
+  it('keeps an anchored node at the same screen position after relayout', () => {
+    const viewport = { x: 42, y: -18, zoom: 1.25 };
+    const next = preserveNodeScreenPosition(viewport, { x: 240, y: -80 }, { x: 360, y: 24 });
+    assert.deepEqual(next, { x: -108, y: -148, zoom: 1.25 });
+    assert.equal(viewport.x + 240 * viewport.zoom, next.x + 360 * next.zoom);
+    assert.equal(viewport.y - 80 * viewport.zoom, next.y + 24 * next.zoom);
   });
 });

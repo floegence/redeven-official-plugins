@@ -15,6 +15,8 @@ describe('Mind Map source contract', () => {
     assert.match(app, /new PluginBridgeClient/u);
     assert.match(app, /openCanvas\(CANVAS_ID\)/u);
     assert.match(app, /onCanvasInput\(CANVAS_ID/u);
+    assert.match(app, /onKeyboardInput\(handleKeyboardInput\)/u);
+    assert.match(app, /setKeyboardBindings/u);
     assert.match(app, /onLifecycle/u);
     assert.match(app, /mindmap\.workspace\.load/u);
     assert.match(app, /mindmap\.workspace\.save/u);
@@ -74,7 +76,9 @@ describe('Mind Map source contract', () => {
     assert.doesNotMatch(app, /const railWidth = box\.depth === 1 \? 3 : 2/u);
     assert.doesNotMatch(app, /function branchColor/u);
     assert.match(app, /nodeColor\(node\.color\)/u);
-    assert.match(layout, /function nodeHeight\(depth: number\)/u);
+    assert.match(layout, /measureNodeText/u);
+    assert.doesNotMatch(app, /function fittedTitle/u);
+    assert.match(app, /for \(const \[lineIndex, line\] of box\.text\.lines\.entries\(\)\)/u);
   });
 
   it('supports a bounded node context menu and one resizable compact sidebar', async () => {
@@ -93,9 +97,11 @@ describe('Mind Map source contract', () => {
   });
 
   it('uses commercial map editing interactions without a node rename dialog', async () => {
-    const [app, editorUI] = await Promise.all([
+    const [app, editorUI, styles, build] = await Promise.all([
       readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8'),
       readFile(path.join(root, 'ui', 'src', 'editor-ui.ts'), 'utf8'),
+      readFile(path.join(root, 'ui', 'styles.css'), 'utf8'),
+      readFile(path.join(root, 'scripts', 'build.mjs'), 'utf8'),
     ]);
     assert.doesNotMatch(app, /kind: 'rename-node'/u);
     assert.doesNotMatch(app, /case 'rename-node'/u);
@@ -103,9 +109,15 @@ describe('Mind Map source contract', () => {
     assert.match(app, /data-redevplugin-action="edit-node-title"/u);
     assert.match(app, /data-redevplugin-action="commit-node-title"/u);
     assert.match(app, /data-redevplugin-escape-action="cancel-node-title"/u);
+    assert.match(app, /<textarea/u);
+    assert.match(app, /<textarea\s+key=\{NODE_TITLE_INPUT_KEY\}/u);
+    assert.match(styles, /var\(--node-editor-zoom\)/u);
+    assert.match(build, /node-editor-z-/u);
     assert.match(app, /event\.isComposing/u);
     assert.match(app, /event\.type === 'wheel'/u);
     assert.match(app, /zoomViewportAtPoint/u);
+    assert.match(app, /keepsEditor: nodeTitleEditor !== undefined/u);
+    assert.match(app, /if \(pointer\.keepsEditor\) scheduleViewportRender\(\)/u);
     assert.match(editorUI, /normalizeWheelDelta/u);
   });
 
@@ -115,7 +127,25 @@ describe('Mind Map source contract', () => {
     const nodeHit = app.indexOf('const hit = hitNode', expanderHit);
     assert.ok(expanderHit >= 0);
     assert.ok(nodeHit > expanderHit);
-    assert.match(app, /toggleCollapsed\(selectedDocument\(draft\), expander\.id\)/u);
+    assert.match(app, /toggleSubtree\(expander\.id\)/u);
+    assert.equal((app.match(/toggleCollapsed\(/gu) ?? []).length, 1);
+  });
+
+  it('stores one canonical DSL payload and retains a one-time v1 migration', async () => {
+    const [app, worker, manifest] = await Promise.all([
+      readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8'),
+      readFile(path.join(root, 'worker', 'src', 'lib.rs'), 'utf8'),
+      readFile(path.join(root, 'manifest.json'), 'utf8').then(JSON.parse),
+    ]);
+    assert.match(app, /workspace_dsl: serializeWorkspaceDSL\(snapshot\)/u);
+    assert.match(app, /parseWorkspaceDSL\(response\.workspace_dsl\)/u);
+    assert.match(worker, /workspace-v2\.json/u);
+    assert.match(worker, /workspace-v1\.json/u);
+    assert.match(worker, /migrate_legacy_state/u);
+    assert.equal(manifest.storage.stores[0].schema_version, 1);
+    assert.match(worker, /const STATE_SCHEMA_VERSION: u32 = 2/u);
+    assert.deepEqual(manifest.methods[0].response_schema.required, ['revision', 'saved_at', 'workspace_dsl']);
+    assert.deepEqual(manifest.methods[1].request_schema.required, ['expected_revision', 'workspace_dsl']);
   });
 
   it('fails closed until the saved workspace is confirmed after a runtime restart', async () => {

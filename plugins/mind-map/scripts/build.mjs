@@ -54,12 +54,16 @@ function run(command, args) {
 
 function nodeEditorPlacementCSS() {
   const rules = [];
-  for (let value = 0; value <= 4096; value += 4) {
+  for (let value = 0; value <= 8192; value += 2) {
     rules.push(`.node-editor-x-${value}{left:${value}px}`);
     rules.push(`.node-editor-y-${value}{top:${value}px}`);
   }
-  for (let value = 112; value <= 344; value += 8) {
+  for (let value = 0; value <= 4096; value += 2) {
     rules.push(`.node-editor-w-${value}{width:${value}px}`);
+    rules.push(`.node-editor-h-${value}{height:${value}px}`);
+  }
+  for (let value = 320; value <= 2400; value += 1) {
+    rules.push(`.node-editor-z-${value}{--node-editor-zoom:${value / 1000}}`);
   }
   return `${rules.join('\n')}\n`;
 }

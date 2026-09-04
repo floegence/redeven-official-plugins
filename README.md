@@ -8,8 +8,8 @@ state.
 The current catalog contains Weather and Mind Map. Weather pairs a local clock
 with forecasts through ReDevPlugin's brokered network and storage contracts.
 Mind Map is an offline-first Canvas editor with brokered user-scoped storage,
-optimistic revision checks, multi-document editing, and portable JSON import
-and export. Retired plugin source is intentionally absent. Historical tags and
+optimistic revision checks, multi-document editing, and a portable indentation
+DSL for import and export. Retired plugin source is intentionally absent. Historical tags and
 immutable releases remain the audit record.
 
 ## Repository Layout

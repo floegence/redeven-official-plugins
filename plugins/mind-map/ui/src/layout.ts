@@ -1,4 +1,6 @@
 import type { BranchSide, MindMapDocument, MindMapNode } from './workspace-model.js';
+import { MIN_ZOOM } from './editor-ui.ts';
+import { measureNodeText, type NodeTextMetrics, type TextWidthMeasurer } from './node-text-metrics.ts';
 
 export type LayoutNode = {
   id: string;
@@ -8,6 +10,7 @@ export type LayoutNode = {
   height: number;
   depth: number;
   side: BranchSide;
+  text: NodeTextMetrics;
 };
 
 export type LayoutEdge = { from: string; to: string; side: BranchSide };
@@ -21,15 +24,13 @@ export type Underline = { startX: number; endX: number; y: number };
 
 const HORIZONTAL_GAP = 88;
 const VERTICAL_GAP = 20;
-const ROOT_NODE_HEIGHT = 54;
-const BRANCH_NODE_HEIGHT = 44;
-const TOPIC_NODE_HEIGHT = 36;
+export type EditingTitle = { nodeID: string; title: string };
 
-export function layoutDocument(document: MindMapDocument): DocumentLayout {
+export function layoutDocument(document: MindMapDocument, editing?: EditingTitle, measure?: TextWidthMeasurer): DocumentLayout {
   const root = document.nodes.find((node) => node.parent_id === null);
   if (!root) return { nodes: new Map(), edges: [] };
   const output: DocumentLayout = { nodes: new Map(), edges: [] };
-  output.nodes.set(root.id, boxFor(root, 0, 0, 0, 'right', true));
+  output.nodes.set(root.id, boxFor(root, 0, 0, 0, 'right', editing, measure));
   const rootChildren = childrenOf(document, root.id);
   const groups: Array<{ side: BranchSide; children: MindMapNode[] }> = document.layout === 'right'
     ? [{ side: 'right', children: rootChildren }]
@@ -37,7 +38,7 @@ export function layoutDocument(document: MindMapDocument): DocumentLayout {
       { side: 'left', children: rootChildren.filter((node) => node.side === 'left') },
       { side: 'right', children: rootChildren.filter((node) => node.side === 'right') },
     ];
-  for (const group of groups) layoutSide(document, root, group.children, group.side, output);
+  for (const group of groups) layoutSide(document, root, output.nodes.get(root.id)!, group.children, group.side, output, editing, measure);
   return output;
 }
 
@@ -57,7 +58,7 @@ export function fitLayoutToViewport(
   const availableHeight = Math.max(1, viewportHeight - padding.top - padding.bottom);
   const contentWidth = Math.max(1, maxX - minX);
   const contentHeight = Math.max(1, maxY - minY);
-  const zoom = Math.max(0.42, Math.min(1, availableWidth / contentWidth, availableHeight / contentHeight));
+  const zoom = Math.max(MIN_ZOOM, Math.min(1, availableWidth / contentWidth, availableHeight / contentHeight));
   const visibleCenterX = padding.left + availableWidth / 2;
   const visibleCenterY = padding.top + availableHeight / 2;
   return {
@@ -108,17 +109,20 @@ export function expanderCenter(node: LayoutNode): Point {
 function layoutSide(
   document: MindMapDocument,
   root: MindMapNode,
+  rootBox: LayoutNode,
   children: MindMapNode[],
   side: BranchSide,
   output: DocumentLayout,
+  editing?: EditingTitle,
+  measure?: TextWidthMeasurer,
 ): void {
   if (children.length === 0) return;
-  const spans = children.map((child) => subtreeHeight(document, child));
+  const spans = children.map((child) => subtreeHeight(document, child, editing, measure));
   const total = spans.reduce((sum, value) => sum + value, 0) + VERTICAL_GAP * Math.max(0, children.length - 1);
   let cursor = -total / 2;
   children.forEach((child, index) => {
     const span = spans[index];
-    placeSubtree(document, child, 1, cursor + span / 2, side, output);
+    placeSubtree(document, child, 1, cursor + span / 2, side, rootBox, output, editing, measure);
     output.edges.push({ from: root.id, to: child.id, side });
     cursor += span + VERTICAL_GAP;
   });
@@ -130,35 +134,39 @@ function placeSubtree(
   depth: number,
   centerY: number,
   side: BranchSide,
+  parentBox: LayoutNode,
   output: DocumentLayout,
+  editing?: EditingTitle,
+  measure?: TextWidthMeasurer,
 ): void {
-  const width = nodeWidth(node.title, depth);
-  const height = nodeHeight(depth);
-  const x = (side === 'right' ? 1 : -1) * (depth * (188 + HORIZONTAL_GAP));
-  output.nodes.set(node.id, { id: node.id, x, y: centerY, width, height, depth, side });
+  const text = measureNodeText(editing?.nodeID === node.id ? editing.title : node.title, depth, measure);
+  const direction = side === 'right' ? 1 : -1;
+  const x = parentBox.x + direction * (parentBox.width / 2 + HORIZONTAL_GAP + text.width / 2);
+  const box = { id: node.id, x, y: centerY, width: text.width, height: text.height, depth, side, text };
+  output.nodes.set(node.id, box);
   if (node.collapsed) return;
   const children = childrenOf(document, node.id);
   if (children.length === 0) return;
-  const spans = children.map((child) => subtreeHeight(document, child));
+  const spans = children.map((child) => subtreeHeight(document, child, editing, measure));
   const total = spans.reduce((sum, value) => sum + value, 0) + VERTICAL_GAP * Math.max(0, children.length - 1);
   let cursor = centerY - total / 2;
   children.forEach((child, index) => {
     const span = spans[index];
-    placeSubtree(document, child, depth + 1, cursor + span / 2, side, output);
+    placeSubtree(document, child, depth + 1, cursor + span / 2, side, box, output, editing, measure);
     output.edges.push({ from: node.id, to: child.id, side });
     cursor += span + VERTICAL_GAP;
   });
 }
 
-function subtreeHeight(document: MindMapDocument, node: MindMapNode): number {
+function subtreeHeight(document: MindMapDocument, node: MindMapNode, editing?: EditingTitle, measure?: TextWidthMeasurer): number {
   const depth = nodeDepth(document, node.id);
-  const height = nodeHeight(depth);
+  const height = measureNodeText(editing?.nodeID === node.id ? editing.title : node.title, depth, measure).height;
   if (node.collapsed) return height;
   const children = childrenOf(document, node.id);
   if (children.length === 0) return height;
   return Math.max(
     height,
-    children.reduce((sum, child) => sum + subtreeHeight(document, child), 0) + VERTICAL_GAP * (children.length - 1),
+    children.reduce((sum, child) => sum + subtreeHeight(document, child, editing, measure), 0) + VERTICAL_GAP * (children.length - 1),
   );
 }
 
@@ -166,21 +174,9 @@ function childrenOf(document: MindMapDocument, parentID: string): MindMapNode[] 
   return document.nodes.filter((node) => node.parent_id === parentID).sort((a, b) => a.order - b.order);
 }
 
-function boxFor(node: MindMapNode, x: number, y: number, depth: number, side: BranchSide, root = false): LayoutNode {
-  return { id: node.id, x, y, width: nodeWidth(node.title, depth), height: root ? ROOT_NODE_HEIGHT : nodeHeight(depth), depth, side };
-}
-
-function nodeWidth(title: string, depth: number): number {
-  const estimated = [...title].reduce((width, char) => width + ((char.codePointAt(0) ?? 0) <= 0x7f ? 7.5 : 14), 38);
-  if (depth === 0) return Math.min(236, Math.max(160, estimated));
-  if (depth === 1) return Math.min(216, Math.max(136, estimated));
-  return Math.min(188, Math.max(112, estimated - 12));
-}
-
-function nodeHeight(depth: number): number {
-  if (depth === 0) return ROOT_NODE_HEIGHT;
-  if (depth === 1) return BRANCH_NODE_HEIGHT;
-  return TOPIC_NODE_HEIGHT;
+function boxFor(node: MindMapNode, x: number, y: number, depth: number, side: BranchSide, editing?: EditingTitle, measure?: TextWidthMeasurer): LayoutNode {
+  const text = measureNodeText(editing?.nodeID === node.id ? editing.title : node.title, depth, measure);
+  return { id: node.id, x, y, width: text.width, height: text.height, depth, side, text };
 }
 
 function nodeDepth(document: MindMapDocument, nodeID: string): number {

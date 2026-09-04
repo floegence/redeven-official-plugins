@@ -6,16 +6,13 @@ export const SIDEBAR_WIDTH_STEP = 8;
 export const CONTEXT_MENU_WIDTH = 196;
 export const CONTEXT_MENU_HEIGHT = 282;
 const FLOATING_PANEL_MARGIN = 8;
-export const MIN_ZOOM = 0.42;
+export const MIN_ZOOM = 0.32;
 export const MAX_ZOOM = 2.4;
 const WHEEL_DELTA_LIMIT = 240;
 const WHEEL_ZOOM_RATE = 0.0015;
-const EDITOR_MARGIN = 12;
-const EDITOR_POSITION_STEP = 4;
-const EDITOR_WIDTH_STEP = 8;
-const MIN_EDITOR_WIDTH = 112;
-const MAX_EDITOR_WIDTH = 344;
-const MAX_EDITOR_AXIS = 4096;
+const EDITOR_POSITION_STEP = 2;
+const EDITOR_SIZE_STEP = 2;
+const EDITOR_ZOOM_SCALE = 1_000;
 
 export type EditorViewport = { x: number; y: number; zoom: number };
 export type EditorNodeBox = { x: number; y: number; width: number; height: number; depth: number };
@@ -23,6 +20,7 @@ export type NodeEditorPlacement = {
   centerX: number;
   centerY: number;
   width: number;
+  height: number;
   className: string;
 };
 
@@ -88,25 +86,33 @@ export function nodeEditorPlacement(
   canvasWidth: number,
   canvasHeight: number,
 ): NodeEditorPlacement {
-  const width = quantize(
-    Math.max(MIN_EDITOR_WIDTH, Math.min(MAX_EDITOR_WIDTH, node.width * viewport.zoom + 16)),
-    EDITOR_WIDTH_STEP,
-  );
-  const editorHeight = node.depth === 0 ? 44 : node.depth === 1 ? 40 : 34;
-  const rawX = canvasWidth / 2 + viewport.x + node.x * viewport.zoom;
-  const rawY = canvasHeight / 2 + viewport.y + node.y * viewport.zoom;
-  const minX = EDITOR_MARGIN + width / 2;
-  const maxX = Math.min(MAX_EDITOR_AXIS, Math.max(minX, canvasWidth - EDITOR_MARGIN - width / 2));
-  const minY = EDITOR_MARGIN + editorHeight / 2;
-  const maxY = Math.min(MAX_EDITOR_AXIS, Math.max(minY, canvasHeight - EDITOR_MARGIN - editorHeight / 2));
-  const centerX = quantize(Math.max(minX, Math.min(maxX, rawX)), EDITOR_POSITION_STEP);
-  const centerY = quantize(Math.max(minY, Math.min(maxY, rawY)), EDITOR_POSITION_STEP);
+  const zoomKey = Math.round(clampZoom(viewport.zoom) * EDITOR_ZOOM_SCALE);
+  const zoom = zoomKey / EDITOR_ZOOM_SCALE;
+  const width = quantize(node.width * zoom, EDITOR_SIZE_STEP);
+  const height = quantize(node.height * zoom, EDITOR_SIZE_STEP);
+  const rawX = canvasWidth / 2 + viewport.x + node.x * zoom;
+  const rawY = canvasHeight / 2 + viewport.y + node.y * zoom;
+  const centerX = quantize(rawX, EDITOR_POSITION_STEP);
+  const centerY = quantize(rawY, EDITOR_POSITION_STEP);
   const kind = node.depth === 0 ? 'is-root' : node.depth === 1 ? 'is-branch' : 'is-topic';
   return {
     centerX,
     centerY,
     width,
-    className: `node-title-editor ${kind} node-editor-x-${centerX} node-editor-y-${centerY} node-editor-w-${width}`,
+    height,
+    className: `node-title-editor ${kind} node-editor-x-${centerX} node-editor-y-${centerY} node-editor-w-${width} node-editor-h-${height} node-editor-z-${zoomKey}`,
+  };
+}
+
+export function preserveNodeScreenPosition(
+  viewport: EditorViewport,
+  before: Pick<EditorNodeBox, 'x' | 'y'>,
+  after: Pick<EditorNodeBox, 'x' | 'y'>,
+): EditorViewport {
+  return {
+    x: viewport.x + (before.x - after.x) * viewport.zoom,
+    y: viewport.y + (before.y - after.y) * viewport.zoom,
+    zoom: viewport.zoom,
   };
 }
 

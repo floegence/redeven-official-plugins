@@ -13,6 +13,7 @@ import {
   duplicateDocument,
   exportDocument,
   importDocument,
+  isValidNodeTextDraft,
   moveNode,
   redoHistory,
   renameNode,
@@ -125,20 +126,21 @@ describe('Mind Map workspace model', () => {
     assert.equal(deleteDocument(workspace, first.id), false);
   });
 
-  it('round-trips one document through bounded JSON with regenerated identities', () => {
+  it('round-trips one document through bounded DSL with regenerated identities', () => {
     const workspace = createWorkspace(6);
     const source = workspace.documents[0];
     renameNode(source, source.nodes[0].id, 'Launch');
     const branch = addChild(source, source.nodes[0].id, 'Research');
     toggleCollapsed(source, branch.id);
-    const json = exportDocument(source);
-    const imported = importDocument(json, workspace, 99);
+    const dsl = exportDocument(source);
+    assert.match(dsl, /^mind-map 1\nkind: document/u);
+    const imported = importDocument(dsl, workspace, 99);
     assert.equal(imported.title, 'Launch');
     assert.equal(imported.nodes.length, 2);
     assert.notEqual(imported.id, source.id);
     assert.ok(imported.nodes.every((node) => !source.nodes.some((candidate) => candidate.id === node.id)));
     assert.throws(() => importDocument('{"schema_version":"wrong"}', workspace, 100));
-    const malformed = JSON.parse(json);
+    const malformed = structuredClone(source);
     malformed.nodes[1].parent_id = 'missing';
     assert.throws(() => importDocument(JSON.stringify(malformed), workspace, 101), /parent/u);
     assert.throws(() => importDocument(' '.repeat(60 * 1024 + 1), workspace, 102), /import limit/u);
@@ -165,5 +167,44 @@ describe('Mind Map workspace model', () => {
     const root = document.nodes[0];
     for (let index = 1; index < MAX_NODES_PER_DOCUMENT; index += 1) addChild(document, root.id, `N${index}`);
     assert.throws(() => addChild(document, root.id, 'Too many'));
+  });
+
+  it('enforces complete node text limits without truncating accepted input', () => {
+    const workspace = createWorkspace(9);
+    const document = workspace.documents[0];
+    const root = document.nodes[0];
+    const maximum = '🚀'.repeat(512);
+    assert.equal(isValidNodeTextDraft(maximum), true);
+    assert.equal(renameNode(document, root.id, maximum), true);
+    assert.equal(root.title, maximum);
+    assert.equal(isValidNodeTextDraft(`${maximum}x`), false);
+    assert.equal(isValidNodeTextDraft(`line${'\nnext'.repeat(32)}`), true);
+    assert.equal(isValidNodeTextDraft(`line${'\nnext'.repeat(33)}`), false);
+    assert.throws(() => renameNode(document, root.id, `${maximum}x`), /limits/u);
+  });
+
+  it('matches the Worker validation boundary for timestamps, controls, root order, and branch sides', () => {
+    const valid = createWorkspace(10);
+    const document = valid.documents[0];
+    const root = document.nodes[0];
+    const branch = addChild(document, root.id, 'Branch');
+    const topic = addChild(document, branch.id, 'Topic');
+    assert.doesNotThrow(() => validateWorkspace(valid));
+
+    const timestampDrift = structuredClone(valid);
+    timestampDrift.documents[0].updated_at = 'x'.repeat(65);
+    assert.throws(() => validateWorkspace(timestampDrift), /document/u);
+
+    const controlDrift = structuredClone(valid);
+    controlDrift.documents[0].nodes[0].title = 'Root\u0085topic';
+    assert.throws(() => validateWorkspace(controlDrift), /node/u);
+
+    const rootOrderDrift = structuredClone(valid);
+    rootOrderDrift.documents[0].nodes[0].order = 1;
+    assert.throws(() => validateWorkspace(rootOrderDrift), /root/u);
+
+    const sideDrift = structuredClone(valid);
+    sideDrift.documents[0].nodes.find((node) => node.id === topic.id).side = branch.side === 'left' ? 'right' : 'left';
+    assert.throws(() => validateWorkspace(sideDrift), /side/u);
   });
 });
