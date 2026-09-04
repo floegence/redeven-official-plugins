@@ -466,7 +466,6 @@ function nodeTitleEditorView() {
         value={editor.draft}
         placeholder={node.title}
         maxlength={MAX_TITLE_UTF8_BYTES}
-        autocomplete="off"
         autofocus={true}
         aria-label={text().topic}
         data-redevplugin-action="edit-node-title"
