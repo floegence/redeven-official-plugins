@@ -37,6 +37,15 @@ import {
 } from './editor-ui.js';
 import { loadWithRetry } from './startup-load.js';
 import {
+  EXPORT_FORMATS,
+  bitmapExportSize,
+  exportLayoutBounds,
+  nodeColorValue,
+  safeExportBaseName,
+  serializeMindMapSVG,
+  type ExportFormat,
+} from './export.js';
+import {
   MAX_IMPORT_BYTES,
   MAX_TITLE_UTF8_BYTES,
   addChild,
@@ -47,7 +56,6 @@ import {
   deleteDocument,
   deleteNode,
   duplicateDocument,
-  exportDocument,
   importDocument,
   isValidNodeTextDraft,
   moveNode,
@@ -56,6 +64,7 @@ import {
   renameDocument,
   renameNode,
   parseWorkspaceDSL,
+  serializeDocumentDSL,
   serializeWorkspaceDSL,
   selectedDocument,
   setNodeAlignment,
@@ -80,8 +89,7 @@ type Modal =
   | { kind: 'rename-document'; title: string }
   | { kind: 'delete-document'; title: string }
   | { kind: 'delete-node'; title: string; count: number }
-  | { kind: 'import'; text: string }
-  | { kind: 'export'; text: string };
+  | { kind: 'import'; text: string };
 type Viewport = { x: number; y: number; zoom: number };
 type DropTarget = { parentID: string; order: number; side?: BranchSide; label: string };
 type NodeContextMenu = { nodeID: string; x: number; y: number; hover: number };
@@ -123,6 +131,10 @@ let editVersion = 0;
 let selectedNodeID = selectedDocument(workspace).nodes[0].id;
 let modal: Modal | undefined;
 let nodeTitleEditor: NodeTitleEditor | undefined;
+let exportMenuOpen = false;
+let exportBusy = false;
+let exportMessage = '';
+let exportRendering = false;
 let locale: Locale = 'en';
 let colors = DEFAULT_COLORS;
 let canvas: OffscreenCanvas | undefined;
@@ -151,7 +163,7 @@ const COPY = {
     app: 'Mind Map', maps: 'Maps', newMap: 'New map', rename: 'Rename', duplicate: 'Duplicate', remove: 'Delete',
     workspace: 'Workspace', documents: 'maps', topics: 'topics', selectedMap: 'Current map',
     undo: 'Undo', redo: 'Redo', bilateral: 'Both sides', right: 'Right only', child: 'Child', sibling: 'Sibling',
-    collapse: 'Fold / unfold', importLabel: 'Import', exportLabel: 'Export', center: 'Center', loading: 'Restoring your workspace…',
+    collapse: 'Fold / unfold', importLabel: 'Import file', exportLabel: 'Export file', center: 'Center', loading: 'Restoring your workspace…',
     loadingBody: 'Your saved maps will appear as soon as the local plugin runtime is ready.',
     loadFailedTitle: 'Workspace is still unavailable', loadFailed: 'Your saved data was not changed. Try loading it again.',
     saved: 'Saved', saving: 'Saving…', unsaved: 'Unsaved changes', saveFailed: 'Save failed — changes remain here',
@@ -162,7 +174,6 @@ const COPY = {
     deleteNodeTitle: 'Delete this branch?', deleteMapBody: 'This cannot be undone after the workspace is saved.',
     deleteNodeBody: 'The selected topic and all topics below it will be removed.', importTitle: 'Import mind map DSL',
     importBody: 'Paste a mind-map 1 document. Legacy mind-map.document.v1 JSON is migrated once.', importAction: 'Import as new map',
-    exportTitle: 'Export current mind map', exportBody: 'Copy this DSL and keep it as a portable backup.', close: 'Close',
     invalidImport: 'The DSL is invalid or exceeds the supported limits.', operationFailed: 'The operation could not be completed.',
     rootCannotDelete: 'The central topic cannot be deleted.', recovered: 'Recovered copy', dropInside: 'Move inside',
     dropBefore: 'Move before', dropAfter: 'Move after', statusReady: 'Ready', zoomIn: 'Zoom in', zoomOut: 'Zoom out',
@@ -170,12 +181,16 @@ const COPY = {
     nodeStyle: 'Topic style', textAlignment: 'Text alignment', alignLeft: 'Align text left',
     alignCenter: 'Center text', alignRight: 'Align text right',
     nodeActions: 'Topic actions', narrowSidebar: 'Narrow map sidebar', widenSidebar: 'Widen map sidebar',
+    exportFormat: 'Choose export format', exportPNG: 'PNG image', exportJPEG: 'JPEG image', exportWebP: 'WebP image',
+    exportSVG: 'SVG image', exportDSL: 'Mind map DSL', exportFailed: 'The file could not be exported. Try again.',
+    dismiss: 'Dismiss', colorAccent: 'Accent', colorBlue: 'Blue', colorGreen: 'Green', colorAmber: 'Amber',
+    colorRose: 'Rose', colorViolet: 'Violet',
   },
   zh: {
     app: '思维导图', maps: '导图', newMap: '新建', rename: '重命名', duplicate: '复制', remove: '删除',
     workspace: '工作空间', documents: '张导图', topics: '个节点', selectedMap: '当前导图',
     undo: '撤销', redo: '重做', bilateral: '双向', right: '向右', child: '子节点', sibling: '同级节点',
-    collapse: '折叠 / 展开', importLabel: '导入', exportLabel: '导出', center: '居中', loading: '正在恢复工作区…',
+    collapse: '折叠 / 展开', importLabel: '导入文件', exportLabel: '导出文件', center: '居中', loading: '正在恢复工作区…',
     loadingBody: '本地插件运行时就绪后，将自动载入已保存的导图。',
     loadFailedTitle: '工作区暂时不可用', loadFailed: '已保存的数据没有被修改，请重新载入。',
     saved: '已保存', saving: '正在保存…', unsaved: '有未保存修改', saveFailed: '保存失败，修改仍保留在本地界面',
@@ -186,13 +201,16 @@ const COPY = {
     deleteNodeTitle: '删除整个分支？', deleteMapBody: '工作区保存后，此操作无法撤销。',
     deleteNodeBody: '选中节点及其全部子节点都会被删除。', importTitle: '导入思维导图 DSL',
     importBody: '粘贴 mind-map 1 文档；旧版 mind-map.document.v1 JSON 仅迁移一次。', importAction: '作为新导图导入',
-    exportTitle: '导出当前导图', exportBody: '复制以下 DSL，可作为可移植备份。', close: '关闭',
     invalidImport: 'DSL 无效或超过支持范围。', operationFailed: '操作未能完成。', rootCannotDelete: '中心节点不能删除。',
     recovered: '恢复的副本', dropInside: '移入节点', dropBefore: '移到前面', dropAfter: '移到后面',
     statusReady: '可编辑', zoomIn: '放大', zoomOut: '缩小', firstBranch: '按 Tab 创建第一个分支',
     canvasTools: '导图编辑工具', colors: '节点颜色', nodeStyle: '节点样式', textAlignment: '文字对齐',
     alignLeft: '文字左对齐', alignCenter: '文字居中', alignRight: '文字右对齐',
     nodeActions: '节点操作', narrowSidebar: '收窄导图侧边栏', widenSidebar: '加宽导图侧边栏',
+    exportFormat: '选择导出格式', exportPNG: 'PNG 图片', exportJPEG: 'JPEG 图片', exportWebP: 'WebP 图片',
+    exportSVG: 'SVG 图片', exportDSL: '思维导图 DSL', exportFailed: '文件导出失败，请重试。',
+    dismiss: '关闭提示', colorAccent: '主题色', colorBlue: '蓝色', colorGreen: '绿色', colorAmber: '琥珀色',
+    colorRose: '玫红色', colorViolet: '紫色',
   },
 } as const;
 
@@ -214,7 +232,10 @@ bridge.onAction('zoom-in', () => setZoom(viewport.zoom * 1.16));
 bridge.onAction('zoom-out', () => setZoom(viewport.zoom / 1.16));
 bridge.onAction('center-map', () => centerMap());
 bridge.onAction('import-document', () => openModal({ kind: 'import', text: '' }));
-bridge.onAction('export-document', () => openModal({ kind: 'export', text: exportDocument(currentDocument()) }));
+bridge.onAction('export-document', () => toggleExportMenu());
+bridge.onAction('close-export-menu', () => closeExportMenu());
+bridge.onAction('export-file', (event) => void exportCurrentMap(String(event.value ?? '')));
+bridge.onAction('dismiss-export-error', () => dismissExportError());
 bridge.onAction('set-node-color', (event) => setSelectedColor(String(event.value ?? '')));
 bridge.onAction('set-node-alignment', (event) => setSelectedAlignment(String(event.value ?? '')));
 bridge.onAction('narrow-sidebar', () => adjustSidebar(-SIDEBAR_WIDTH_STEP));
@@ -330,7 +351,7 @@ function view() {
             <strong key="sidebar-title">{t.maps}</strong>
             <small key="sidebar-count">{workspace.documents.length} {t.documents}</small>
           </span>
-          <button key="new-document" className="icon-button create-map-button" type="button" title={t.newMap} aria-label={t.newMap} data-redevplugin-action="new-document"><span key="new-document-icon" className="tool-icon lucide-icon icon-add"></span></button>
+          <button key="new-document" className="icon-button create-map-button" type="button" aria-label={t.newMap} data-tooltip={t.newMap} data-tooltip-placement="bottom" data-redevplugin-action="new-document"><span key="new-document-icon" className="tool-icon lucide-icon icon-add"></span></button>
         </header>
         <div key="sidebar-section-label" className="sidebar-section-label"><span key="workspace-label">{t.workspace}</span></div>
         <ul key="document-list" className="document-list">
@@ -358,14 +379,15 @@ function view() {
           <span key="sidebar-footnote">Tab · Enter · F2</span>
         </footer>
         <div key="sidebar-resizer" className="sidebar-resizer" aria-label={`${t.narrowSidebar} / ${t.widenSidebar}`}>
-          <button key="narrow-sidebar" className="sidebar-resize-button" type="button" title={t.narrowSidebar} aria-label={t.narrowSidebar} disabled={sidebarWidth <= MIN_SIDEBAR_WIDTH} data-redevplugin-action="narrow-sidebar"><span key="narrow-sidebar-icon" className="sidebar-resize-icon lucide-icon icon-minus"></span></button>
-          <button key="widen-sidebar" className="sidebar-resize-button" type="button" title={t.widenSidebar} aria-label={t.widenSidebar} disabled={sidebarWidth >= MAX_SIDEBAR_WIDTH} data-redevplugin-action="widen-sidebar"><span key="widen-sidebar-icon" className="sidebar-resize-icon lucide-icon icon-add"></span></button>
+          <button key="narrow-sidebar" className="sidebar-resize-button" type="button" aria-label={t.narrowSidebar} data-tooltip={t.narrowSidebar} data-tooltip-placement="right" disabled={sidebarWidth <= MIN_SIDEBAR_WIDTH} data-redevplugin-action="narrow-sidebar"><span key="narrow-sidebar-icon" className="sidebar-resize-icon lucide-icon icon-minus"></span></button>
+          <button key="widen-sidebar" className="sidebar-resize-button" type="button" aria-label={t.widenSidebar} data-tooltip={t.widenSidebar} data-tooltip-placement="right" disabled={sidebarWidth >= MAX_SIDEBAR_WIDTH} data-redevplugin-action="widen-sidebar"><span key="widen-sidebar-icon" className="sidebar-resize-icon lucide-icon icon-add"></span></button>
         </div>
       </aside>
       <section key="editor-shell" className="editor-shell">
         <div key="canvas-shell" className="canvas-shell">
           <canvas key="map-canvas" className="map-canvas" data-redevplugin-canvas={CANVAS_ID} tabindex={0} autofocus={true} aria-label={t.app}></canvas>
           {loadState === 'ready' && nodeTitleEditor ? nodeTitleEditorView() : null}
+          {exportMenuOpen ? <button key="export-menu-scrim" className="export-menu-scrim" type="button" tabindex={-1} aria-label={t.dismiss} data-redevplugin-action="close-export-menu"></button> : null}
           <header key="canvas-command-deck" className="canvas-command-deck">
             <div key="canvas-context" className="canvas-context">
               <small key="canvas-eyebrow">{t.selectedMap}</small>
@@ -390,8 +412,11 @@ function view() {
                 <span key="zoom-readout" className="zoom-readout">{Math.round(viewport.zoom * 100)}%</span>
                 {toolButton('zoom-in', 'add', t.zoomIn)}
                 {toolButton('center-map', 'center', t.center)}
-                {toolButton('import-document', 'import', t.importLabel)}
-                {toolButton('export-document', 'export', t.exportLabel)}
+                {toolButton('import-document', 'upload', t.importLabel)}
+                <div key="export-control" className="export-control">
+                  {toolButton('export-document', 'download', t.exportLabel, exportBusy, exportMenuOpen)}
+                  {exportMenuOpen ? exportFormatMenu() : null}
+                </div>
               </div>
             </nav>
           </header>
@@ -401,7 +426,7 @@ function view() {
             <div key="color-control" className="color-control" role="group" aria-label={t.colors}>
               <span key="color-label" className="color-label">{t.colors}</span>
               {NODE_COLORS.map((color) => (
-                <button key={`color-${color}`} className={`color-button color-${color}`} type="button" value={color} aria-label={color} aria-pressed={selected.color === color} data-redevplugin-action="set-node-color"></button>
+                <button key={`color-${color}`} className={`color-button color-${color}`} type="button" value={color} aria-label={colorLabel(color)} data-tooltip={colorLabel(color)} data-tooltip-placement="top" aria-pressed={selected.color === color} data-redevplugin-action="set-node-color"></button>
               ))}
             </div>
             <span key="style-divider" className="style-divider" aria-hidden="true"></span>
@@ -411,6 +436,7 @@ function view() {
           </div>
           {loadState === 'ready' && saveState === 'conflict' ? conflictNotice() : null}
           {loadState === 'ready' && saveState === 'error' ? errorNotice() : null}
+          {loadState === 'ready' && exportMessage ? exportErrorNotice() : null}
           {loadState === 'ready' && modal ? modalView(modal) : null}
         </div>
       </section>
@@ -420,17 +446,31 @@ function view() {
 }
 
 function toolButton(action: string, icon: string, label: string, disabled = false, pressed?: boolean) {
-  return <button key={`tool-${action}`} className="tool-button" type="button" title={label} aria-label={label} aria-pressed={pressed} disabled={disabled} data-redevplugin-action={action}><span key={`tool-${action}-icon`} className={`tool-icon lucide-icon icon-${icon}`}></span></button>;
+  return <button key={`tool-${action}`} className="tool-button" type="button" aria-label={label} data-tooltip={label} data-tooltip-placement="bottom" aria-pressed={pressed} disabled={disabled} data-redevplugin-action={action}><span key={`tool-${action}-icon`} className={`tool-icon lucide-icon icon-${icon}`}></span></button>;
 }
 
 function sideActionButton(action: string, icon: string, label: string, disabled = false) {
-  return <button key={`side-${action}`} className="side-action-button" type="button" title={label} aria-label={label} disabled={disabled} data-redevplugin-action={action}><span key={`side-${action}-icon`} className={`tool-icon lucide-icon icon-${icon}`}></span></button>;
+  return <button key={`side-${action}`} className="side-action-button" type="button" aria-label={label} data-tooltip={label} data-tooltip-placement="top" disabled={disabled} data-redevplugin-action={action}><span key={`side-${action}-icon`} className={`tool-icon lucide-icon icon-${icon}`}></span></button>;
 }
 
 function alignmentButton(alignment: NodeAlignment, selected: NodeAlignment) {
   const t = text();
   const label = alignment === 'left' ? t.alignLeft : alignment === 'right' ? t.alignRight : t.alignCenter;
-  return <button key={`alignment-${alignment}`} className="alignment-button" type="button" title={label} aria-label={label} aria-pressed={selected === alignment} value={alignment} data-redevplugin-action="set-node-alignment"><span key={`alignment-${alignment}-icon`} className={`alignment-icon lucide-icon icon-text-${alignment}`}></span></button>;
+  return <button key={`alignment-${alignment}`} className="alignment-button" type="button" aria-label={label} data-tooltip={label} data-tooltip-placement="top" aria-pressed={selected === alignment} value={alignment} data-redevplugin-action="set-node-alignment"><span key={`alignment-${alignment}-icon`} className={`alignment-icon lucide-icon icon-text-${alignment}`}></span></button>;
+}
+
+function exportFormatMenu() {
+  const t = text();
+  return (
+    <div key="export-format-menu" className="export-format-menu" role="menu" aria-label={t.exportFormat}>
+      {EXPORT_FORMATS.map((format) => (
+        <button key={`export-${format}`} className="export-format-button" type="button" role="menuitem" value={format} data-redevplugin-action="export-file">
+          <span key={`export-${format}-badge`} className="export-format-badge" aria-hidden="true">{format === 'jpeg' ? 'JPG' : format.toUpperCase()}</span>
+          <span key={`export-${format}-label`}>{exportFormatLabel(format)}</span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function startupOverlay() {
@@ -469,6 +509,16 @@ function errorNotice() {
   );
 }
 
+function exportErrorNotice() {
+  const t = text();
+  return (
+    <div key="export-error-notice" className="notice-banner is-error" role="alert">
+      <span key="export-error-message">{exportMessage}</span>
+      <button key="dismiss-export-error" type="button" data-redevplugin-action="dismiss-export-error">{t.dismiss}</button>
+    </div>
+  );
+}
+
 function nodeTitleEditorView() {
   const editor = nodeTitleEditor;
   if (!editor) return null;
@@ -497,7 +547,7 @@ function nodeTitleEditorView() {
 function modalView(current: Modal) {
   const t = text();
   const details = modalDetails(current);
-  const isText = current.kind === 'import' || current.kind === 'export';
+  const isText = current.kind === 'import';
   const isDelete = current.kind === 'delete-document' || current.kind === 'delete-node';
   return (
     <div key="modal-backdrop" className="modal-backdrop" role="presentation">
@@ -505,13 +555,13 @@ function modalView(current: Modal) {
         <h2 key="modal-title">{details.title}</h2>
         {details.body ? <p key="modal-body">{details.body}</p> : null}
         {isText
-          ? <textarea key="modal-value" name="value" maxlength={MAX_IMPORT_BYTES} readonly={current.kind === 'export'} autofocus={true} aria-label={details.label}>{current.text}</textarea>
+          ? <textarea key="modal-value" name="value" maxlength={MAX_IMPORT_BYTES} autofocus={true} aria-label={details.label}>{current.text}</textarea>
           : isDelete
             ? null
             : <input key="modal-value" type="text" name="value" value={current.title} maxlength={80} autocomplete="off" autofocus={true} aria-label={details.label}></input>}
         <div key="modal-actions" className="modal-actions">
-          <button key="cancel-modal" className="tool-button" type="button" data-redevplugin-action="cancel-modal">{current.kind === 'export' ? t.close : t.cancel}</button>
-          {current.kind === 'export' ? null : <button key="submit-modal" className={isDelete ? 'danger-button' : 'primary-button'} type="submit">{details.action}</button>}
+          <button key="cancel-modal" className="tool-button" type="button" data-redevplugin-action="cancel-modal">{t.cancel}</button>
+          <button key="submit-modal" className={isDelete ? 'danger-button' : 'primary-button'} type="submit">{details.action}</button>
         </div>
       </form>
     </div>
@@ -526,12 +576,11 @@ function modalDetails(current: Modal): { title: string; body: string; label: str
     case 'delete-document': return { title: t.deleteMapTitle, body: t.deleteMapBody, label: '', action: t.confirmDelete };
     case 'delete-node': return { title: t.deleteNodeTitle, body: `${t.deleteNodeBody} (${current.count})`, label: '', action: t.confirmDelete };
     case 'import': return { title: t.importTitle, body: t.importBody, label: t.importTitle, action: t.importAction };
-    case 'export': return { title: t.exportTitle, body: t.exportBody, label: t.exportTitle, action: t.close };
   }
 }
 
 function submitModal(event: PluginUIActionEvent): void {
-  if (!modal || modal.kind === 'export') return;
+  if (!modal) return;
   const value = String(event.form_data?.value ?? '').trim();
   try {
     if (modal.kind === 'new-document') {
@@ -565,6 +614,7 @@ function submitModal(event: PluginUIActionEvent): void {
 function openModal(next: Modal): void {
   if (loadState !== 'ready') return;
   commitNodeTitleEdit();
+  exportMenuOpen = false;
   modal = next;
   void render();
 }
@@ -573,6 +623,129 @@ function closeModal(): void {
   modal = undefined;
   void render();
   draw();
+}
+
+function toggleExportMenu(): void {
+  if (loadState !== 'ready' || exportBusy) return;
+  commitNodeTitleEdit();
+  modal = undefined;
+  nodeContextMenu = undefined;
+  exportMenuOpen = !exportMenuOpen;
+  void render();
+  draw();
+}
+
+function closeExportMenu(): void {
+  if (!exportMenuOpen) return;
+  exportMenuOpen = false;
+  void render();
+}
+
+function dismissExportError(): void {
+  exportMessage = '';
+  void render();
+}
+
+async function exportCurrentMap(value: string): Promise<void> {
+  if (loadState !== 'ready' || exportBusy || !EXPORT_FORMATS.includes(value as ExportFormat)) return;
+  const format = value as ExportFormat;
+  exportMenuOpen = false;
+  exportBusy = true;
+  exportMessage = '';
+  commitNodeTitleEdit();
+  void render();
+
+  try {
+    const document = currentDocument();
+    const layout = layoutDocument(document, undefined, measureCanvasText);
+    const baseName = safeExportBaseName(document.title);
+    if (format === 'dsl') {
+      await bridge.exportFile({
+        fileName: `${baseName}.mindmap`,
+        mediaType: 'text/plain',
+        bytes: new TextEncoder().encode(serializeDocumentDSL(document)),
+      });
+    } else if (format === 'svg') {
+      await bridge.exportFile({
+        fileName: `${baseName}.svg`,
+        mediaType: 'image/svg+xml',
+        bytes: new TextEncoder().encode(serializeMindMapSVG(document, layout, colors)),
+      });
+    } else {
+      const mediaType = format === 'png' ? 'image/png' : format === 'jpeg' ? 'image/jpeg' : 'image/webp';
+      const blob = await renderBitmapExport(layout, mediaType);
+      await bridge.exportFile({
+        fileName: `${baseName}.${format === 'jpeg' ? 'jpg' : format}`,
+        mediaType,
+        bytes: new Uint8Array(await blob.arrayBuffer()),
+      });
+    }
+  } catch {
+    exportMessage = text().exportFailed;
+  } finally {
+    exportBusy = false;
+    await render();
+    draw();
+  }
+}
+
+async function renderBitmapExport(
+  layout: DocumentLayout,
+  mediaType: 'image/png' | 'image/jpeg' | 'image/webp',
+): Promise<Blob> {
+  const bounds = exportLayoutBounds(layout);
+  const size = bitmapExportSize(bounds);
+  const targetCanvas = new OffscreenCanvas(size.width, size.height);
+  const targetContext = targetCanvas.getContext('2d', { alpha: false });
+  if (!targetContext) throw new Error('2D export canvas is unavailable');
+
+  const previous = {
+    canvas,
+    context,
+    cssWidth,
+    cssHeight,
+    devicePixelRatio,
+    viewport,
+    selectedNodeID,
+    nodeTitleEditor,
+    pointer,
+    dropTarget,
+    nodeContextMenu,
+    exportRendering,
+  };
+  try {
+    canvas = targetCanvas;
+    context = targetContext;
+    cssWidth = size.width;
+    cssHeight = size.height;
+    devicePixelRatio = 1;
+    viewport = {
+      x: -bounds.left * size.scale - size.width / 2,
+      y: -bounds.top * size.scale - size.height / 2,
+      zoom: size.scale,
+    };
+    selectedNodeID = '';
+    nodeTitleEditor = undefined;
+    pointer = undefined;
+    dropTarget = undefined;
+    nodeContextMenu = undefined;
+    exportRendering = true;
+    draw();
+  } finally {
+    canvas = previous.canvas;
+    context = previous.context;
+    cssWidth = previous.cssWidth;
+    cssHeight = previous.cssHeight;
+    devicePixelRatio = previous.devicePixelRatio;
+    viewport = previous.viewport;
+    selectedNodeID = previous.selectedNodeID;
+    nodeTitleEditor = previous.nodeTitleEditor;
+    pointer = previous.pointer;
+    dropTarget = previous.dropTarget;
+    nodeContextMenu = previous.nodeContextMenu;
+    exportRendering = previous.exportRendering;
+  }
+  return targetCanvas.convertToBlob({ type: mediaType, quality: mediaType === 'image/png' ? undefined : 0.92 });
 }
 
 async function selectMap(event: PluginUIActionEvent): Promise<void> {
@@ -932,7 +1105,7 @@ async function recoverLocalCopy(): Promise<void> {
   try {
     const response = await bridge.call<PluginMethodResult<LoadResponse>>('mindmap.workspace.load', {});
     const remote = parseWorkspaceDSL(response.data.workspace_dsl);
-    const recovered = importDocument(exportDocument(localDocument), remote, Date.now());
+    const recovered = importDocument(serializeDocumentDSL(localDocument), remote, Date.now());
     renameDocument(recovered, `${localDocument.title} — ${text().recovered}`);
     workspace = remote;
     revision = response.data.revision;
@@ -1295,7 +1468,7 @@ function draw(): void {
   if (!context || !canvas || !visible) return;
   context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   drawCanvasAtmosphere();
-  drawGrid();
+  if (!exportRendering) drawGrid();
   if (loadState !== 'ready') return;
   context.save();
   context.translate(cssWidth / 2 + viewport.x, cssHeight / 2 + viewport.y);
@@ -1303,9 +1476,9 @@ function draw(): void {
   const layout = currentLayout();
   drawEdges(layout);
   drawNodes(layout);
-  if (currentDocument().nodes.length === 1) drawFirstBranchHint(layout);
+  if (!exportRendering && currentDocument().nodes.length === 1) drawFirstBranchHint(layout);
   context.restore();
-  if (nodeContextMenu) drawNodeContextMenu();
+  if (!exportRendering && nodeContextMenu) drawNodeContextMenu();
 }
 
 function drawCanvasAtmosphere(): void {
@@ -1404,7 +1577,7 @@ function drawNodes(layout: DocumentLayout): void {
         context.fillText(line, textAnchor.x, firstLineY + lineIndex * box.text.lineHeight);
       }
     }
-    if (hasChildren(document, node.id)) {
+    if (!exportRendering && hasChildren(document, node.id)) {
       const badge = expanderCenter(box);
       context.beginPath();
       context.arc(badge.x, badge.y, 7.5, 0, Math.PI * 2);
@@ -1691,13 +1864,27 @@ function text() {
   return COPY[locale];
 }
 
+function exportFormatLabel(format: ExportFormat): string {
+  const t = text();
+  if (format === 'png') return t.exportPNG;
+  if (format === 'jpeg') return t.exportJPEG;
+  if (format === 'webp') return t.exportWebP;
+  if (format === 'svg') return t.exportSVG;
+  return t.exportDSL;
+}
+
+function colorLabel(color: NodeColor): string {
+  const t = text();
+  if (color === 'accent') return t.colorAccent;
+  if (color === 'blue') return t.colorBlue;
+  if (color === 'green') return t.colorGreen;
+  if (color === 'amber') return t.colorAmber;
+  if (color === 'rose') return t.colorRose;
+  return t.colorViolet;
+}
+
 function nodeColor(color: NodeColor): string {
-  if (color === 'accent') return colors.accent;
-  if (color === 'blue') return '#5f86ee';
-  if (color === 'green') return '#43b990';
-  if (color === 'amber') return '#e6a23c';
-  if (color === 'rose') return '#e9687d';
-  return '#8d6de8';
+  return nodeColorValue(color, colors);
 }
 
 function mixColor(left: string, right: string, rightAmount: number): string {

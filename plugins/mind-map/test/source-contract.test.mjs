@@ -136,6 +136,27 @@ describe('Mind Map source contract', () => {
     assert.match(model, /alignment: \$\{node\.alignment\}/u);
   });
 
+  it('exports image and DSL files with clear icons and immediate localized tooltips', async () => {
+    const [app, exports, styles, build] = await Promise.all([
+      readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8'),
+      readFile(path.join(root, 'ui', 'src', 'export.ts'), 'utf8'),
+      readFile(path.join(root, 'ui', 'styles.css'), 'utf8'),
+      readFile(path.join(root, 'scripts', 'build.mjs'), 'utf8'),
+    ]);
+
+    assert.match(app, /bridge\.exportFile\(/u);
+    assert.match(exports, /'png'.*'jpeg'.*'webp'.*'svg'.*'dsl'/su);
+    assert.match(app, /toolButton\('import-document', 'upload'/u);
+    assert.match(app, /toolButton\('export-document', 'download'/u);
+    assert.match(app, /data-tooltip=\{label\}/u);
+    assert.match(app, /colorLabel\(color\)/u);
+    assert.doesNotMatch(app, /aria-label=\{color\}/u);
+    assert.match(styles, /\[data-tooltip\]::after/u);
+    assert.match(styles, /transition-delay:\s*0s/u);
+    assert.match(build, /'upload\.png'/u);
+    assert.match(build, /'download\.png'/u);
+  });
+
   it('gives the subtree expander priority over node drag selection', async () => {
     const app = await readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8');
     const expanderHit = app.indexOf('const expander = hitExpander');

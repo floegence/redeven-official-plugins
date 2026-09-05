@@ -1,6 +1,6 @@
 {
   "name": "@redeven/official-mind-map-plugin",
-  "version": "1.0.30",
+  "version": "1.0.33",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@floegence/redevplugin-ui": "3.0.24"
+    "@floegence/redevplugin-ui": "3.0.25"
   },
   "devDependencies": {
     "esbuild": "0.25.5",

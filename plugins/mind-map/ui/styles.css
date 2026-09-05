@@ -374,7 +374,7 @@ button:disabled { cursor: not-allowed; opacity: .34; }
 
 .canvas-command-deck {
   position: absolute;
-  z-index: 2;
+  z-index: 4;
   top: 16px;
   right: 16px;
   left: 16px;
@@ -461,13 +461,102 @@ button:disabled { cursor: not-allowed; opacity: .34; }
 .icon-bilateral { --lucide-icon: url("icons/bilateral.png"); }
 .icon-right { --lucide-icon: url("icons/right.png"); }
 .icon-center { --lucide-icon: url("icons/center.png"); }
-.icon-import { --lucide-icon: url("icons/import.png"); }
-.icon-export { --lucide-icon: url("icons/export.png"); }
+.icon-upload { --lucide-icon: url("icons/upload.png"); }
+.icon-download { --lucide-icon: url("icons/download.png"); }
 .icon-duplicate { --lucide-icon: url("icons/duplicate.png"); }
 .icon-network { --lucide-icon: url("icons/network.png"); }
 .icon-text-left { --lucide-icon: url("icons/text-left.png"); }
 .icon-text-center { --lucide-icon: url("icons/text-center.png"); }
 .icon-text-right { --lucide-icon: url("icons/text-right.png"); }
+
+button[data-tooltip] { position: relative; }
+button[data-tooltip]::after {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 7px);
+  left: 50%;
+  max-width: 220px;
+  padding: 5px 8px;
+  transform: translateX(-50%);
+  border: 1px solid color-mix(in srgb, var(--redevplugin-color-border) 78%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--redevplugin-color-text) 94%, transparent);
+  color: var(--redevplugin-color-canvas);
+  box-shadow: 0 6px 18px color-mix(in srgb, #000000 22%, transparent);
+  content: attr(data-tooltip);
+  font-size: 10px;
+  font-weight: 620;
+  line-height: 1.25;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .08s ease;
+  transition-delay: 0s;
+  visibility: hidden;
+  white-space: nowrap;
+}
+button[data-tooltip]:hover:not(:disabled)::after,
+button[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+}
+button[data-tooltip][data-tooltip-placement="top"]::after {
+  top: auto;
+  bottom: calc(100% + 7px);
+}
+button[data-tooltip][data-tooltip-placement="right"]::after {
+  top: 50%;
+  left: calc(100% + 7px);
+  transform: translateY(-50%);
+}
+.export-control { position: relative; }
+.export-control .tool-button[aria-pressed="true"]::after { display: none; }
+.export-menu-scrim {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.export-format-menu {
+  position: absolute;
+  z-index: 6;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  width: 190px;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid color-mix(in srgb, var(--redevplugin-color-border) 78%, transparent);
+  border-radius: 8px;
+  background: var(--redevplugin-color-surface-elevated);
+  box-shadow: 0 14px 36px color-mix(in srgb, #000000 22%, transparent);
+}
+.export-format-button {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--redevplugin-color-text);
+  font-size: 11px;
+  text-align: left;
+}
+.export-format-button:hover,
+.export-format-button:focus-visible {
+  background: color-mix(in srgb, var(--redevplugin-color-accent) 11%, transparent);
+  outline: none;
+}
+.export-format-badge {
+  color: var(--redevplugin-color-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+  font-weight: 720;
+}
 
 .save-pill, .shortcut-pill, .color-panel {
   position: absolute;

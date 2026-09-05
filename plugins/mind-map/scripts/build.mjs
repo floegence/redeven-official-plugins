@@ -10,7 +10,7 @@ const releaseWorker = String(process.env.MIND_MAP_RELEASE_WASM ?? '').trim();
 const iconAssets = [
   'add.png', 'minus.png', 'undo.png', 'redo.png', 'child.png', 'sibling.png',
   'rename.png', 'collapse.png', 'delete.png', 'bilateral.png', 'right.png',
-  'center.png', 'import.png', 'export.png', 'duplicate.png', 'network.png',
+  'center.png', 'duplicate.png', 'network.png', 'upload.png', 'download.png',
   'text-left.png', 'text-center.png', 'text-right.png',
 ];
 
