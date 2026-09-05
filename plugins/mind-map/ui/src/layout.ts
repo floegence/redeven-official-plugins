@@ -1,4 +1,4 @@
-import type { BranchSide, MindMapDocument, MindMapNode } from './workspace-model.js';
+import type { BranchSide, MindMapDocument, MindMapNode, NodeAlignment } from './workspace-model.js';
 import { MIN_ZOOM } from './editor-ui.ts';
 import { measureNodeText, type NodeTextMetrics, type TextWidthMeasurer } from './node-text-metrics.ts';
 
@@ -21,6 +21,7 @@ export type NodeVisualKind = 'root' | 'branch' | 'topic';
 export type EdgeEndpoint = 'source' | 'target';
 export type Point = { x: number; y: number };
 export type Underline = { startX: number; endX: number; y: number };
+export type TextLineAnchor = { x: number; textAlign: NodeAlignment };
 
 const HORIZONTAL_GAP = 88;
 const VERTICAL_GAP = 20;
@@ -73,6 +74,12 @@ export function nodeVisualKind(depth: number): NodeVisualKind {
   if (depth === 0) return 'root';
   if (depth === 1) return 'branch';
   return 'topic';
+}
+
+export function textLineAnchor(node: Pick<LayoutNode, 'x' | 'width' | 'text'>, alignment: NodeAlignment): TextLineAnchor {
+  if (alignment === 'left') return { x: node.x - node.width / 2 + node.text.horizontalPadding, textAlign: 'left' };
+  if (alignment === 'right') return { x: node.x + node.width / 2 - node.text.horizontalPadding, textAlign: 'right' };
+  return { x: node.x, textAlign: 'center' };
 }
 
 export function topicUnderline(node: LayoutNode): Underline {

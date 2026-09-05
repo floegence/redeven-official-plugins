@@ -11,6 +11,7 @@ const iconAssets = [
   'add.png', 'minus.png', 'undo.png', 'redo.png', 'child.png', 'sibling.png',
   'rename.png', 'collapse.png', 'delete.png', 'bilateral.png', 'right.png',
   'center.png', 'import.png', 'export.png', 'duplicate.png', 'network.png',
+  'text-left.png', 'text-center.png', 'text-right.png',
 ];
 
 await rm(resolve(root, 'dist'), { recursive: true, force: true });

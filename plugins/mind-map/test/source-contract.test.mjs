@@ -121,6 +121,21 @@ describe('Mind Map source contract', () => {
     assert.match(editorUI, /normalizeWheelDelta/u);
   });
 
+  it('offers per-node text alignment with matching canvas and editor rendering', async () => {
+    const [app, styles, model] = await Promise.all([
+      readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8'),
+      readFile(path.join(root, 'ui', 'styles.css'), 'utf8'),
+      readFile(path.join(root, 'ui', 'src', 'workspace-model.ts'), 'utf8'),
+    ]);
+    assert.match(app, /data-redevplugin-action="set-node-alignment"/u);
+    assert.match(app, /textLineAnchor\(box, node\.alignment\)/u);
+    assert.match(app, /alignment-\$\{node\.alignment\}/u);
+    assert.match(styles, /\.alignment-button\[aria-pressed="true"\]/u);
+    assert.match(styles, /\.node-title-editor\.alignment-left textarea/u);
+    assert.match(styles, /\.node-title-editor\.alignment-right textarea/u);
+    assert.match(model, /alignment: \$\{node\.alignment\}/u);
+  });
+
   it('gives the subtree expander priority over node drag selection', async () => {
     const app = await readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8');
     const expanderHit = app.indexOf('const expander = hitExpander');
@@ -131,7 +146,7 @@ describe('Mind Map source contract', () => {
     assert.equal((app.match(/toggleCollapsed\(/gu) ?? []).length, 1);
   });
 
-  it('stores one canonical DSL payload and retains a one-time v1 migration', async () => {
+  it('stores one canonical DSL payload and retains contiguous v1 and v2 migrations', async () => {
     const [app, worker, manifest] = await Promise.all([
       readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8'),
       readFile(path.join(root, 'worker', 'src', 'lib.rs'), 'utf8'),
@@ -139,11 +154,13 @@ describe('Mind Map source contract', () => {
     ]);
     assert.match(app, /workspace_dsl: serializeWorkspaceDSL\(snapshot\)/u);
     assert.match(app, /parseWorkspaceDSL\(response\.workspace_dsl\)/u);
+    assert.match(worker, /workspace-v3\.json/u);
     assert.match(worker, /workspace-v2\.json/u);
     assert.match(worker, /workspace-v1\.json/u);
-    assert.match(worker, /migrate_legacy_state/u);
+    assert.match(worker, /migrate_v1_to_v2/u);
+    assert.match(worker, /migrate_v2_to_v3/u);
     assert.equal(manifest.storage.stores[0].schema_version, 1);
-    assert.match(worker, /const STATE_SCHEMA_VERSION: u32 = 2/u);
+    assert.match(worker, /const STATE_SCHEMA_VERSION: u32 = 3/u);
     assert.deepEqual(manifest.methods[0].response_schema.required, ['revision', 'saved_at', 'workspace_dsl']);
     assert.deepEqual(manifest.methods[1].request_schema.required, ['expected_revision', 'workspace_dsl']);
   });

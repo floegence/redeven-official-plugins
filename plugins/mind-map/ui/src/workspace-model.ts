@@ -1,6 +1,7 @@
 export type MapLayout = 'bilateral' | 'right';
 export type BranchSide = 'left' | 'right';
 export type NodeColor = 'accent' | 'blue' | 'green' | 'amber' | 'rose' | 'violet';
+export type NodeAlignment = 'left' | 'center' | 'right';
 
 export type MindMapNode = {
   id: string;
@@ -9,6 +10,7 @@ export type MindMapNode = {
   side: BranchSide;
   title: string;
   color: NodeColor;
+  alignment: NodeAlignment;
   collapsed: boolean;
 };
 
@@ -43,9 +45,11 @@ export const MAX_DOCUMENT_TITLE_LENGTH = 80;
 export const MAX_IMPORT_BYTES = 60 * 1024;
 export const MAX_WORKSPACE_DSL_UTF8_BYTES = 3_000_000;
 const COLORS: readonly NodeColor[] = ['accent', 'blue', 'green', 'amber', 'rose', 'violet'];
+const ALIGNMENTS: readonly NodeAlignment[] = ['left', 'center', 'right'];
 const LEGACY_MAX_TITLE_LENGTH = 120;
 const DOCUMENT_FIELDS = ['schema_version', 'id', 'title', 'layout', 'updated_at', 'nodes'] as const;
-const NODE_FIELDS = ['id', 'parent_id', 'order', 'side', 'title', 'color', 'collapsed'] as const;
+const NODE_FIELDS = ['id', 'parent_id', 'order', 'side', 'title', 'color', 'alignment', 'collapsed'] as const;
+const LEGACY_NODE_FIELDS = ['id', 'parent_id', 'order', 'side', 'title', 'color', 'collapsed'] as const;
 
 export function createWorkspace(seed = Date.now()): MindMapWorkspace {
   const document = createDocument(`map-${normalizeSeed(seed)}`, 'New Mind Map');
@@ -70,6 +74,7 @@ export function createDocument(id: string, title: string): MindMapDocument {
       side: 'right',
       title: 'Central topic',
       color: 'accent',
+      alignment: 'center',
       collapsed: false,
     }],
     updated_at: new Date(0).toISOString(),
@@ -137,6 +142,7 @@ export function addChild(document: MindMapDocument, parentID: string, title = 'N
     side,
     title: nodeText(title, 'New topic'),
     color: parent.parent_id === null ? colorForIndex(siblings.length + 1) : parent.color,
+    alignment: 'center',
     collapsed: false,
   };
   document.nodes.push(node);
@@ -196,6 +202,15 @@ export function setNodeColor(document: MindMapDocument, nodeID: string, color: N
   const node = requiredNode(document, nodeID);
   if (node.color === color) return false;
   node.color = color;
+  touch(document);
+  return true;
+}
+
+export function setNodeAlignment(document: MindMapDocument, nodeID: string, alignment: string): boolean {
+  if (!ALIGNMENTS.includes(alignment as NodeAlignment)) return false;
+  const node = requiredNode(document, nodeID);
+  if (node.alignment === alignment) return false;
+  node.alignment = alignment as NodeAlignment;
   touch(document);
   return true;
 }
@@ -289,7 +304,8 @@ export function validateDocument(value: unknown): MindMapDocument {
     if (!isRecord(raw) || typeof raw.id !== 'string' || !validID(raw.id) || ids.has(raw.id) ||
         !(raw.parent_id === null || typeof raw.parent_id === 'string') || !Number.isSafeInteger(raw.order) || Number(raw.order) < 0 ||
         (raw.side !== 'left' && raw.side !== 'right') || typeof raw.title !== 'string' || !validNodeText(raw.title) ||
-        !COLORS.includes(raw.color as NodeColor) || typeof raw.collapsed !== 'boolean') {
+        !COLORS.includes(raw.color as NodeColor) || !ALIGNMENTS.includes(raw.alignment as NodeAlignment) ||
+        typeof raw.collapsed !== 'boolean') {
       throw new Error('node is invalid');
     }
     ids.add(raw.id);
@@ -523,12 +539,15 @@ function validateLegacyDocument(value: unknown): MindMapDocument {
   if (!isRecord(value) || !hasExactFields(value, DOCUMENT_FIELDS)) throw new Error('legacy document is invalid');
   if (!Array.isArray(value.nodes)) throw new Error('legacy document nodes are invalid');
   for (const raw of value.nodes) {
-    if (!isRecord(raw) || !hasExactFields(raw, NODE_FIELDS) || typeof raw.title !== 'string' ||
+    if (!isRecord(raw) || !hasExactFields(raw, LEGACY_NODE_FIELDS) || typeof raw.title !== 'string' ||
         raw.title.includes('\n') || [...raw.title].length > LEGACY_MAX_TITLE_LENGTH) {
       throw new Error('legacy node is invalid');
     }
   }
-  return validateDocument(value);
+  return validateDocument({
+    ...value,
+    nodes: value.nodes.map((raw) => ({ ...(raw as Record<string, unknown>), alignment: 'center' })),
+  });
 }
 
 function hasExactFields(value: Record<string, unknown>, fields: readonly string[]): boolean {
@@ -555,6 +574,7 @@ function serializeNode(document: MindMapDocument, node: MindMapNode, depth: numb
     `${prefix}node ${JSON.stringify(node.id)}`,
     `${fieldPrefix}side: ${node.side}`,
     `${fieldPrefix}color: ${node.color}`,
+    `${fieldPrefix}alignment: ${node.alignment}`,
     `${fieldPrefix}folded: ${node.collapsed}`,
     `${fieldPrefix}text: |-`,
     ...node.title.split('\n').map((line) => `${textPrefix}${line}`),
@@ -633,6 +653,14 @@ function parseDSLNode(
   const colorLine = lines[cursor++];
   const color = colorLine?.startsWith(`${fieldPrefix}color: `) ? colorLine.slice(`${fieldPrefix}color: `.length) as NodeColor : undefined;
   if (!color || !COLORS.includes(color)) throw new Error(`invalid node color at line ${cursor}`);
+  let alignment: NodeAlignment = 'center';
+  const alignmentLine = lines[cursor];
+  if (alignmentLine?.startsWith(`${fieldPrefix}alignment: `)) {
+    const candidate = alignmentLine.slice(`${fieldPrefix}alignment: `.length) as NodeAlignment;
+    if (!ALIGNMENTS.includes(candidate)) throw new Error(`invalid node alignment at line ${cursor + 1}`);
+    alignment = candidate;
+    cursor += 1;
+  }
   const foldedLine = lines[cursor++];
   const collapsed = foldedLine === `${fieldPrefix}folded: true` ? true : foldedLine === `${fieldPrefix}folded: false` ? false : undefined;
   if (collapsed === undefined) throw new Error(`invalid folded value at line ${cursor}`);
@@ -640,7 +668,7 @@ function parseDSLNode(
   const textLines: string[] = [];
   while (cursor < lines.length && lines[cursor].startsWith(contentPrefix)) textLines.push(lines[cursor++].slice(contentPrefix.length));
   if (textLines.length === 0) throw new Error(`node text is missing at line ${cursor + 1}`);
-  const node: MindMapNode = { id, parent_id: parentID, order: parentID === null ? 0 : output.filter((candidate) => candidate.parent_id === parentID).length, side, title: textLines.join('\n'), color, collapsed };
+  const node: MindMapNode = { id, parent_id: parentID, order: parentID === null ? 0 : output.filter((candidate) => candidate.parent_id === parentID).length, side, title: textLines.join('\n'), color, alignment, collapsed };
   output.push(node);
   while (cursor < lines.length && lines[cursor].startsWith(`${fieldPrefix}node `)) {
     cursor = parseDSLNode(lines, cursor, depth + 1, id, output, ids).cursor;

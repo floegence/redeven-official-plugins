@@ -22,14 +22,25 @@ describe('Mind Map canonical DSL', () => {
       side: 'right',
       title: 'Research\n\n  details',
       color: 'blue',
+      alignment: 'right',
       collapsed: true,
     });
 
     const dsl = serializeWorkspaceDSL(workspace);
     assert.match(dsl, /^mind-map 1\nkind: workspace\nselected: "map-7"\n\nmap "map-7"/u);
-    assert.match(dsl, /      folded: true\n      text: \|-\n        Research\n        \n          details\n/u);
+    assert.match(dsl, /      color: blue\n      alignment: right\n      folded: true\n      text: \|-\n        Research\n        \n          details\n/u);
     assert.deepEqual(parseWorkspaceDSL(dsl), workspace);
     assert.equal(serializeWorkspaceDSL(parseWorkspaceDSL(dsl)), dsl);
+  });
+
+  it('upgrades DSL without alignment to centered canonical nodes', () => {
+    const current = serializeWorkspaceDSL(createWorkspace(71));
+    const legacy = current.replaceAll('    alignment: center\n', '');
+    const parsed = parseWorkspaceDSL(legacy);
+
+    assert.ok(parsed.documents[0].nodes.every((node) => node.alignment === 'center'));
+    assert.match(serializeWorkspaceDSL(parsed), /    alignment: center\n/u);
+    assert.throws(() => parseWorkspaceDSL(current.replace('alignment: center', 'alignment: justify')), /alignment/u);
   });
 
   it('exports one document as DSL and regenerates IDs when importing it', () => {
@@ -57,21 +68,24 @@ describe('Mind Map canonical DSL', () => {
 
   it('accepts legacy document JSON only as an import migration input', () => {
     const workspace = createWorkspace(10);
-    const legacy = JSON.stringify(workspace.documents[0]);
+    const legacyDocument = structuredClone(workspace.documents[0]);
+    for (const node of legacyDocument.nodes) delete node.alignment;
+    const legacy = JSON.stringify(legacyDocument);
     const parsed = parseDocumentDSL(legacy);
     assert.equal(parsed.schema_version, 'mind-map.document.v1');
+    assert.equal(parsed.nodes[0].alignment, 'center');
     assert.match(serializeDocumentDSL(parsed), /^mind-map 1/u);
     assert.throws(() => parseWorkspaceDSL(JSON.stringify(workspace)), /mind-map 1/u);
 
-    const multiline = structuredClone(workspace.documents[0]);
+    const multiline = structuredClone(legacyDocument);
     multiline.nodes[0].title = 'legacy\nnewline';
     assert.throws(() => parseDocumentDSL(JSON.stringify(multiline)), /legacy|node/u);
 
-    const oversized = structuredClone(workspace.documents[0]);
+    const oversized = structuredClone(legacyDocument);
     oversized.nodes[0].title = 'x'.repeat(121);
     assert.throws(() => parseDocumentDSL(JSON.stringify(oversized)), /legacy|node/u);
 
-    const extended = { ...structuredClone(workspace.documents[0]), unknown: true };
+    const extended = { ...structuredClone(legacyDocument), unknown: true };
     assert.throws(() => parseDocumentDSL(JSON.stringify(extended)), /legacy|document/u);
   });
 });

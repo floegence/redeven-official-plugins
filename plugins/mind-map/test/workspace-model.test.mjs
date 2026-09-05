@@ -17,6 +17,7 @@ import {
   moveNode,
   redoHistory,
   renameNode,
+  setNodeAlignment,
   setNodeColor,
   toggleCollapsed,
   undoHistory,
@@ -29,6 +30,7 @@ describe('Mind Map workspace model', () => {
     assert.equal(workspace.documents.length, 1);
     assert.equal(workspace.documents[0].nodes.length, 1);
     assert.equal(workspace.documents[0].nodes[0].parent_id, null);
+    assert.equal(workspace.documents[0].nodes[0].alignment, 'center');
     assert.equal(workspace.selected_document_id, workspace.documents[0].id);
     assert.doesNotThrow(() => validateWorkspace(workspace));
   });
@@ -124,6 +126,22 @@ describe('Mind Map workspace model', () => {
     assert.equal(greatGrandchild.color, 'rose');
   });
 
+  it('keeps text alignment independent for every node', () => {
+    const workspace = createWorkspace(42);
+    const document = workspace.documents[0];
+    const root = document.nodes[0];
+    const child = addChild(document, root.id, 'Child');
+
+    assert.equal(child.alignment, 'center');
+    assert.equal(setNodeAlignment(document, root.id, 'left'), true);
+    assert.equal(setNodeAlignment(document, child.id, 'right'), true);
+    assert.equal(root.alignment, 'left');
+    assert.equal(child.alignment, 'right');
+    assert.equal(setNodeAlignment(document, child.id, 'right'), false);
+    assert.equal(setNodeAlignment(document, child.id, 'justify'), false);
+    assert.doesNotThrow(() => validateWorkspace(workspace));
+  });
+
   it('supports document creation, duplication, deletion, and a permanent final document', () => {
     const workspace = createWorkspace(5);
     const first = workspace.documents[0];
@@ -154,6 +172,7 @@ describe('Mind Map workspace model', () => {
     assert.throws(() => importDocument('{"schema_version":"wrong"}', workspace, 100));
     const malformed = structuredClone(source);
     malformed.nodes[1].parent_id = 'missing';
+    for (const node of malformed.nodes) delete node.alignment;
     assert.throws(() => importDocument(JSON.stringify(malformed), workspace, 101), /parent/u);
     assert.throws(() => importDocument(' '.repeat(60 * 1024 + 1), workspace, 102), /import limit/u);
   });
@@ -218,5 +237,9 @@ describe('Mind Map workspace model', () => {
     const sideDrift = structuredClone(valid);
     sideDrift.documents[0].nodes.find((node) => node.id === topic.id).side = branch.side === 'left' ? 'right' : 'left';
     assert.throws(() => validateWorkspace(sideDrift), /side/u);
+
+    const alignmentDrift = structuredClone(valid);
+    alignmentDrift.documents[0].nodes[0].alignment = 'justify';
+    assert.throws(() => validateWorkspace(alignmentDrift), /node/u);
   });
 });

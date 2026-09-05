@@ -7,10 +7,12 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
 
 const STORE_ID: &str = "mind-map";
-const STATE_KEY: &str = "workspace-v2.json";
-const LEGACY_STATE_KEY: &str = "workspace-v1.json";
-const STATE_SCHEMA_VERSION: u32 = 2;
-const LEGACY_STATE_SCHEMA_VERSION: u32 = 1;
+const STATE_KEY: &str = "workspace-v3.json";
+const V2_STATE_KEY: &str = "workspace-v2.json";
+const V1_STATE_KEY: &str = "workspace-v1.json";
+const STATE_SCHEMA_VERSION: u32 = 3;
+const V2_STATE_SCHEMA_VERSION: u32 = 2;
+const V1_STATE_SCHEMA_VERSION: u32 = 1;
 const MAX_DOCUMENTS: usize = 32;
 const MAX_NODES: usize = 500;
 const MAX_DOCUMENT_TITLE: usize = 80;
@@ -49,6 +51,7 @@ struct Node {
     side: String,
     title: String,
     color: String,
+    alignment: String,
     collapsed: bool,
 }
 
@@ -63,11 +66,51 @@ struct StoredWorkspace {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct LegacyStoredWorkspace {
+struct V2StoredWorkspace {
     schema_version: u32,
     revision: u64,
     saved_at: Option<String>,
-    workspace: Workspace,
+    workspace_dsl: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct V1StoredWorkspace {
+    schema_version: u32,
+    revision: u64,
+    saved_at: Option<String>,
+    workspace: V1Workspace,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct V1Workspace {
+    schema_version: String,
+    selected_document_id: String,
+    documents: Vec<V1Document>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct V1Document {
+    schema_version: String,
+    id: String,
+    title: String,
+    layout: String,
+    nodes: Vec<V1Node>,
+    updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct V1Node {
+    id: String,
+    parent_id: Option<String>,
+    order: usize,
+    side: String,
+    title: String,
+    color: String,
+    collapsed: bool,
 }
 
 impl Default for StoredWorkspace {
@@ -98,6 +141,7 @@ fn default_workspace() -> Workspace {
                 side: "right".to_string(),
                 title: "Central topic".to_string(),
                 color: "accent".to_string(),
+                alignment: "center".to_string(),
                 collapsed: false,
             }],
             updated_at: "1970-01-01T00:00:00.000Z".to_string(),
@@ -188,10 +232,15 @@ fn load_state() -> Result<StoredWorkspace, WorkerError> {
     if let Some(bytes) = load_key(STATE_KEY)? {
         return decode_stored_state(&bytes);
     }
-    let Some(bytes) = load_key(LEGACY_STATE_KEY)? else {
+    let migrated = if let Some(bytes) = load_key(V2_STATE_KEY)? {
+        let v2 = decode_v2_state(&bytes)?;
+        migrate_v2_to_v3(&v2)?
+    } else if let Some(bytes) = load_key(V1_STATE_KEY)? {
+        let v2 = migrate_v1_to_v2(&bytes)?;
+        migrate_v2_to_v3(&v2)?
+    } else {
         return Ok(StoredWorkspace::default());
     };
-    let migrated = migrate_legacy_state(&bytes)?;
     save_state(&migrated)?;
     Ok(migrated)
 }
@@ -218,24 +267,84 @@ fn load_key(key: &str) -> Result<Option<Vec<u8>>, WorkerError> {
 
 fn decode_stored_state(bytes: &[u8]) -> Result<StoredWorkspace, WorkerError> {
     let state: StoredWorkspace = serde_json::from_slice(bytes)
-        .map_err(|error| WorkerError::hostcall(format!("decode Mind Map v2 workspace: {error}")))?;
+        .map_err(|error| WorkerError::hostcall(format!("decode Mind Map v3 workspace: {error}")))?;
     validate_stored(&state)?;
     Ok(state)
 }
 
-fn migrate_legacy_state(bytes: &[u8]) -> Result<StoredWorkspace, WorkerError> {
-    let legacy: LegacyStoredWorkspace = serde_json::from_slice(bytes).map_err(|error| {
-        WorkerError::hostcall(format!("decode legacy Mind Map workspace: {error}"))
-    })?;
-    validate_legacy_stored(&legacy)?;
+fn decode_v2_state(bytes: &[u8]) -> Result<V2StoredWorkspace, WorkerError> {
+    let state: V2StoredWorkspace = serde_json::from_slice(bytes)
+        .map_err(|error| WorkerError::hostcall(format!("decode Mind Map v2 workspace: {error}")))?;
+    validate_v2_stored(&state)?;
+    Ok(state)
+}
+
+fn migrate_v1_to_v2(bytes: &[u8]) -> Result<V2StoredWorkspace, WorkerError> {
+    let legacy: V1StoredWorkspace = serde_json::from_slice(bytes)
+        .map_err(|error| WorkerError::hostcall(format!("decode Mind Map v1 workspace: {error}")))?;
+    if legacy.schema_version != V1_STATE_SCHEMA_VERSION
+        || legacy
+            .saved_at
+            .as_ref()
+            .is_some_and(|value| value.len() > 64)
+    {
+        return Err(invalid("Mind Map v1 workspace envelope is invalid"));
+    }
+    let workspace = upgrade_v1_workspace(legacy.workspace);
+    validate_workspace(&workspace, true)?;
+    let migrated = V2StoredWorkspace {
+        schema_version: V2_STATE_SCHEMA_VERSION,
+        revision: legacy.revision,
+        saved_at: legacy.saved_at,
+        workspace_dsl: serialize_workspace_v2(&workspace),
+    };
+    validate_v2_stored(&migrated)?;
+    Ok(migrated)
+}
+
+fn migrate_v2_to_v3(legacy: &V2StoredWorkspace) -> Result<StoredWorkspace, WorkerError> {
+    validate_v2_stored(legacy)?;
+    let workspace = parse_workspace_dsl(&legacy.workspace_dsl)?;
     let migrated = StoredWorkspace {
         schema_version: STATE_SCHEMA_VERSION,
         revision: legacy.revision,
-        saved_at: legacy.saved_at,
-        workspace_dsl: serialize_workspace(&legacy.workspace),
+        saved_at: legacy.saved_at.clone(),
+        workspace_dsl: serialize_workspace(&workspace),
     };
     validate_stored(&migrated)?;
     Ok(migrated)
+}
+
+fn upgrade_v1_workspace(legacy: V1Workspace) -> Workspace {
+    Workspace {
+        schema_version: legacy.schema_version,
+        selected_document_id: legacy.selected_document_id,
+        documents: legacy
+            .documents
+            .into_iter()
+            .map(|document| Document {
+                schema_version: document.schema_version,
+                id: document.id,
+                title: document.title,
+                layout: document.layout,
+                nodes: document
+                    .nodes
+                    .into_iter()
+                    .map(|node| Node {
+                        id: node.id,
+                        parent_id: node.parent_id,
+                        order: node.order,
+                        side: node.side,
+                        title: node.title,
+                        color: node.color,
+                        alignment: "center".to_string(),
+                        collapsed: node.collapsed,
+                    })
+                    .collect(),
+                updated_at: document.updated_at,
+            })
+            .collect(),
+    }
 }
 
 fn save_state(state: &StoredWorkspace) -> Result<(), WorkerError> {
@@ -273,16 +382,21 @@ fn validate_stored(state: &StoredWorkspace) -> Result<(), WorkerError> {
     Ok(())
 }
 
-fn validate_legacy_stored(state: &LegacyStoredWorkspace) -> Result<(), WorkerError> {
-    if state.schema_version != LEGACY_STATE_SCHEMA_VERSION
+fn validate_v2_stored(state: &V2StoredWorkspace) -> Result<(), WorkerError> {
+    if state.schema_version != V2_STATE_SCHEMA_VERSION
         || state
             .saved_at
             .as_ref()
             .is_some_and(|value| value.len() > 64)
     {
-        return Err(invalid("legacy stored workspace envelope is invalid"));
+        return Err(invalid("Mind Map v2 workspace envelope is invalid"));
     }
-    validate_workspace(&state.workspace, true)
+    enforce_dsl_size(&state.workspace_dsl)?;
+    let workspace = parse_workspace_dsl(&state.workspace_dsl)?;
+    if serialize_workspace_v2(&workspace) != state.workspace_dsl {
+        return Err(invalid("Mind Map v2 workspace DSL is not canonical"));
+    }
+    Ok(())
 }
 
 fn parse_workspace_dsl(serialized: &str) -> Result<Workspace, WorkerError> {
@@ -409,6 +523,23 @@ fn parse_dsl_node(
         .ok_or_else(|| invalid(format!("invalid node color at line {}", *cursor + 1)))?
         .to_string();
     *cursor += 1;
+    let alignment_prefix = format!("{field_prefix}alignment: ");
+    let alignment = match lines
+        .get(*cursor)
+        .and_then(|line| line.strip_prefix(&alignment_prefix))
+    {
+        Some(value) if matches!(value, "left" | "center" | "right") => {
+            *cursor += 1;
+            value.to_string()
+        }
+        Some(_) => {
+            return Err(invalid(format!(
+                "invalid node alignment at line {}",
+                *cursor + 1
+            )));
+        }
+        None => "center".to_string(),
+    };
     let collapsed = match lines.get(*cursor).copied() {
         Some(line) if line == format!("{field_prefix}folded: true") => true,
         Some(line) if line == format!("{field_prefix}folded: false") => false,
@@ -446,6 +577,7 @@ fn parse_dsl_node(
         side,
         title: text_lines.join("\n"),
         color,
+        alignment,
         collapsed,
     });
     let child_prefix = format!("{field_prefix}node ");
@@ -459,6 +591,14 @@ fn parse_dsl_node(
 }
 
 fn serialize_workspace(workspace: &Workspace) -> String {
+    serialize_workspace_version(workspace, true)
+}
+
+fn serialize_workspace_v2(workspace: &Workspace) -> String {
+    serialize_workspace_version(workspace, false)
+}
+
+fn serialize_workspace_version(workspace: &Workspace, include_alignment: bool) -> String {
     let mut output = String::new();
     writeln!(output, "mind-map 1").expect("write string");
     writeln!(output, "kind: workspace").expect("write string");
@@ -473,12 +613,12 @@ fn serialize_workspace(workspace: &Workspace) -> String {
         if index > 0 {
             output.push('\n');
         }
-        serialize_map(&mut output, document);
+        serialize_map(&mut output, document, include_alignment);
     }
     output
 }
 
-fn serialize_map(output: &mut String, document: &Document) {
+fn serialize_map(output: &mut String, document: &Document, include_alignment: bool) {
     writeln!(
         output,
         "map {}",
@@ -503,10 +643,16 @@ fn serialize_map(output: &mut String, document: &Document) {
         .iter()
         .find(|node| node.parent_id.is_none())
         .expect("validated document has one root");
-    serialize_node(output, document, root, 1);
+    serialize_node(output, document, root, 1, include_alignment);
 }
 
-fn serialize_node(output: &mut String, document: &Document, node: &Node, depth: usize) {
+fn serialize_node(
+    output: &mut String,
+    document: &Document,
+    node: &Node,
+    depth: usize,
+    include_alignment: bool,
+) {
     let prefix = "  ".repeat(depth);
     let field_prefix = "  ".repeat(depth + 1);
     let text_prefix = "  ".repeat(depth + 2);
@@ -518,6 +664,9 @@ fn serialize_node(output: &mut String, document: &Document, node: &Node, depth: 
     .expect("write string");
     writeln!(output, "{field_prefix}side: {}", node.side).expect("write string");
     writeln!(output, "{field_prefix}color: {}", node.color).expect("write string");
+    if include_alignment {
+        writeln!(output, "{field_prefix}alignment: {}", node.alignment).expect("write string");
+    }
     writeln!(output, "{field_prefix}folded: {}", node.collapsed).expect("write string");
     writeln!(output, "{field_prefix}text: |-").expect("write string");
     for line in node.title.split('\n') {
@@ -530,7 +679,7 @@ fn serialize_node(output: &mut String, document: &Document, node: &Node, depth: 
         .collect::<Vec<_>>();
     children.sort_by_key(|candidate| candidate.order);
     for child in children {
-        serialize_node(output, document, child, depth + 1);
+        serialize_node(output, document, child, depth + 1, include_alignment);
     }
 }
 
@@ -583,6 +732,7 @@ fn validate_document(document: &Document, legacy: bool) -> Result<(), WorkerErro
                 node.color.as_str(),
                 "accent" | "blue" | "green" | "amber" | "rose" | "violet"
             )
+            || !matches!(node.alignment.as_str(), "left" | "center" | "right")
         {
             return Err(invalid("node is invalid"));
         }
@@ -719,6 +869,37 @@ mod tests {
         }
     }
 
+    fn v1_workspace(workspace: &Workspace) -> V1Workspace {
+        V1Workspace {
+            schema_version: workspace.schema_version.clone(),
+            selected_document_id: workspace.selected_document_id.clone(),
+            documents: workspace
+                .documents
+                .iter()
+                .map(|document| V1Document {
+                    schema_version: document.schema_version.clone(),
+                    id: document.id.clone(),
+                    title: document.title.clone(),
+                    layout: document.layout.clone(),
+                    nodes: document
+                        .nodes
+                        .iter()
+                        .map(|node| V1Node {
+                            id: node.id.clone(),
+                            parent_id: node.parent_id.clone(),
+                            order: node.order,
+                            side: node.side.clone(),
+                            title: node.title.clone(),
+                            color: node.color.clone(),
+                            collapsed: node.collapsed,
+                        })
+                        .collect(),
+                    updated_at: document.updated_at.clone(),
+                })
+                .collect(),
+        }
+    }
+
     #[test]
     fn default_workspace_is_canonical_and_valid() {
         let state = StoredWorkspace::default();
@@ -767,16 +948,18 @@ mod tests {
             side: "right".to_string(),
             title: "Preserved child".to_string(),
             color: "blue".to_string(),
+            alignment: "center".to_string(),
             collapsed: true,
         });
-        let legacy = LegacyStoredWorkspace {
+        let legacy = V1StoredWorkspace {
             schema_version: 1,
             revision: 7,
             saved_at: Some("2026-09-04T12:00:00.000Z".to_string()),
-            workspace: workspace.clone(),
+            workspace: v1_workspace(&workspace),
         };
-        let migrated = migrate_legacy_state(&serde_json::to_vec(&legacy).expect("legacy JSON"))
-            .expect("migrate legacy state");
+        let v2 = migrate_v1_to_v2(&serde_json::to_vec(&legacy).expect("legacy JSON"))
+            .expect("migrate v1 state");
+        let migrated = migrate_v2_to_v3(&v2).expect("migrate v2 state");
         assert_eq!(migrated.revision, 7);
         assert_eq!(migrated.saved_at, legacy.saved_at);
         assert_eq!(
@@ -786,9 +969,29 @@ mod tests {
     }
 
     #[test]
+    fn v2_dsl_migrates_alignment_without_changing_user_records() {
+        let mut workspace = default_workspace();
+        workspace.documents[0].nodes[0].title = "Aligned later".to_string();
+        let legacy = V2StoredWorkspace {
+            schema_version: V2_STATE_SCHEMA_VERSION,
+            revision: 11,
+            saved_at: Some("2026-09-05T12:00:00.000Z".to_string()),
+            workspace_dsl: serialize_workspace_v2(&workspace),
+        };
+
+        let migrated = migrate_v2_to_v3(&legacy).expect("migrate v2 state");
+        let parsed = parse_workspace_dsl(&migrated.workspace_dsl).expect("parse migrated state");
+        assert_eq!(migrated.revision, legacy.revision);
+        assert_eq!(migrated.saved_at, legacy.saved_at);
+        assert_eq!(parsed.documents[0].nodes[0].title, "Aligned later");
+        assert_eq!(parsed.documents[0].nodes[0].alignment, "center");
+        assert!(migrated.workspace_dsl.contains("    alignment: center\n"));
+    }
+
+    #[test]
     fn schema_drift_and_future_state_are_rejected() {
         let mut future = StoredWorkspace::default();
-        future.schema_version = 3;
+        future.schema_version = 4;
         assert_eq!(
             validate_stored(&future).expect_err("future state").code,
             "MIND_MAP_INVALID_WORKSPACE"
@@ -803,15 +1006,15 @@ mod tests {
             "MIND_MAP_INVALID_WORKSPACE"
         );
 
-        let mut legacy = LegacyStoredWorkspace {
+        let mut legacy = V1StoredWorkspace {
             schema_version: 1,
             revision: 0,
             saved_at: None,
-            workspace: default_workspace(),
+            workspace: v1_workspace(&default_workspace()),
         };
         legacy.workspace.documents[0].nodes[0].title = "legacy\nnewline".to_string();
         assert_eq!(
-            migrate_legacy_state(&serde_json::to_vec(&legacy).expect("legacy JSON"))
+            migrate_v1_to_v2(&serde_json::to_vec(&legacy).expect("legacy JSON"))
                 .expect_err("legacy drift")
                 .code,
             "MIND_MAP_INVALID_WORKSPACE"
@@ -828,6 +1031,7 @@ mod tests {
             side: "right".to_string(),
             title: "Missing parent".to_string(),
             color: "blue".to_string(),
+            alignment: "center".to_string(),
             collapsed: false,
         });
         assert_eq!(
@@ -855,11 +1059,25 @@ mod tests {
             side: "right".to_string(),
             title: "Gap".to_string(),
             color: "blue".to_string(),
+            alignment: "center".to_string(),
             collapsed: false,
         });
         assert_eq!(
             validate_workspace(&workspace, false)
                 .expect_err("order gap")
+                .code,
+            "MIND_MAP_INVALID_WORKSPACE"
+        );
+    }
+
+    #[test]
+    fn invalid_node_alignment_is_rejected() {
+        let mut workspace = default_workspace();
+        workspace.documents[0].nodes[0].alignment = "justify".to_string();
+
+        assert_eq!(
+            validate_workspace(&workspace, false)
+                .expect_err("invalid alignment")
                 .code,
             "MIND_MAP_INVALID_WORKSPACE"
         );

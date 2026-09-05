@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { addChild, createWorkspace } from '../ui/src/workspace-model.ts';
-import { edgeAnchor, expanderCenter, fitLayoutToViewport, layoutDocument, nodeVisualKind, topicUnderline } from '../ui/src/layout.ts';
+import { edgeAnchor, expanderCenter, fitLayoutToViewport, layoutDocument, nodeVisualKind, textLineAnchor, topicUnderline } from '../ui/src/layout.ts';
 
 describe('Mind Map automatic layout', () => {
   it('keeps the root centered and distributes bilateral branches to both sides', () => {
@@ -110,6 +110,14 @@ describe('Mind Map automatic layout', () => {
     assert.equal(nodeVisualKind(1), 'branch');
     assert.equal(nodeVisualKind(2), 'topic');
     assert.equal(nodeVisualKind(8), 'topic');
+  });
+
+  it('anchors node text inside its measured padding for each alignment', () => {
+    const box = { id: 'node', x: 200, y: 40, width: 160, height: 50, depth: 1, side: 'right', text: { horizontalPadding: 18 } };
+
+    assert.deepEqual(textLineAnchor(box, 'left'), { x: 138, textAlign: 'left' });
+    assert.deepEqual(textLineAnchor(box, 'center'), { x: 200, textAlign: 'center' });
+    assert.deepEqual(textLineAnchor(box, 'right'), { x: 262, textAlign: 'right' });
   });
 
   it('keeps deep topic hit areas while placing a full-width underline below the text', () => {

@@ -14,6 +14,7 @@ import {
   expanderCenter,
   fitLayoutToViewport,
   layoutDocument,
+  textLineAnchor,
   topicUnderline,
   type DocumentLayout,
   type LayoutNode,
@@ -57,6 +58,7 @@ import {
   parseWorkspaceDSL,
   serializeWorkspaceDSL,
   selectedDocument,
+  setNodeAlignment,
   setNodeColor,
   toggleCollapsed,
   undoHistory,
@@ -65,6 +67,7 @@ import {
   type MindMapDocument,
   type MindMapNode,
   type MindMapWorkspace,
+  type NodeAlignment,
   type NodeColor,
   type WorkspaceHistory,
 } from './workspace-model.js';
@@ -100,6 +103,7 @@ const bridge = new PluginBridgeClient({ timeoutMs: 20_000 });
 const CANVAS_ID = 'map';
 const NODE_TITLE_INPUT_KEY = 'node-title-input';
 const NODE_COLORS: readonly NodeColor[] = ['accent', 'blue', 'green', 'amber', 'rose', 'violet'];
+const NODE_ALIGNMENTS: readonly NodeAlignment[] = ['left', 'center', 'right'];
 const DEFAULT_COLORS: PluginSurfaceContext['appearance']['colors'] = {
   canvas: '#f6f7fb', surface: '#ffffff', surface_elevated: '#ffffff', text: '#202532',
   text_muted: '#737b8c', border: '#dfe3eb', accent: '#5865d8', accent_text: '#ffffff',
@@ -163,6 +167,8 @@ const COPY = {
     rootCannotDelete: 'The central topic cannot be deleted.', recovered: 'Recovered copy', dropInside: 'Move inside',
     dropBefore: 'Move before', dropAfter: 'Move after', statusReady: 'Ready', zoomIn: 'Zoom in', zoomOut: 'Zoom out',
     firstBranch: 'Press Tab to shape your first branch', canvasTools: 'Map editing tools', colors: 'Topic color',
+    nodeStyle: 'Topic style', textAlignment: 'Text alignment', alignLeft: 'Align text left',
+    alignCenter: 'Center text', alignRight: 'Align text right',
     nodeActions: 'Topic actions', narrowSidebar: 'Narrow map sidebar', widenSidebar: 'Widen map sidebar',
   },
   zh: {
@@ -184,7 +190,8 @@ const COPY = {
     invalidImport: 'DSL 无效或超过支持范围。', operationFailed: '操作未能完成。', rootCannotDelete: '中心节点不能删除。',
     recovered: '恢复的副本', dropInside: '移入节点', dropBefore: '移到前面', dropAfter: '移到后面',
     statusReady: '可编辑', zoomIn: '放大', zoomOut: '缩小', firstBranch: '按 Tab 创建第一个分支',
-    canvasTools: '导图编辑工具', colors: '节点颜色',
+    canvasTools: '导图编辑工具', colors: '节点颜色', nodeStyle: '节点样式', textAlignment: '文字对齐',
+    alignLeft: '文字左对齐', alignCenter: '文字居中', alignRight: '文字右对齐',
     nodeActions: '节点操作', narrowSidebar: '收窄导图侧边栏', widenSidebar: '加宽导图侧边栏',
   },
 } as const;
@@ -209,6 +216,7 @@ bridge.onAction('center-map', () => centerMap());
 bridge.onAction('import-document', () => openModal({ kind: 'import', text: '' }));
 bridge.onAction('export-document', () => openModal({ kind: 'export', text: exportDocument(currentDocument()) }));
 bridge.onAction('set-node-color', (event) => setSelectedColor(String(event.value ?? '')));
+bridge.onAction('set-node-alignment', (event) => setSelectedAlignment(String(event.value ?? '')));
 bridge.onAction('narrow-sidebar', () => adjustSidebar(-SIDEBAR_WIDTH_STEP));
 bridge.onAction('widen-sidebar', () => adjustSidebar(SIDEBAR_WIDTH_STEP));
 bridge.onAction('cancel-modal', () => closeModal());
@@ -389,11 +397,17 @@ function view() {
           </header>
           {loadState === 'ready' ? <span key="save-state" className={saveState === 'error' || saveState === 'conflict' ? 'save-pill is-error' : saveState === 'saving' ? 'save-pill is-saving' : 'save-pill'} role="status"><span key="save-dot" className="save-dot"></span>{saveLabel()}</span> : null}
           <p key="canvas-hint" id="canvas-hint" className="shortcut-pill"><kbd key="tab-key">Tab</kbd><span key="tab-label">{t.child}</span><span key="hint-divider-1">·</span><kbd key="enter-key">Enter</kbd><span key="enter-label">{t.sibling}</span><span key="hint-divider-2">·</span><kbd key="f2-key">F2</kbd><span key="f2-label">{t.rename}</span></p>
-          <div key="color-panel" className="color-panel" aria-label={t.colors}>
-            <span key="color-label" className="color-label">{t.colors}</span>
-            {NODE_COLORS.map((color) => (
-              <button key={`color-${color}`} className={`color-button color-${color}`} type="button" value={color} aria-label={color} aria-pressed={selected.color === color} data-redevplugin-action="set-node-color"></button>
-            ))}
+          <div key="color-panel" className="color-panel" aria-label={t.nodeStyle}>
+            <div key="color-control" className="color-control" role="group" aria-label={t.colors}>
+              <span key="color-label" className="color-label">{t.colors}</span>
+              {NODE_COLORS.map((color) => (
+                <button key={`color-${color}`} className={`color-button color-${color}`} type="button" value={color} aria-label={color} aria-pressed={selected.color === color} data-redevplugin-action="set-node-color"></button>
+              ))}
+            </div>
+            <span key="style-divider" className="style-divider" aria-hidden="true"></span>
+            <div key="alignment-control" className="alignment-control" role="group" aria-label={t.textAlignment}>
+              {NODE_ALIGNMENTS.map((alignment) => alignmentButton(alignment, selected.alignment))}
+            </div>
           </div>
           {loadState === 'ready' && saveState === 'conflict' ? conflictNotice() : null}
           {loadState === 'ready' && saveState === 'error' ? errorNotice() : null}
@@ -411,6 +425,12 @@ function toolButton(action: string, icon: string, label: string, disabled = fals
 
 function sideActionButton(action: string, icon: string, label: string, disabled = false) {
   return <button key={`side-${action}`} className="side-action-button" type="button" title={label} aria-label={label} disabled={disabled} data-redevplugin-action={action}><span key={`side-${action}-icon`} className={`tool-icon lucide-icon icon-${icon}`}></span></button>;
+}
+
+function alignmentButton(alignment: NodeAlignment, selected: NodeAlignment) {
+  const t = text();
+  const label = alignment === 'left' ? t.alignLeft : alignment === 'right' ? t.alignRight : t.alignCenter;
+  return <button key={`alignment-${alignment}`} className="alignment-button" type="button" title={label} aria-label={label} aria-pressed={selected === alignment} value={alignment} data-redevplugin-action="set-node-alignment"><span key={`alignment-${alignment}-icon`} className={`alignment-icon lucide-icon icon-text-${alignment}`}></span></button>;
 }
 
 function startupOverlay() {
@@ -458,7 +478,7 @@ function nodeTitleEditorView() {
   if (!node || !box) return null;
   const placement = nodeEditorPlacement(box, viewport, cssWidth, cssHeight);
   return (
-    <form key={`node-title-editor-${node.id}`} className={`${placement.className} color-${node.color}`} autocomplete="off" data-redevplugin-action="commit-node-title">
+    <form key={`node-title-editor-${node.id}`} className={`${placement.className} color-${node.color} alignment-${node.alignment}`} autocomplete="off" data-redevplugin-action="commit-node-title">
       <textarea
         key={NODE_TITLE_INPUT_KEY}
         name="value"
@@ -703,6 +723,11 @@ function setLayout(layout: MindMapDocument['layout']): void {
 function setSelectedColor(value: string): void {
   if (!NODE_COLORS.includes(value as NodeColor)) return;
   runMutation((draft) => setNodeColor(selectedDocument(draft), selectedNodeID, value as NodeColor) ? selectedNodeID : undefined);
+}
+
+function setSelectedAlignment(value: string): void {
+  if (!NODE_ALIGNMENTS.includes(value as NodeAlignment)) return;
+  runMutation((draft) => setNodeAlignment(selectedDocument(draft), selectedNodeID, value) ? selectedNodeID : undefined);
 }
 
 function adjustSidebar(delta: number): void {
@@ -1371,11 +1396,12 @@ function drawNodes(layout: DocumentLayout): void {
           ? colors.text
           : mixColor(colors.text, accent, 0.22);
       context.font = box.text.font;
-      context.textAlign = 'center';
+      const textAnchor = textLineAnchor(box, node.alignment);
+      context.textAlign = textAnchor.textAlign;
       context.textBaseline = 'middle';
       const firstLineY = box.y + (box.depth >= 2 ? -2 : 0) - ((box.text.lines.length - 1) * box.text.lineHeight) / 2;
       for (const [lineIndex, line] of box.text.lines.entries()) {
-        context.fillText(line, box.x, firstLineY + lineIndex * box.text.lineHeight);
+        context.fillText(line, textAnchor.x, firstLineY + lineIndex * box.text.lineHeight);
       }
     }
     if (hasChildren(document, node.id)) {
@@ -1389,6 +1415,7 @@ function drawNodes(layout: DocumentLayout): void {
       context.stroke();
       context.fillStyle = accent;
       context.font = '700 10px system-ui, sans-serif';
+      context.textAlign = 'center';
       context.fillText(node.collapsed ? '+' : '−', badge.x, badge.y + 0.5);
     }
     context.restore();
