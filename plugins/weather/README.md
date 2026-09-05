@@ -12,6 +12,9 @@ Selecting a city immediately highlights that location and shows a loading
 indicator while keeping the chooser and previous forecast visible. The chooser
 closes after the new forecast arrives; a failed request preserves the previous
 weather and leaves the selection available to retry.
+City buttons remain available during loading. Further selections immediately
+update the pending indicator; only the latest selection is fetched after the
+active request finishes, and superseded responses do not change the visible city.
 
 The visual concept is inspired by Patrick Kissling's MIT-licensed
 [clock-weather-card](https://github.com/pkissling/clock-weather-card): the clock
@@ -46,7 +49,7 @@ npm test
 npm run build
 ```
 
-Version `1.0.31` is the stable release-train version. Build the unsigned official
+Version `1.0.32` is the stable release-train version. Build the unsigned official
 package from the repository root with:
 
 ```bash

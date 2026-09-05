@@ -97,12 +97,52 @@ for (const [action, key] of [['preview-location', 'major-open-preset:tokyo'], ['
     assert.equal(content(find(pending.tree, 'place-name')), 'Beijing', 'keep old weather bound to its own city');
     app.action('preview-location', { value: singapore.id });
     await flush();
-    assert.equal(app.calls.length, 1, 'suppress overlapping forecast requests');
+    assert.equal(app.calls.length, 1, 'queue city changes instead of starting parallel requests');
+    assert.equal(find(app.tree, 'major-open-preset:singapore').attributes['aria-busy'], true);
+    assert.equal(find(app.tree, key).attributes.disabled, false);
+    assert.match(content(find(app.tree, 'chooser-status')), /Singapore/u);
     pending.resolve({ location: tokyo, forecast: { ...forecast, timezone: tokyo.timezone }, favorites: [tokyo, beijing] });
     await flush();
+    assert.equal(app.calls.length, 2, 'start the queued city after the active request finishes');
+    const queued = app.calls[1];
+    assert.equal(queued.method, 'weather.forecast');
+    assert.equal(queued.input.id, singapore.id);
+    assert.equal(content(find(app.tree, 'place-name')), 'Beijing', 'keep the previous weather visible while queued city loads');
+    queued.resolve({ location: singapore, forecast: { ...forecast, timezone: singapore.timezone }, favorites: [singapore, tokyo] });
+    await flush();
     assert.equal(find(app.tree, 'location-popover'), undefined);
-    assert.equal(content(find(app.tree, 'place-name')), 'Tokyo');
+    assert.equal(content(find(app.tree, 'place-name')), 'Singapore');
     assert.equal(find(app.tree, 'refresh').attributes.disabled, false);
+  });
+}
+
+for (const fails of [false, true]) {
+  test(`latest city selection wins when the superseded request ${fails ? 'fails' : 'succeeds'}`, async () => {
+    const app = await ready();
+    app.action('preview-location', { value: tokyo.id });
+    await flush();
+    app.action('preview-location', { value: singapore.id });
+    app.action('open-location', { value: beijing.id });
+    await flush();
+    assert.equal(app.calls.length, 1);
+    assert.match(content(find(app.tree, 'chooser-status')), /Beijing/u);
+    assert.equal(find(app.tree, 'major-open-preset:singapore').attributes['aria-busy'], false);
+    assert.equal(find(app.tree, 'favorite-open-preset:beijing').attributes['aria-busy'], true);
+    assert.equal(find(app.tree, 'favorite-remove-preset:beijing').attributes.disabled, true);
+    assert.equal(find(app.tree, 'refresh').attributes.disabled, true);
+    if (fails) app.calls[0].reject(new Error('Network timeout'));
+    else app.calls[0].resolve({ location: tokyo, forecast, favorites: [tokyo, beijing] });
+    await flush();
+    assert.equal(app.calls.length, 2);
+    assert.equal(app.calls[1].input.id, beijing.id);
+    assert.ok(find(app.tree, 'location-popover'));
+    assert.equal(content(find(app.tree, 'place-name')), 'Beijing');
+    assert.doesNotMatch(find(app.tree, 'chooser-status').attributes.class, /error/u);
+    app.calls[1].resolve({ location: beijing, forecast, favorites: [beijing, tokyo] });
+    await flush();
+    assert.equal(app.calls.length, 2);
+    assert.equal(find(app.tree, 'location-popover'), undefined);
+    assert.equal(content(find(app.tree, 'place-name')), 'Beijing');
   });
 }
 
@@ -140,6 +180,7 @@ test('search result selection shows pending feedback without removing the result
   app.action('preview-location', { value: tokyo.id });
   await flush();
   assert.equal(find(app.calls[0].tree, 'result-open-preset:tokyo').attributes['aria-busy'], true);
+  assert.equal(find(app.tree, 'result-open-preset:tokyo').attributes.disabled, false);
   assert.match(content(find(app.calls[0].tree, 'chooser-status')), /Tokyo/u);
 });
 
