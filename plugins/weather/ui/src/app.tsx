@@ -58,6 +58,7 @@ const state: {
   favorites: Location[];
   results: Location[];
   selected?: Location;
+  pendingLocation?: Location;
   forecast?: Forecast;
   query: string;
   notice?: Notice;
@@ -163,7 +164,6 @@ async function previewLocation(event: PluginUIActionEvent): Promise<void> {
   if (state.busy) return;
   const location = locationForAction(event);
   if (!location) return;
-  state.chooserOpen = false;
   await loadForecast(location);
 }
 
@@ -171,7 +171,6 @@ async function openLocation(event: PluginUIActionEvent): Promise<void> {
   if (state.busy) return;
   const location = state.favorites.find((item) => item.id === String(event.value ?? ""));
   if (!location) return;
-  state.chooserOpen = false;
   await loadForecast(location);
 }
 
@@ -223,8 +222,7 @@ async function loadForecast(location: Location, options: { preserveVisible?: boo
   const preserveVisible = Boolean(options.preserveVisible && state.forecast && state.selected?.id === location.id);
   state.busy = "forecast";
   state.notice = undefined;
-  state.selected = location;
-  if (!preserveVisible) state.forecast = undefined;
+  state.pendingLocation = options.preserveVisible ? undefined : location;
   await render();
   try {
     const response = await bridge.call<PluginMethodResult<ForecastResult>>(
@@ -236,13 +234,15 @@ async function loadForecast(location: Location, options: { preserveVisible?: boo
     state.favorites = response.data.favorites;
     state.results = [];
     state.query = "";
+    if (state.pendingLocation) state.chooserOpen = false;
   } catch (error) {
     const message = preserveVisible && state.forecast
       ? translations().refreshFailed
       : friendlyError(error, "forecast");
-    state.notice = { scope: preserveVisible ? "weather" : "chooser", text: message, error: true };
+    state.notice = { scope: state.forecast && !state.chooserOpen ? "weather" : "chooser", text: message, error: true };
   } finally {
     state.busy = undefined;
+    state.pendingLocation = undefined;
     await render();
   }
 }
@@ -276,7 +276,7 @@ function view() {
 
 function locationPicker(t: WeatherTranslations, mode: "onboarding" | "popover") {
   const notice = state.notice?.scope === "chooser" ? state.notice : undefined;
-  const status = notice?.text ?? (state.busy === "forecast" ? t.loading : "");
+  const status = notice?.text ?? (state.pendingLocation ? pendingLocationLabel(t) : state.busy === "forecast" ? t.loading : "");
   return (
     <section key={`location-${mode}`} className={`location-picker location-${mode}`} aria-label={t.chooseLocation}>
       {mode === "onboarding" ? onboardingIntroduction(t) : pickerHeading(t)}
@@ -301,7 +301,8 @@ function locationPicker(t: WeatherTranslations, mode: "onboarding" | "popover") 
         </button>
       </form>
       <p key="chooser-status" className={notice?.error ? "chooser-status error" : "chooser-status"} role="status">
-        {status}
+        {state.busy === "forecast" ? <span key="chooser-loading" className="location-loading-mark" aria-hidden="true" /> : null}
+        <span key="chooser-status-text">{status}</span>
       </p>
       {state.favorites.length > 0 ? favoritePlaces(t) : <span key="favorites-empty" />}
       {state.results.length > 0 ? searchResults(t) : majorCities(t)}
@@ -322,7 +323,7 @@ function onboardingIntroduction(t: WeatherTranslations) {
 function pickerHeading(t: WeatherTranslations) {
   return (
     <div key="chooser-heading" className="chooser-heading">
-      <div key="chooser-title-copy">
+      <div key="chooser-title-copy" className="chooser-title-copy">
         <span key="chooser-overline" className="chooser-overline">{t.chooseLocation}</span>
         <strong key="chooser-title">{state.selected?.name ?? t.majorCities}</strong>
       </div>
@@ -338,7 +339,7 @@ function majorCities(t: WeatherTranslations) {
       <ul key="major-cities-list">
         {majorCitiesForLocale(state.locale).map((location) => (
           <li key={`major-${location.id}`}>
-            <button key={`major-open-${location.id}`} type="button" value={location.id} disabled={Boolean(state.busy)} data-redevplugin-action="preview-location">
+            <button key={`major-open-${location.id}`} type="button" value={location.id} disabled={Boolean(state.busy)} aria-busy={state.pendingLocation?.id === location.id} data-redevplugin-action="preview-location">
               <strong key={`major-name-${location.id}`}>{location.name}</strong>
               <span key={`major-country-${location.id}`}>{location.country}</span>
             </button>
@@ -356,7 +357,7 @@ function searchResults(t: WeatherTranslations) {
       <ul key="search-results-list">
         {state.results.map((location) => (
           <li key={`result-${location.id}`} className="search-result">
-            <button key={`result-open-${location.id}`} className="search-result-button" type="button" value={location.id} disabled={Boolean(state.busy)} data-redevplugin-action="preview-location">
+            <button key={`result-open-${location.id}`} className="search-result-button" type="button" value={location.id} disabled={Boolean(state.busy)} aria-busy={state.pendingLocation?.id === location.id} data-redevplugin-action="preview-location">
               <span key={`result-pin-${location.id}`} className="location-pin" aria-hidden="true">•</span>
               <span key={`result-copy-${location.id}`} className="location-copy">
                 <strong key={`result-name-${location.id}`}>{location.name}</strong>
@@ -384,6 +385,7 @@ function favoritePlaces(t: WeatherTranslations) {
               type="button"
               value={location.id}
               aria-pressed={state.selected?.id === location.id}
+              aria-busy={state.pendingLocation?.id === location.id}
               disabled={Boolean(state.busy)}
               data-redevplugin-action="open-location"
             >{location.name}</button>
@@ -408,8 +410,15 @@ function forecastDashboard(location: Location, forecast: Forecast, t: WeatherTra
   const current = forecast.current;
   const condition = conditionForCode(current.weather_code, current.is_day);
   const notice = state.notice?.scope === "weather" ? state.notice : undefined;
+  const showProgress = Boolean(state.pendingLocation && !state.chooserOpen);
   return (
-    <article key="forecast-dashboard" className={`forecast-dashboard condition-${condition.kind}`}>
+    <article key="forecast-dashboard" className={`forecast-dashboard condition-${condition.kind}${showProgress ? " has-progress" : ""}`}>
+      {showProgress ? (
+        <p key="weather-progress" className="weather-progress" role="status">
+          <span key="weather-progress-mark" className="location-loading-mark" aria-hidden="true" />
+          <span key="weather-progress-text">{pendingLocationLabel(t)}</span>
+        </p>
+      ) : null}
       <section key="weather-hero" className="weather-hero">
         {weatherCardControls(t)}
         <div key="clock-column" className="clock-column">
@@ -495,7 +504,7 @@ function loadingState(t: WeatherTranslations) {
 }
 
 function weatherCardControls(t: WeatherTranslations) {
-  const refreshing = state.busy === "forecast" && Boolean(state.forecast);
+  const refreshing = state.busy === "forecast" && Boolean(state.forecast) && !state.pendingLocation;
   const refreshLabel = refreshing ? t.refreshing : t.refresh;
   return (
     <div key="weather-card-controls" className="weather-card-controls">
@@ -543,6 +552,10 @@ function isFavorite(id: string): boolean {
 
 function translations(): WeatherTranslations {
   return translationsForLocale(state.locale);
+}
+
+function pendingLocationLabel(t: WeatherTranslations): string {
+  return t.loadingLocation.replace("{city}", state.pendingLocation?.name ?? "");
 }
 
 function translatedCondition(kind: ReturnType<typeof conditionForCode>["kind"]): string {

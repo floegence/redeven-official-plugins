@@ -177,6 +177,8 @@ p {
 .chooser-title-copy {
   display: grid;
   gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .chooser-overline,
@@ -498,17 +500,62 @@ p {
 }
 
 .chooser-status {
-  min-height: 14px;
-  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .chooser-status.error {
   color: var(--danger);
+}
+
+.location-loading-mark,
+.location-picker button[aria-busy="true"]::after {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 800ms linear infinite;
+}
+
+.location-picker button[aria-busy="true"] {
+  position: relative;
+  padding-right: 30px;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--surface) 90%, var(--accent));
+  color: var(--text);
+  cursor: progress;
+  opacity: 1;
+}
+
+.location-picker button[aria-busy="true"]::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 7px);
+  right: 9px;
+}
+
+.search-result-button[aria-busy="true"] .result-arrow {
+  visibility: hidden;
+}
+
+.weather-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .forecast-dashboard {
@@ -522,6 +569,10 @@ p {
   border-radius: clamp(16px, 2.5vh, 22px);
   background: var(--surface);
   box-shadow: var(--shadow);
+}
+
+.forecast-dashboard.has-progress {
+  grid-template-rows: auto minmax(126px, 0.8fr) auto minmax(190px, 1.2fr);
 }
 
 .weather-hero {
@@ -1043,6 +1094,10 @@ p {
 
   .forecast-dashboard {
     grid-template-rows: minmax(104px, 0.68fr) auto minmax(124px, 1.32fr);
+  }
+
+  .forecast-dashboard.has-progress {
+    grid-template-rows: auto minmax(104px, 0.68fr) auto minmax(124px, 1.32fr);
   }
 
   .weather-hero {

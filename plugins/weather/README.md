@@ -8,6 +8,11 @@ background. A compact location chooser includes localized major cities across
 the world, and the forecast adapts to the available surface without page
 scrolling.
 
+Selecting a city immediately highlights that location and shows a loading
+indicator while keeping the chooser and previous forecast visible. The chooser
+closes after the new forecast arrives; a failed request preserves the previous
+weather and leaves the selection available to retry.
+
 The visual concept is inspired by Patrick Kissling's MIT-licensed
 [clock-weather-card](https://github.com/pkissling/clock-weather-card): the clock
 and weather share one surface, while daily low/high ranges reveal the weekly
