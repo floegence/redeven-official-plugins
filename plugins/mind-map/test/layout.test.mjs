@@ -52,6 +52,19 @@ describe('Mind Map automatic layout', () => {
     assert.equal(document.nodes.length, 3);
   });
 
+  it('removes all root descendants while the root is collapsed', () => {
+    const document = createWorkspace(45).documents[0];
+    const root = document.nodes[0];
+    const branch = addChild(document, root.id, 'Branch');
+    addChild(document, branch.id, 'Leaf');
+    root.collapsed = true;
+
+    const layout = layoutDocument(document);
+    assert.deepEqual([...layout.nodes.keys()], [root.id]);
+    assert.equal(layout.edges.length, 0);
+    assert.equal(document.nodes.length, 3);
+  });
+
   it('gives root, branch, and deeper topics distinct visual geometry', () => {
     const document = createWorkspace(42).documents[0];
     const root = document.nodes[0];

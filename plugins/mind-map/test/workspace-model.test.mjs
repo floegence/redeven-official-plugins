@@ -47,6 +47,18 @@ describe('Mind Map workspace model', () => {
     assert.doesNotThrow(() => validateWorkspace(workspace));
   });
 
+  it('toggles the root when it has descendants', () => {
+    const workspace = createWorkspace(21);
+    const document = workspace.documents[0];
+    const root = document.nodes[0];
+    addChild(document, root.id, 'Branch');
+
+    assert.equal(toggleCollapsed(document, root.id), true);
+    assert.equal(root.collapsed, true);
+    assert.equal(toggleCollapsed(document, root.id), true);
+    assert.equal(root.collapsed, false);
+  });
+
   it('moves a subtree but rejects root, self, and descendant cycles', () => {
     const workspace = createWorkspace(3);
     const document = workspace.documents[0];

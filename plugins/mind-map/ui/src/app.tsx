@@ -87,7 +87,6 @@ type PointerGesture = {
   pointerID: number;
   kind: 'pan' | 'node';
   nodeID?: string;
-  keepsEditor?: boolean;
   startX: number;
   startY: number;
   startPanX: number;
@@ -637,7 +636,6 @@ function beginNodeTitleEdit(nodeID: string, clear = false): void {
 
 function updateNodeTitleEdit(event: PluginUIActionEvent): void {
   if (!nodeTitleEditor || (event.event !== 'input' && event.event !== 'change')) return;
-  const keepEditor = event.event === 'change' && pointer?.kind === 'pan' && pointer.keepsEditor;
   const before = currentLayout().nodes.get(nodeTitleEditor.nodeID);
   const next = String(event.value ?? '').replace(new RegExp('\\r\\n?', 'gu'), '\n');
   nodeTitleEditor.isComposing = event.isComposing;
@@ -651,7 +649,7 @@ function updateNodeTitleEdit(event: PluginUIActionEvent): void {
   revealSelection();
   void render();
   draw();
-  if (event.event === 'change' && !event.isComposing && !keepEditor) commitNodeTitleEdit();
+  if (event.event === 'change' && !event.isComposing) commitNodeTitleEdit();
 }
 
 function commitNodeTitleEdit(event?: PluginUIActionEvent): void {
@@ -995,8 +993,8 @@ function handlePointer(event: PluginCanvasPointerEvent): void {
   const world = screenToWorld(event.x, event.y);
   if (event.event === 'pointerdown') {
     if (nodeTitleEditor?.isComposing) return;
+    commitNodeTitleEdit();
     if (event.button === 2) {
-      commitNodeTitleEdit();
       pointer = undefined;
       dropTarget = undefined;
       const hit = hitNode(world.x, world.y);
@@ -1017,7 +1015,6 @@ function handlePointer(event: PluginCanvasPointerEvent): void {
     }
     const expander = hitExpander(world.x, world.y);
     if (expander) {
-      commitNodeTitleEdit();
       pointer = undefined;
       dropTarget = undefined;
       selectedNodeID = expander.id;
@@ -1027,7 +1024,6 @@ function handlePointer(event: PluginCanvasPointerEvent): void {
     }
     const hit = hitNode(world.x, world.y);
     if (hit) {
-      commitNodeTitleEdit();
       selectedNodeID = hit.id;
       pointer = {
         pointerID: event.pointerId, kind: 'node', nodeID: hit.id, startX: event.x, startY: event.y,
@@ -1038,7 +1034,7 @@ function handlePointer(event: PluginCanvasPointerEvent): void {
     } else {
       pointer = {
         pointerID: event.pointerId, kind: 'pan', startX: event.x, startY: event.y,
-        startPanX: viewport.x, startPanY: viewport.y, moved: false, keepsEditor: nodeTitleEditor !== undefined,
+        startPanX: viewport.x, startPanY: viewport.y, moved: false,
       };
     }
     return;
@@ -1058,7 +1054,6 @@ function handlePointer(event: PluginCanvasPointerEvent): void {
     if (pointer.kind === 'pan') {
       viewport.x = pointer.startPanX + event.x - pointer.startX;
       viewport.y = pointer.startPanY + event.y - pointer.startY;
-      if (pointer.keepsEditor) scheduleViewportRender();
     } else if (pointer.moved && pointer.nodeID && !isRoot(pointer.nodeID)) {
       dropTarget = findDropTarget(pointer.nodeID, world.x, world.y);
     }
@@ -1068,7 +1063,6 @@ function handlePointer(event: PluginCanvasPointerEvent): void {
   if (event.event === 'pointerup') {
     const finished = pointer;
     pointer = undefined;
-    if (finished.kind === 'pan' && !finished.moved && finished.keepsEditor) commitNodeTitleEdit();
     if (finished.kind === 'node' && finished.nodeID) {
       if (finished.moved && dropTarget && !isRoot(finished.nodeID)) {
         const target = dropTarget;

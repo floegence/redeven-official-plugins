@@ -116,8 +116,8 @@ describe('Mind Map source contract', () => {
     assert.match(app, /event\.isComposing/u);
     assert.match(app, /event\.type === 'wheel'/u);
     assert.match(app, /zoomViewportAtPoint/u);
-    assert.match(app, /keepsEditor: nodeTitleEditor !== undefined/u);
-    assert.match(app, /if \(pointer\.keepsEditor\) scheduleViewportRender\(\)/u);
+    assert.match(app, /if \(nodeTitleEditor\?\.isComposing\) return;\s*commitNodeTitleEdit\(\);/su);
+    assert.doesNotMatch(app, /keepsEditor/u);
     assert.match(editorUI, /normalizeWheelDelta/u);
   });
 

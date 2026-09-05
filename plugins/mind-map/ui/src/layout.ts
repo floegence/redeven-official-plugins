@@ -31,6 +31,7 @@ export function layoutDocument(document: MindMapDocument, editing?: EditingTitle
   if (!root) return { nodes: new Map(), edges: [] };
   const output: DocumentLayout = { nodes: new Map(), edges: [] };
   output.nodes.set(root.id, boxFor(root, 0, 0, 0, 'right', editing, measure));
+  if (root.collapsed) return output;
   const rootChildren = childrenOf(document, root.id);
   const groups: Array<{ side: BranchSide; children: MindMapNode[] }> = document.layout === 'right'
     ? [{ side: 'right', children: rootChildren }]
