@@ -40,7 +40,7 @@ dependencies = [
 
 [[package]]
 name = "redeven-official-mind-map-worker"
-version = "1.0.27"
+version = "1.0.28"
 dependencies = [
  "base64",
  "redevplugin-worker-sdk",
@@ -50,9 +50,9 @@ dependencies = [
 
 [[package]]
 name = "redevplugin-worker-sdk"
-version = "3.0.23"
+version = "3.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2aaff2d9ad90a9602acf57776fb5fcfbd81c57017a40a14672316190bde1aad4"
+checksum = "01f4f3fe09646ac94b650746258f315c6b58267b664c4b1a7062f169f942e2e3"
 dependencies = [
  "base64",
  "serde",
