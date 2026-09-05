@@ -4,7 +4,7 @@
   "channel": "stable",
   "source_type": "registry",
   "source_class": "official",
-  "generated_at": "2026-09-01T00:00:00Z",
+  "generated_at": "2026-09-05T00:00:00Z",
   "expires_at": "2026-11-21T00:00:00Z",
   "root": {
     "algorithm": "ed25519",
