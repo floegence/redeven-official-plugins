@@ -137,8 +137,11 @@ let exportMessage = '';
 let exportRendering = false;
 let locale: Locale = 'en';
 let colors = DEFAULT_COLORS;
-let canvas: OffscreenCanvas | undefined;
-let context: OffscreenCanvasRenderingContext2D | undefined;
+type DrawingCanvas = OffscreenCanvas | HTMLCanvasElement;
+type DrawingContext = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
+
+let canvas: DrawingCanvas | undefined;
+let context: DrawingContext | undefined;
 let cssWidth = 960;
 let cssHeight = 600;
 let devicePixelRatio = 1;
@@ -701,7 +704,12 @@ async function renderBitmapExport(
 ): Promise<Blob> {
   const bounds = exportLayoutBounds(layout);
   const size = bitmapExportSize(bounds);
-  const targetCanvas = new OffscreenCanvas(size.width, size.height);
+  // DOM canvases have a reliable toBlob implementation in Electron's plugin iframe.
+  // The transferred surface remains an OffscreenCanvas; only the temporary export
+  // target uses the DOM-backed path so image export works across renderer versions.
+  const targetCanvas = document.createElement('canvas');
+  targetCanvas.width = size.width;
+  targetCanvas.height = size.height;
   const targetContext = targetCanvas.getContext('2d', { alpha: false });
   if (!targetContext) throw new Error('2D export canvas is unavailable');
 
@@ -751,7 +759,12 @@ async function renderBitmapExport(
     nodeContextMenu = previous.nodeContextMenu;
     exportRendering = previous.exportRendering;
   }
-  return targetCanvas.convertToBlob({ type: mediaType, quality: mediaType === 'image/png' ? undefined : 0.92 });
+  return new Promise<Blob>((resolve, reject) => {
+    targetCanvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('Bitmap export produced no data'));
+    }, mediaType, mediaType === 'image/png' ? undefined : 0.92);
+  });
 }
 
 async function selectMap(event: PluginUIActionEvent): Promise<void> {
@@ -1909,7 +1922,7 @@ function contrastText(hex: string): string {
   return luminance > 170 ? '#202532' : '#ffffff';
 }
 
-function roundedRect(target: OffscreenCanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {
+function roundedRect(target: DrawingContext, x: number, y: number, width: number, height: number, radius: number): void {
   const r = Math.min(radius, width / 2, height / 2);
   target.beginPath();
   target.moveTo(x + r, y);
