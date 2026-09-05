@@ -127,6 +127,6 @@ describe('official plugin repository contract', () => {
     const weatherReleaseInputs = [...tracked.matchAll(/^releases\/weather\/([^/]+)\//gmu)].map((match) => match[1]);
     assert.deepEqual([...new Set(weatherReleaseInputs)], ['1.0.31']);
     const mindMapReleaseInputs = [...tracked.matchAll(/^releases\/mind-map\/([^/]+)\//gmu)].map((match) => match[1]);
-    assert.deepEqual([...new Set(mindMapReleaseInputs)], ['1.0.17', '1.0.18', '1.0.19', '1.0.20', '1.0.21', '1.0.22', '1.0.23', '1.0.24', '1.0.25', '1.0.26', '1.0.29', '1.0.30']);
+    assert.deepEqual([...new Set(mindMapReleaseInputs)], ['1.0.17', '1.0.18', '1.0.19', '1.0.20', '1.0.21', '1.0.22', '1.0.23', '1.0.24', '1.0.25', '1.0.26', '1.0.30']);
   });
 });
