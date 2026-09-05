@@ -102,6 +102,10 @@ type PointerGesture = {
   startY: number;
   startPanX: number;
   startPanY: number;
+  startWorldX?: number;
+  startWorldY?: number;
+  currentWorldX?: number;
+  currentWorldY?: number;
   moved: boolean;
 };
 type LoadResponse = { revision: number; saved_at: string | null; workspace_dsl: string };
@@ -1245,6 +1249,7 @@ function handlePointer(event: PluginCanvasPointerEvent): void {
       pointer = {
         pointerID: event.pointerId, kind: 'node', nodeID: hit.id, startX: event.x, startY: event.y,
         startPanX: viewport.x, startPanY: viewport.y, moved: false,
+        startWorldX: world.x, startWorldY: world.y, currentWorldX: world.x, currentWorldY: world.y,
       };
       void render();
       draw();
@@ -1268,6 +1273,10 @@ function handlePointer(event: PluginCanvasPointerEvent): void {
   if (event.event === 'pointermove') {
     const distance = Math.hypot(event.x - pointer.startX, event.y - pointer.startY);
     if (distance > 5) pointer.moved = true;
+    if (pointer.kind === 'node') {
+      pointer.currentWorldX = world.x;
+      pointer.currentWorldY = world.y;
+    }
     if (pointer.kind === 'pan') {
       viewport.x = pointer.startPanX + event.x - pointer.startX;
       viewport.y = pointer.startPanY + event.y - pointer.startY;
@@ -1570,49 +1579,75 @@ function drawEdges(layout: DocumentLayout): void {
 function drawNodes(layout: DocumentLayout): void {
   if (!context) return;
   const document = currentDocument();
+  const draggingID = activeDraggedNodeID();
   for (const box of layout.nodes.values()) {
     const node = document.nodes.find((candidate) => candidate.id === box.id);
     if (!node) continue;
-    const selected = node.id === selectedNodeID;
-    const isDropParent = dropTarget?.parentID === node.id;
-    context.save();
-    if (selected) drawSelectionHalo(box);
-    const accent = nodeColor(node.color);
-    if (box.depth >= 2) drawTopicNode(box, accent, selected, isDropParent);
-    else drawBlockNode(box, node, accent, selected, isDropParent);
-
-    if (nodeTitleEditor?.nodeID !== node.id) {
-      context.fillStyle = box.depth === 0
-        ? contrastText(accent)
-        : box.depth === 1
-          ? colors.text
-          : mixColor(colors.text, accent, 0.22);
-      context.font = box.text.font;
-      const textAnchor = textLineAnchor(box, node.alignment);
-      context.textAlign = textAnchor.textAlign;
-      context.textBaseline = 'middle';
-      const firstLineY = box.y + (box.depth >= 2 ? -2 : 0) - ((box.text.lines.length - 1) * box.text.lineHeight) / 2;
-      for (const [lineIndex, line] of box.text.lines.entries()) {
-        context.fillText(line, textAnchor.x, firstLineY + lineIndex * box.text.lineHeight);
-      }
-    }
-    if (!exportRendering && hasChildren(document, node.id)) {
-      const badge = expanderCenter(box);
-      context.beginPath();
-      context.arc(badge.x, badge.y, 7.5, 0, Math.PI * 2);
-      context.fillStyle = colors.surface;
-      context.fill();
-      context.lineWidth = 1.25 / viewport.zoom;
-      context.strokeStyle = withAlpha(accent, 0.68);
-      context.stroke();
-      context.fillStyle = accent;
-      context.font = '700 10px system-ui, sans-serif';
-      context.textAlign = 'center';
-      context.fillText(node.collapsed ? '+' : '−', badge.x, badge.y + 0.5);
-    }
-    context.restore();
+    const isDragging = node.id === draggingID;
+    drawNodeAt(box, node, node.id === selectedNodeID && !isDragging, dropTarget?.parentID === node.id, isDragging ? 0.2 : 1);
   }
+  if (draggingID) drawDraggedNode(layout, document, draggingID);
   if (dropTarget && pointer?.kind === 'node') drawDropLabel(layout);
+}
+
+function drawNodeAt(box: LayoutNode, node: MindMapNode, selected: boolean, isDropParent: boolean, opacity = 1): void {
+  if (!context) return;
+  context.save();
+  context.globalAlpha = opacity;
+  if (selected) drawSelectionHalo(box);
+  const accent = nodeColor(node.color);
+  if (box.depth >= 2) drawTopicNode(box, accent, selected, isDropParent);
+  else drawBlockNode(box, node, accent, selected, isDropParent);
+
+  if (nodeTitleEditor?.nodeID !== node.id) {
+    context.fillStyle = box.depth === 0
+      ? contrastText(accent)
+      : box.depth === 1
+        ? colors.text
+        : mixColor(colors.text, accent, 0.22);
+    context.font = box.text.font;
+    const textAnchor = textLineAnchor(box, node.alignment);
+    context.textAlign = textAnchor.textAlign;
+    context.textBaseline = 'middle';
+    const firstLineY = box.y + (box.depth >= 2 ? -2 : 0) - ((box.text.lines.length - 1) * box.text.lineHeight) / 2;
+    for (const [lineIndex, line] of box.text.lines.entries()) {
+      context.fillText(line, textAnchor.x, firstLineY + lineIndex * box.text.lineHeight);
+    }
+  }
+  if (!exportRendering && hasChildren(currentDocument(), node.id)) {
+    const badge = expanderCenter(box);
+    context.beginPath();
+    context.arc(badge.x, badge.y, 7.5, 0, Math.PI * 2);
+    context.fillStyle = colors.surface;
+    context.fill();
+    context.lineWidth = 1.25 / viewport.zoom;
+    context.strokeStyle = withAlpha(accent, 0.68);
+    context.stroke();
+    context.fillStyle = accent;
+    context.font = '700 10px system-ui, sans-serif';
+    context.textAlign = 'center';
+    context.fillText(node.collapsed ? '+' : '−', badge.x, badge.y + 0.5);
+  }
+  context.restore();
+}
+
+function activeDraggedNodeID(): string | undefined {
+  if (!pointer || pointer.kind !== 'node' || !pointer.moved || !pointer.nodeID || isRoot(pointer.nodeID)) return undefined;
+  return pointer.nodeID;
+}
+
+function drawDraggedNode(layout: DocumentLayout, document: MindMapDocument, nodeID: string): void {
+  if (!pointer || pointer.startWorldX === undefined || pointer.startWorldY === undefined ||
+      pointer.currentWorldX === undefined || pointer.currentWorldY === undefined) return;
+  const box = layout.nodes.get(nodeID);
+  const node = document.nodes.find((candidate) => candidate.id === nodeID);
+  if (!box || !node) return;
+  const preview: LayoutNode = {
+    ...box,
+    x: box.x + pointer.currentWorldX - pointer.startWorldX,
+    y: box.y + pointer.currentWorldY - pointer.startWorldY,
+  };
+  drawNodeAt(preview, node, true, false, 0.92);
 }
 
 function drawBlockNode(box: LayoutNode, node: MindMapNode, accent: string, selected: boolean, isDropParent: boolean): void {

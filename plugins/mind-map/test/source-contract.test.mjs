@@ -68,6 +68,9 @@ describe('Mind Map source contract', () => {
     assert.match(app, /function drawCanvasAtmosphere/u);
     assert.match(app, /createLinearGradient/u);
     assert.match(app, /function drawSelectionHalo/u);
+    assert.match(app, /function drawDraggedNode/u);
+    assert.match(app, /const draggingID = activeDraggedNodeID\(\)/u);
+    assert.match(app, /context\.globalAlpha = opacity/u);
     assert.match(app, /function drawTopicNode/u);
     assert.match(app, /topicUnderline\(box\)/u);
     assert.match(app, /edgeAnchor\(from, edge\.side, 'source'\)/u);
