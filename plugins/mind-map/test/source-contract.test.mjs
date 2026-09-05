@@ -148,10 +148,12 @@ describe('Mind Map source contract', () => {
     assert.match(exports, /'png'.*'jpeg'.*'webp'.*'svg'.*'dsl'/su);
     assert.match(app, /toolButton\('import-document', 'upload'/u);
     assert.match(app, /toolButton\('export-document', 'download'/u);
-    assert.match(app, /data-tooltip=\{label\}/u);
+    assert.doesNotMatch(app, /data-tooltip/u);
+    assert.match(app, /className="tool-button has-tooltip tooltip-bottom"/u);
     assert.match(app, /colorLabel\(color\)/u);
     assert.doesNotMatch(app, /aria-label=\{color\}/u);
-    assert.match(styles, /\[data-tooltip\]::after/u);
+    assert.match(styles, /button\.has-tooltip::after/u);
+    assert.match(styles, /content:\s*attr\(aria-label\)/u);
     assert.match(styles, /transition-delay:\s*0s/u);
     assert.match(build, /'upload\.png'/u);
     assert.match(build, /'download\.png'/u);

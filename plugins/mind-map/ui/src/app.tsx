@@ -351,7 +351,7 @@ function view() {
             <strong key="sidebar-title">{t.maps}</strong>
             <small key="sidebar-count">{workspace.documents.length} {t.documents}</small>
           </span>
-          <button key="new-document" className="icon-button create-map-button" type="button" aria-label={t.newMap} data-tooltip={t.newMap} data-tooltip-placement="bottom" data-redevplugin-action="new-document"><span key="new-document-icon" className="tool-icon lucide-icon icon-add"></span></button>
+          <button key="new-document" className="icon-button create-map-button has-tooltip tooltip-bottom" type="button" aria-label={t.newMap} data-redevplugin-action="new-document"><span key="new-document-icon" className="tool-icon lucide-icon icon-add"></span></button>
         </header>
         <div key="sidebar-section-label" className="sidebar-section-label"><span key="workspace-label">{t.workspace}</span></div>
         <ul key="document-list" className="document-list">
@@ -379,8 +379,8 @@ function view() {
           <span key="sidebar-footnote">Tab · Enter · F2</span>
         </footer>
         <div key="sidebar-resizer" className="sidebar-resizer" aria-label={`${t.narrowSidebar} / ${t.widenSidebar}`}>
-          <button key="narrow-sidebar" className="sidebar-resize-button" type="button" aria-label={t.narrowSidebar} data-tooltip={t.narrowSidebar} data-tooltip-placement="right" disabled={sidebarWidth <= MIN_SIDEBAR_WIDTH} data-redevplugin-action="narrow-sidebar"><span key="narrow-sidebar-icon" className="sidebar-resize-icon lucide-icon icon-minus"></span></button>
-          <button key="widen-sidebar" className="sidebar-resize-button" type="button" aria-label={t.widenSidebar} data-tooltip={t.widenSidebar} data-tooltip-placement="right" disabled={sidebarWidth >= MAX_SIDEBAR_WIDTH} data-redevplugin-action="widen-sidebar"><span key="widen-sidebar-icon" className="sidebar-resize-icon lucide-icon icon-add"></span></button>
+          <button key="narrow-sidebar" className="sidebar-resize-button has-tooltip tooltip-right" type="button" aria-label={t.narrowSidebar} disabled={sidebarWidth <= MIN_SIDEBAR_WIDTH} data-redevplugin-action="narrow-sidebar"><span key="narrow-sidebar-icon" className="sidebar-resize-icon lucide-icon icon-minus"></span></button>
+          <button key="widen-sidebar" className="sidebar-resize-button has-tooltip tooltip-right" type="button" aria-label={t.widenSidebar} disabled={sidebarWidth >= MAX_SIDEBAR_WIDTH} data-redevplugin-action="widen-sidebar"><span key="widen-sidebar-icon" className="sidebar-resize-icon lucide-icon icon-add"></span></button>
         </div>
       </aside>
       <section key="editor-shell" className="editor-shell">
@@ -426,7 +426,7 @@ function view() {
             <div key="color-control" className="color-control" role="group" aria-label={t.colors}>
               <span key="color-label" className="color-label">{t.colors}</span>
               {NODE_COLORS.map((color) => (
-                <button key={`color-${color}`} className={`color-button color-${color}`} type="button" value={color} aria-label={colorLabel(color)} data-tooltip={colorLabel(color)} data-tooltip-placement="top" aria-pressed={selected.color === color} data-redevplugin-action="set-node-color"></button>
+                <button key={`color-${color}`} className={`color-button color-${color} has-tooltip tooltip-top`} type="button" value={color} aria-label={colorLabel(color)} aria-pressed={selected.color === color} data-redevplugin-action="set-node-color"></button>
               ))}
             </div>
             <span key="style-divider" className="style-divider" aria-hidden="true"></span>
@@ -446,17 +446,17 @@ function view() {
 }
 
 function toolButton(action: string, icon: string, label: string, disabled = false, pressed?: boolean) {
-  return <button key={`tool-${action}`} className="tool-button" type="button" aria-label={label} data-tooltip={label} data-tooltip-placement="bottom" aria-pressed={pressed} disabled={disabled} data-redevplugin-action={action}><span key={`tool-${action}-icon`} className={`tool-icon lucide-icon icon-${icon}`}></span></button>;
+  return <button key={`tool-${action}`} className="tool-button has-tooltip tooltip-bottom" type="button" aria-label={label} aria-pressed={pressed} disabled={disabled} data-redevplugin-action={action}><span key={`tool-${action}-icon`} className={`tool-icon lucide-icon icon-${icon}`}></span></button>;
 }
 
 function sideActionButton(action: string, icon: string, label: string, disabled = false) {
-  return <button key={`side-${action}`} className="side-action-button" type="button" aria-label={label} data-tooltip={label} data-tooltip-placement="top" disabled={disabled} data-redevplugin-action={action}><span key={`side-${action}-icon`} className={`tool-icon lucide-icon icon-${icon}`}></span></button>;
+  return <button key={`side-${action}`} className="side-action-button has-tooltip tooltip-top" type="button" aria-label={label} disabled={disabled} data-redevplugin-action={action}><span key={`side-${action}-icon`} className={`tool-icon lucide-icon icon-${icon}`}></span></button>;
 }
 
 function alignmentButton(alignment: NodeAlignment, selected: NodeAlignment) {
   const t = text();
   const label = alignment === 'left' ? t.alignLeft : alignment === 'right' ? t.alignRight : t.alignCenter;
-  return <button key={`alignment-${alignment}`} className="alignment-button" type="button" aria-label={label} data-tooltip={label} data-tooltip-placement="top" aria-pressed={selected === alignment} value={alignment} data-redevplugin-action="set-node-alignment"><span key={`alignment-${alignment}-icon`} className={`alignment-icon lucide-icon icon-text-${alignment}`}></span></button>;
+  return <button key={`alignment-${alignment}`} className="alignment-button has-tooltip tooltip-top" type="button" aria-label={label} aria-pressed={selected === alignment} value={alignment} data-redevplugin-action="set-node-alignment"><span key={`alignment-${alignment}-icon`} className={`alignment-icon lucide-icon icon-text-${alignment}`}></span></button>;
 }
 
 function exportFormatMenu() {

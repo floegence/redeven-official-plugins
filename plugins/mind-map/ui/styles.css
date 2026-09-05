@@ -469,8 +469,8 @@ button:disabled { cursor: not-allowed; opacity: .34; }
 .icon-text-center { --lucide-icon: url("icons/text-center.png"); }
 .icon-text-right { --lucide-icon: url("icons/text-right.png"); }
 
-button[data-tooltip] { position: relative; }
-button[data-tooltip]::after {
+button.has-tooltip { position: relative; }
+button.has-tooltip::after {
   position: absolute;
   z-index: 20;
   top: calc(100% + 7px);
@@ -483,7 +483,7 @@ button[data-tooltip]::after {
   background: color-mix(in srgb, var(--redevplugin-color-text) 94%, transparent);
   color: var(--redevplugin-color-canvas);
   box-shadow: 0 6px 18px color-mix(in srgb, #000000 22%, transparent);
-  content: attr(data-tooltip);
+  content: attr(aria-label);
   font-size: 10px;
   font-weight: 620;
   line-height: 1.25;
@@ -494,16 +494,16 @@ button[data-tooltip]::after {
   visibility: hidden;
   white-space: nowrap;
 }
-button[data-tooltip]:hover:not(:disabled)::after,
-button[data-tooltip]:focus-visible::after {
+button.has-tooltip:hover:not(:disabled)::after,
+button.has-tooltip:focus-visible::after {
   opacity: 1;
   visibility: visible;
 }
-button[data-tooltip][data-tooltip-placement="top"]::after {
+button.has-tooltip.tooltip-top::after {
   top: auto;
   bottom: calc(100% + 7px);
 }
-button[data-tooltip][data-tooltip-placement="right"]::after {
+button.has-tooltip.tooltip-right::after {
   top: 50%;
   left: calc(100% + 7px);
   transform: translateY(-50%);
