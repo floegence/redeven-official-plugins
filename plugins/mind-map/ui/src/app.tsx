@@ -302,6 +302,7 @@ async function initialize(): Promise<void> {
     const localeChanged = locale !== nextLocale;
     locale = nextLocale;
     draw();
+    if (localeChanged && canvas) void updateCanvasAccessibility();
     if (localeChanged) void render();
   });
   await render();
@@ -319,12 +320,16 @@ async function initialize(): Promise<void> {
 }
 
 async function activateLoadedWorkspace(): Promise<void> {
-  await bridge.updateCanvasAccessibility(CANVAS_ID, {
+  await updateCanvasAccessibility();
+  await render();
+  draw();
+}
+
+function updateCanvasAccessibility(): Promise<void> {
+  return bridge.updateCanvasAccessibility(CANVAS_ID, {
     label: text().app,
     description: text().hint,
   });
-  await render();
-  draw();
 }
 
 async function showFatal(error: unknown): Promise<void> {
@@ -385,7 +390,7 @@ function view() {
       </aside>
       <section key="editor-shell" className="editor-shell">
         <div key="canvas-shell" className="canvas-shell">
-          <canvas key="map-canvas" className="map-canvas" data-redevplugin-canvas={CANVAS_ID} tabindex={0} autofocus={true} aria-label={t.app}></canvas>
+          <canvas key="map-canvas" className="map-canvas" data-redevplugin-canvas={CANVAS_ID} tabindex={0} autofocus={true} aria-label="Mind Map"></canvas>
           {loadState === 'ready' && nodeTitleEditor ? nodeTitleEditorView() : null}
           {exportMenuOpen ? <button key="export-menu-scrim" className="export-menu-scrim" type="button" tabindex={-1} aria-label={t.dismiss} data-redevplugin-action="close-export-menu"></button> : null}
           <header key="canvas-command-deck" className="canvas-command-deck">

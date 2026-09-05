@@ -159,6 +159,18 @@ describe('Mind Map source contract', () => {
     assert.match(build, /'download\.png'/u);
   });
 
+  it('updates transferred canvas accessibility outside localized UI patches', async () => {
+    const app = await readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8');
+    const canvas = app.match(/<canvas\s+key="map-canvas"[\s\S]*?><\/canvas>/u)?.[0];
+
+    assert.ok(canvas, 'map canvas must remain present');
+    assert.match(canvas, /aria-label="Mind Map"/u);
+    assert.doesNotMatch(canvas, /aria-label=\{t\.app\}/u);
+    assert.match(app, /if \(localeChanged && canvas\) void updateCanvasAccessibility\(\)/u);
+    assert.match(app, /function updateCanvasAccessibility\(\): Promise<void>/u);
+    assert.match(app, /bridge\.updateCanvasAccessibility\(CANVAS_ID, \{/u);
+  });
+
   it('gives the subtree expander priority over node drag selection', async () => {
     const app = await readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8');
     const expanderHit = app.indexOf('const expander = hitExpander');
