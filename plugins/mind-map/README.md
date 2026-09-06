@@ -11,9 +11,17 @@ ReDevPlugin KV store saves the workspace through a small Rust WASM worker.
 Optimistic revisions prevent two open surfaces from silently overwriting one
 another.
 
-The interface, icon, layout algorithm, renderer, and worker are original. The
-plugin contains no third-party visual, audio, or font assets and requests no
-network access.
+One layout button shows the target layout as a central topic with four curved
+branches. Click it to switch between both sides and right only. Its tooltip
+names the target layout in the current language.
+
+The interface, application icon, layout icons, layout algorithm, renderer, and
+worker are original. Other toolbar icons are rasterized Lucide assets. The
+plugin includes no third-party audio or fonts and requests no network access.
+
+The editable layout icons are `assets/icons/switch-bilateral.svg` and
+`assets/icons/switch-right.svg`. Their 64px PNG exports ship as CSS masks;
+regenerate each PNG with Inkscape at 64px width and height after editing its SVG.
 
 ## Design references
 

@@ -1,6 +1,6 @@
 Redeven Official Mind Map Plugin - Third-Party Notices
 
-The interface, application icon, layout algorithm, Canvas renderer, and
+The interface, application icon, layout icons, layout algorithm, Canvas renderer, and
 application logic were created for this plugin. No third-party audio or font
 assets are included.
 
@@ -9,7 +9,7 @@ Copyright (c) 2026 Lucide Icons and Contributors
 License: ISC License
 Source: https://github.com/lucide-icons/lucide
 
-The released package includes only the Lucide SVG icons used by the interface.
+The released package includes PNG exports of the Lucide icons used by the interface.
 The complete license text is included as licenses/LUCIDE-LICENSE.txt.
 
 JavaScript and Rust build dependencies retain their respective upstream

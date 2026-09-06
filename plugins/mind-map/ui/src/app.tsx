@@ -420,10 +420,8 @@ function view() {
               <div key="view-tools" className="command-cluster view-cluster">
                 {toolButton(
                   'toggle-layout',
-                  document.layout === 'bilateral' ? 'layout-bilateral' : 'layout-right',
+                  document.layout === 'bilateral' ? 'switch-right' : 'switch-bilateral',
                   document.layout === 'bilateral' ? t.switchToRight : t.switchToBilateral,
-                  false,
-                  document.layout === 'right',
                 )}
                 {toolButton('zoom-out', 'minus', t.zoomOut)}
                 <span key="zoom-readout" className="zoom-readout">{Math.round(viewport.zoom * 100)}%</span>

@@ -69,11 +69,15 @@ describe('Mind Map source contract', () => {
     assert.match(app, /bridge\.onAction\('toggle-layout'/u);
     assert.match(app, /currentDocument\(\)\.layout === 'bilateral' \? 'right' : 'bilateral'/u);
     assert.match(app, /toolButton\(\s*'toggle-layout'/u);
-    assert.match(app, /document\.layout === 'bilateral' \? 'layout-bilateral' : 'layout-right'/u);
-    assert.doesNotMatch(app, /toolButton\('(layout-bilateral|layout-right)'/u);
-    assert.match(css, /icons\/layout-bilateral\.png/u);
-    assert.match(css, /icons\/layout-right\.png/u);
-    assert.match(build, /'layout-bilateral\.png'.*'layout-right\.png'/su);
+    assert.equal([...app.matchAll(/toolButton\(\s*'toggle-layout'/gu)].length, 1);
+    assert.match(app, /document\.layout === 'bilateral' \? 'switch-right' : 'switch-bilateral'/u);
+    assert.match(app, /document\.layout === 'bilateral' \? t\.switchToRight : t\.switchToBilateral/u);
+    assert.match(app, /t\.switchToRight : t\.switchToBilateral,\s*\)/u);
+    assert.doesNotMatch(app, /toolButton\('(layout-bilateral|layout-right|switch-right|switch-bilateral)'/u);
+    assert.match(css, /icons\/switch-right\.png/u);
+    assert.match(css, /icons\/switch-bilateral\.png/u);
+    assert.doesNotMatch(css, /icons\/layout-(bilateral|right)\.png/u);
+    assert.match(build, /'switch-bilateral\.png'.*'switch-right\.png'/su);
   });
 
   it('renders a contemporary canvas hierarchy with independent colors and line-style deep topics', async () => {
