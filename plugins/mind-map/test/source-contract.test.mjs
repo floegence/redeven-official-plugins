@@ -206,10 +206,11 @@ describe('Mind Map source contract', () => {
   });
 
   it('fails closed until the saved workspace is confirmed after a runtime restart', async () => {
-    const [app, startup, styles] = await Promise.all([
+    const [app, startup, styles, entry] = await Promise.all([
       readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8'),
       readFile(path.join(root, 'ui', 'src', 'startup-load.ts'), 'utf8'),
       readFile(path.join(root, 'ui', 'styles.css'), 'utf8'),
+      readFile(path.join(root, 'ui', 'index.html'), 'utf8'),
     ]);
     assert.match(app, /if \(!await loadWorkspaceAtStartup\(\)\) return/u);
     assert.match(app, /if \(loadState !== 'ready'\) return/u);
@@ -218,6 +219,13 @@ describe('Mind Map source contract', () => {
     assert.match(startup, /STARTUP_LOAD_RETRY_DELAYS_MS = \[500, 1_000, 2_000, 4_000, 8_000\]/u);
     assert.match(app, /startup-indicator-bar/u);
     assert.match(styles, /startup-indicator span \{/u);
+    assert.doesNotMatch(app, /loadingBody|startup-card/u);
+    assert.match(app, /role=\{failed \? 'alert' : 'status'\}/u);
+    assert.match(app, /failed \? <p key="startup-message"/u);
+    assert.match(app, /data-redevplugin-action="retry-workspace-load"/u);
+    assert.match(styles, /prefers-reduced-motion: reduce/u);
+    assert.match(entry, /class="startup-indicator"/u);
+    assert.doesNotMatch(`${entry}\n${styles}`, /loading-mark|mind-map-loading|startup-card/u);
   });
 
   it('builds release WASM in the pinned Linux environment', async () => {

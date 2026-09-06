@@ -171,7 +171,6 @@ const COPY = {
     workspace: 'Workspace', documents: 'maps', topics: 'topics', selectedMap: 'Current map',
     undo: 'Undo', redo: 'Redo', bilateral: 'Both sides', right: 'Right only', child: 'Child', sibling: 'Sibling',
     collapse: 'Fold / unfold', importLabel: 'Import file', exportLabel: 'Export file', center: 'Center', loading: 'Restoring your workspace…',
-    loadingBody: 'Your saved maps will appear as soon as the local plugin runtime is ready.',
     loadFailedTitle: 'Workspace is still unavailable', loadFailed: 'Your saved data was not changed. Try loading it again.',
     saved: 'Saved', saving: 'Saving…', unsaved: 'Unsaved changes', saveFailed: 'Save failed — changes remain here',
     conflict: 'A newer workspace was saved elsewhere.', reload: 'Reload latest', recover: 'Keep mine as copy', retry: 'Retry',
@@ -198,7 +197,6 @@ const COPY = {
     workspace: '工作空间', documents: '张导图', topics: '个节点', selectedMap: '当前导图',
     undo: '撤销', redo: '重做', bilateral: '双向', right: '向右', child: '子节点', sibling: '同级节点',
     collapse: '折叠 / 展开', importLabel: '导入文件', exportLabel: '导出文件', center: '居中', loading: '正在恢复工作区…',
-    loadingBody: '本地插件运行时就绪后，将自动载入已保存的导图。',
     loadFailedTitle: '工作区暂时不可用', loadFailed: '已保存的数据没有被修改，请重新载入。',
     saved: '已保存', saving: '正在保存…', unsaved: '有未保存修改', saveFailed: '保存失败，修改仍保留在本地界面',
     conflict: '其他窗口已保存了更新版本。', reload: '载入最新版本', recover: '将我的内容保留为副本', retry: '重试',
@@ -490,7 +488,7 @@ function startupOverlay() {
   const failed = loadState === 'error';
   return (
     <div key="startup-overlay" className="startup-overlay" role={failed ? 'alert' : 'status'} aria-live="polite">
-      <div key="startup-card" className={failed ? 'startup-card is-error' : 'startup-card'}>
+      <div key="startup-content" className={failed ? 'startup-content is-error' : 'startup-content'}>
         <div key="startup-eyebrow" className="startup-eyebrow">Mind Map</div>
         {!failed ? <div key="startup-indicator" className="startup-indicator" aria-hidden="true"><span key="startup-indicator-bar"></span></div> : null}
         <strong key="startup-title">{failed ? t.loadFailedTitle : t.loading}</strong>

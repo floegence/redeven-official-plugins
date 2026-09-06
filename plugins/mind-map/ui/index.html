@@ -7,10 +7,11 @@
     <link rel="stylesheet" href="assets/styles.css">
   </head>
   <body>
-    <main class="mind-map-loading" role="status">
-      <span class="loading-mark" aria-hidden="true"></span>
-      <strong>Mind Map</strong>
-      <p>Opening your workspace…</p>
+    <main class="startup-overlay" role="status" aria-live="polite">
+      <div class="startup-content">
+        <strong>Mind Map</strong>
+        <div class="startup-indicator" aria-hidden="true"><span></span></div>
+      </div>
     </main>
     <script type="text/redevplugin-worker" src="assets/app.js"></script>
   </body>
