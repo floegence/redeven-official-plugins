@@ -141,8 +141,8 @@ let exportMessage = '';
 let exportRendering = false;
 let locale: Locale = 'en';
 let colors = DEFAULT_COLORS;
-type DrawingCanvas = OffscreenCanvas | HTMLCanvasElement;
-type DrawingContext = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
+type DrawingCanvas = OffscreenCanvas;
+type DrawingContext = OffscreenCanvasRenderingContext2D;
 
 let canvas: DrawingCanvas | undefined;
 let context: DrawingContext | undefined;
@@ -708,14 +708,10 @@ async function renderBitmapExport(
 ): Promise<Blob> {
   const bounds = exportLayoutBounds(layout);
   const size = bitmapExportSize(bounds);
-  // DOM canvases have a reliable toBlob implementation in Electron's plugin iframe.
-  // The transferred surface remains an OffscreenCanvas; only the temporary export
-  // target uses the DOM-backed path so image export works across renderer versions.
-  const targetCanvas = document.createElement('canvas');
-  targetCanvas.width = size.width;
-  targetCanvas.height = size.height;
-  const targetContext = targetCanvas.getContext('2d', { alpha: false });
-  if (!targetContext) throw new Error('2D export canvas is unavailable');
+  if (!canvas || !context) throw new Error('2D export canvas is unavailable');
+  const targetCanvas = canvas;
+  const originalWidth = targetCanvas.width;
+  const originalHeight = targetCanvas.height;
 
   const previous = {
     canvas,
@@ -732,6 +728,10 @@ async function renderBitmapExport(
     exportRendering,
   };
   try {
+    targetCanvas.width = size.width;
+    targetCanvas.height = size.height;
+    const targetContext = targetCanvas.getContext('2d', { alpha: false });
+    if (!targetContext) throw new Error('2D export canvas is unavailable');
     canvas = targetCanvas;
     context = targetContext;
     cssWidth = size.width;
@@ -749,7 +749,10 @@ async function renderBitmapExport(
     nodeContextMenu = undefined;
     exportRendering = true;
     draw();
+    return await targetCanvas.convertToBlob({ type: mediaType, quality: mediaType === 'image/png' ? undefined : 0.92 });
   } finally {
+    targetCanvas.width = originalWidth;
+    targetCanvas.height = originalHeight;
     canvas = previous.canvas;
     context = previous.context;
     cssWidth = previous.cssWidth;
@@ -762,13 +765,8 @@ async function renderBitmapExport(
     dropTarget = previous.dropTarget;
     nodeContextMenu = previous.nodeContextMenu;
     exportRendering = previous.exportRendering;
+    draw();
   }
-  return new Promise<Blob>((resolve, reject) => {
-    targetCanvas.toBlob((blob) => {
-      if (blob) resolve(blob);
-      else reject(new Error('Bitmap export produced no data'));
-    }, mediaType, mediaType === 'image/png' ? undefined : 0.92);
-  });
 }
 
 async function selectMap(event: PluginUIActionEvent): Promise<void> {

@@ -158,8 +158,8 @@ describe('Mind Map source contract', () => {
     assert.match(styles, /button\.has-tooltip::after/u);
     assert.match(styles, /content:\s*attr\(aria-label\)/u);
     assert.match(styles, /transition-delay:\s*0s/u);
-    assert.match(app, /document\.createElement\('canvas'\)/u);
-    assert.match(app, /targetCanvas\.toBlob\(/u);
+    assert.match(app, /targetCanvas\.convertToBlob\(/u);
+    assert.doesNotMatch(app, /document\.createElement\('canvas'\)/u);
     assert.match(build, /'upload\.png'/u);
     assert.match(build, /'download\.png'/u);
   });
