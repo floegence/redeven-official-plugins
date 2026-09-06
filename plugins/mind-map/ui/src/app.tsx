@@ -169,7 +169,7 @@ const COPY = {
   en: {
     app: 'Mind Map', maps: 'Maps', newMap: 'New map', rename: 'Rename', duplicate: 'Duplicate', remove: 'Delete',
     workspace: 'Workspace', documents: 'maps', topics: 'topics', selectedMap: 'Current map',
-    undo: 'Undo', redo: 'Redo', bilateral: 'Both sides', right: 'Right only', child: 'Child', sibling: 'Sibling',
+    undo: 'Undo', redo: 'Redo', switchToBilateral: 'Switch to both sides', switchToRight: 'Switch to right only', child: 'Child', sibling: 'Sibling',
     collapse: 'Fold / unfold', importLabel: 'Import file', exportLabel: 'Export file', center: 'Center', loading: 'Restoring your workspace…',
     loadFailedTitle: 'Workspace is still unavailable', loadFailed: 'Your saved data was not changed. Try loading it again.',
     saved: 'Saved', saving: 'Saving…', unsaved: 'Unsaved changes', saveFailed: 'Save failed — changes remain here',
@@ -195,7 +195,7 @@ const COPY = {
   zh: {
     app: '思维导图', maps: '导图', newMap: '新建', rename: '重命名', duplicate: '复制', remove: '删除',
     workspace: '工作空间', documents: '张导图', topics: '个节点', selectedMap: '当前导图',
-    undo: '撤销', redo: '重做', bilateral: '双向', right: '向右', child: '子节点', sibling: '同级节点',
+    undo: '撤销', redo: '重做', switchToBilateral: '切换为双向布局', switchToRight: '切换为向右布局', child: '子节点', sibling: '同级节点',
     collapse: '折叠 / 展开', importLabel: '导入文件', exportLabel: '导出文件', center: '居中', loading: '正在恢复工作区…',
     loadFailedTitle: '工作区暂时不可用', loadFailed: '已保存的数据没有被修改，请重新载入。',
     saved: '已保存', saving: '正在保存…', unsaved: '有未保存修改', saveFailed: '保存失败，修改仍保留在本地界面',
@@ -226,8 +226,10 @@ bridge.onAction('duplicate-document', () => runMutation((draft) => duplicateDocu
 bridge.onAction('delete-document', () => requestDeleteDocument());
 bridge.onAction('undo', () => undo());
 bridge.onAction('redo', () => redo());
-bridge.onAction('layout-bilateral', () => setLayout('bilateral'));
-bridge.onAction('layout-right', () => setLayout('right'));
+bridge.onAction('toggle-layout', () => {
+  const nextLayout = currentDocument().layout === 'bilateral' ? 'right' : 'bilateral';
+  setLayout(nextLayout);
+});
 bridge.onAction('add-child', () => addSelectedChild());
 bridge.onAction('add-sibling', () => addSelectedSibling());
 bridge.onAction('rename-node', () => requestRenameNode());
@@ -416,8 +418,13 @@ function view() {
                 {toolButton('delete-node', 'delete', t.remove, selected.parent_id === null)}
               </div>
               <div key="view-tools" className="command-cluster view-cluster">
-                {toolButton('layout-bilateral', 'bilateral', t.bilateral, false, document.layout === 'bilateral')}
-                {toolButton('layout-right', 'right', t.right, false, document.layout === 'right')}
+                {toolButton(
+                  'toggle-layout',
+                  document.layout === 'bilateral' ? 'layout-bilateral' : 'layout-right',
+                  document.layout === 'bilateral' ? t.switchToRight : t.switchToBilateral,
+                  false,
+                  document.layout === 'right',
+                )}
                 {toolButton('zoom-out', 'minus', t.zoomOut)}
                 <span key="zoom-readout" className="zoom-readout">{Math.round(viewport.zoom * 100)}%</span>
                 {toolButton('zoom-in', 'add', t.zoomIn)}

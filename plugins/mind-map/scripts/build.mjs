@@ -9,7 +9,7 @@ const cargo = process.platform === 'win32' ? 'cargo.exe' : 'cargo';
 const releaseWorker = String(process.env.MIND_MAP_RELEASE_WASM ?? '').trim();
 const iconAssets = [
   'add.png', 'minus.png', 'undo.png', 'redo.png', 'child.png', 'sibling.png',
-  'rename.png', 'collapse.png', 'delete.png', 'bilateral.png', 'right.png',
+  'rename.png', 'collapse.png', 'delete.png', 'layout-bilateral.png', 'layout-right.png',
   'center.png', 'duplicate.png', 'network.png', 'upload.png', 'download.png',
   'text-left.png', 'text-center.png', 'text-right.png',
 ];

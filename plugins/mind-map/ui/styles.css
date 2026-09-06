@@ -412,8 +412,8 @@ button:disabled { cursor: not-allowed; opacity: .34; }
 .icon-rename { --lucide-icon: url("icons/rename.png"); }
 .icon-collapse { --lucide-icon: url("icons/collapse.png"); }
 .icon-delete { --lucide-icon: url("icons/delete.png"); }
-.icon-bilateral { --lucide-icon: url("icons/bilateral.png"); }
-.icon-right { --lucide-icon: url("icons/right.png"); }
+.icon-layout-bilateral { --lucide-icon: url("icons/layout-bilateral.png"); }
+.icon-layout-right { --lucide-icon: url("icons/layout-right.png"); }
 .icon-center { --lucide-icon: url("icons/center.png"); }
 .icon-upload { --lucide-icon: url("icons/upload.png"); }
 .icon-download { --lucide-icon: url("icons/download.png"); }

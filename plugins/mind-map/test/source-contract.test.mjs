@@ -60,6 +60,22 @@ describe('Mind Map source contract', () => {
     assert.doesNotMatch(app, /className="toolbar"/u);
   });
 
+  it('uses one accessible button to toggle between bilateral and right-only layouts', async () => {
+    const [app, css, build] = await Promise.all([
+      readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8'),
+      readFile(path.join(root, 'ui', 'styles.css'), 'utf8'),
+      readFile(path.join(root, 'scripts', 'build.mjs'), 'utf8'),
+    ]);
+    assert.match(app, /bridge\.onAction\('toggle-layout'/u);
+    assert.match(app, /currentDocument\(\)\.layout === 'bilateral' \? 'right' : 'bilateral'/u);
+    assert.match(app, /toolButton\(\s*'toggle-layout'/u);
+    assert.match(app, /document\.layout === 'bilateral' \? 'layout-bilateral' : 'layout-right'/u);
+    assert.doesNotMatch(app, /toolButton\('(layout-bilateral|layout-right)'/u);
+    assert.match(css, /icons\/layout-bilateral\.png/u);
+    assert.match(css, /icons\/layout-right\.png/u);
+    assert.match(build, /'layout-bilateral\.png'.*'layout-right\.png'/su);
+  });
+
   it('renders a contemporary canvas hierarchy with independent colors and line-style deep topics', async () => {
     const [app, layout] = await Promise.all([
       readFile(path.join(root, 'ui', 'src', 'app.tsx'), 'utf8'),
