@@ -1,0 +1,9 @@
+{
+  "schema_version": "redevplugin.external_signer_response.v1",
+  "request_id": "e0c3518b78ad011116806ed9e6186ede18b181e016059aa880382d6bdddd0d60",
+  "usage": "redevplugin.release-signing.revocation-document.v1",
+  "key_id": "redeven_official_signing_2026_08",
+  "signing_preimage_sha256": "0a5968d6080593b2438bcbff8830e48fc2abe4681b47bd00f74c14b41b82848e",
+  "algorithm": "ed25519",
+  "signature": "tasDHsvLfOuDA+BhIFffbwkMiOVJyrpY8MUATNgShrHg0ony3Yo3IE1Nq6vXwf9hJqJsbNZx+Y5bOro1/tPXBg=="
+}
