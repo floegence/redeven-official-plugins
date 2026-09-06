@@ -482,11 +482,12 @@ function startupOverlay() {
   const t = text();
   const failed = loadState === 'error';
   return (
-    <div key="startup-overlay" className="startup-overlay" role={failed ? 'alert' : 'status'}>
+    <div key="startup-overlay" className="startup-overlay" role={failed ? 'alert' : 'status'} aria-live="polite">
       <div key="startup-card" className={failed ? 'startup-card is-error' : 'startup-card'}>
-        <span key="startup-mark" className="startup-mark" aria-hidden="true"><span key="startup-core"></span></span>
+        <div key="startup-eyebrow" className="startup-eyebrow">Mind Map</div>
+        {!failed ? <div key="startup-indicator" className="startup-indicator" aria-hidden="true"><span key="startup-indicator-bar"></span></div> : null}
         <strong key="startup-title">{failed ? t.loadFailedTitle : t.loading}</strong>
-        <p key="startup-message">{failed ? loadMessage || t.loadFailed : t.loadingBody}</p>
+        {failed ? <p key="startup-message">{loadMessage || t.loadFailed}</p> : null}
         {failed ? <button key="retry-workspace-load" type="button" data-redevplugin-action="retry-workspace-load">{t.retry}</button> : null}
       </div>
     </div>
