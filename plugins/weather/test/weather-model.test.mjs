@@ -84,3 +84,12 @@ describe('weather presentation model', () => {
     }
   });
 });
+
+it('plots forecast-local clock hours without compressing missing observations', async () => {
+  const { chartPoints } = await import('../ui/src/weather-chart.ts');
+  assert.deepEqual(chartPoints([
+    { time: '2026-09-10T00:00', value: 10 },
+    { time: '2026-09-10T12:00', value: 20 },
+    { time: '2026-09-10T23:00', value: 15 },
+  ], 230, 100, 10, 20), [{ x: 0, y: 100 }, { x: 120, y: 0 }, { x: 230, y: 50 }]);
+});

@@ -1,8 +1,10 @@
+import { drawWeatherChart } from "./weather-chart.js";
 import {
   PluginBridgeClient,
   PluginBridgeError,
   type PluginMethodResult,
   type PluginUIActionEvent,
+  type PluginCanvasSurface,
 } from "@floegence/redevplugin-ui/plugin";
 import {
   conditionForCode,
@@ -35,6 +37,16 @@ type ForecastDay = {
   precipitation_probability: number;
   sunrise: string;
   sunset: string;
+  precipitation_sum?: number | null;
+};
+
+type ForecastHour = CurrentWeather & {
+  precipitation_probability: number;
+  wind_direction: number | null;
+  wind_gusts: number | null;
+  pressure: number | null;
+  visibility: number | null;
+  uv_index: number | null;
 };
 
 type Forecast = {
@@ -43,12 +55,27 @@ type Forecast = {
   source: "network" | "saved";
   current: CurrentWeather;
   days: ForecastDay[];
+  hourly?: ForecastHour[];
 };
 
-type StateLoad = { favorites: Location[]; selected: Location | null; forecast: Forecast | null };
+type LocationSummary = {
+  location_id: string;
+  current: CurrentWeather;
+  today: ForecastDay | null;
+};
+type StateLoad = {
+  location_summaries?: LocationSummary[];
+  favorites: Location[];
+  selected: Location | null;
+  forecast: Forecast | null;
+};
 type LocationsResult = { locations: Location[] };
 type FavoritesResult = { favorites: Location[] };
-type ForecastResult = { location: Location; forecast: Forecast; favorites: Location[] };
+type ForecastResult = {
+  location: Location;
+  forecast: Forecast;
+  favorites: Location[];
+};
 type BusyState = "initial" | "search" | "forecast" | "remove";
 type Notice = { scope: "chooser" | "weather"; text: string; error?: boolean };
 
@@ -66,6 +93,11 @@ const state: {
   busy?: BusyState;
   now: Date;
   chooserOpen: boolean;
+  sidebarCollapsed: boolean;
+  detail?: string;
+  detailDay: number;
+  apparent: boolean;
+  cityForecasts: Record<string, Pick<Forecast, "current" | "days">>;
 } = {
   locale: "en-US",
   favorites: [],
@@ -74,9 +106,23 @@ const state: {
   busy: "initial",
   now: new Date(),
   chooserOpen: false,
+  sidebarCollapsed: false,
+  detailDay: 0,
+  apparent: false,
+  cityForecasts: {},
 };
 
+let chartSurface: PluginCanvasSurface | undefined;
+let chartReady = false;
+let stopChartInput: (() => void) | undefined;
 let disposed = false;
+
+function resetChart() {
+  chartSurface = undefined;
+  chartReady = false;
+  stopChartInput?.();
+  stopChartInput = undefined;
+}
 let clockTimer: ReturnType<typeof setInterval> | undefined;
 let renderQueue = Promise.resolve();
 
@@ -87,9 +133,41 @@ bridge.onAction("remove-location", (event) => void removeLocation(event));
 bridge.onAction("refresh-weather", () => void refreshWeather());
 bridge.onAction("clear-search", () => void clearSearch());
 bridge.onAction("toggle-location-chooser", () => void toggleLocationChooser());
+bridge.onAction("toggle-sidebar", () => {
+  state.sidebarCollapsed = !state.sidebarCollapsed;
+  void render();
+});
+bridge.onAction("open-detail", (event) => {
+  if (!metricItems().some((item) => item.id === event.value)) return;
+  state.detail = String(event.value);
+  state.detailDay = 0;
+  void render();
+});
+bridge.onAction("open-day", (event) => {
+  const day = Number(event.value);
+  if (!Number.isInteger(day) || !state.forecast?.days[day]) return;
+  state.detail = "temperature";
+  state.detailDay = day;
+  void render();
+});
+bridge.onAction("detail-day", (event) => {
+  const day = Number(event.value);
+  if (!Number.isInteger(day) || !state.forecast?.days[day]) return;
+  state.detailDay = day;
+  void render();
+});
+bridge.onAction("detail-temperature", (event) => {
+  state.apparent = event.value === "apparent";
+  void render();
+});
+bridge.onAction("close-detail", () => {
+  state.detail = undefined;
+  void render();
+});
 bridge.onLifecycle((event) => {
   if (event.type !== "dispose") return;
   disposed = true;
+  resetChart();
   if (clockTimer !== undefined) clearInterval(clockTimer);
 });
 
@@ -105,16 +183,31 @@ async function initialize(): Promise<void> {
   });
   clockTimer = setInterval(() => {
     const next = new Date();
-    if (next.getMinutes() === state.now.getMinutes() && next.getHours() === state.now.getHours()) return;
+    if (
+      next.getMinutes() === state.now.getMinutes() &&
+      next.getHours() === state.now.getHours()
+    )
+      return;
     state.now = next;
     void render();
   }, 15_000);
   await render();
   try {
-    const response = await bridge.call<PluginMethodResult<StateLoad>>("weather.state.load", {});
+    const response = await bridge.call<PluginMethodResult<StateLoad>>(
+      "weather.state.load",
+      {},
+    );
     state.favorites = response.data.favorites;
     state.selected = response.data.selected ?? undefined;
     state.forecast = response.data.forecast ?? undefined;
+    for (const summary of response.data.location_summaries ?? []) {
+      state.cityForecasts[summary.location_id] = {
+        current: summary.current,
+        days: summary.today ? [summary.today] : [],
+      };
+    }
+    if (state.selected && state.forecast)
+      state.cityForecasts[state.selected.id] = state.forecast;
     state.busy = undefined;
     if (response.data.selected) {
       await render();
@@ -124,7 +217,11 @@ async function initialize(): Promise<void> {
     }
   } catch (error) {
     state.busy = undefined;
-    state.notice = { scope: "chooser", text: friendlyError(error, "load"), error: true };
+    state.notice = {
+      scope: "chooser",
+      text: friendlyError(error, "load"),
+      error: true,
+    };
     await render();
   }
 }
@@ -149,12 +246,17 @@ async function searchLocations(event: PluginUIActionEvent): Promise<void> {
       { query, language },
     );
     state.results = response.data.locations;
-    state.notice = state.results.length === 0
-      ? { scope: "chooser", text: translations().noResults }
-      : undefined;
+    state.notice =
+      state.results.length === 0
+        ? { scope: "chooser", text: translations().noResults }
+        : undefined;
   } catch (error) {
     state.results = [];
-    state.notice = { scope: "chooser", text: friendlyError(error, "search"), error: true };
+    state.notice = {
+      scope: "chooser",
+      text: friendlyError(error, "search"),
+      error: true,
+    };
   } finally {
     state.busy = undefined;
     await render();
@@ -168,7 +270,9 @@ async function previewLocation(event: PluginUIActionEvent): Promise<void> {
 }
 
 async function openLocation(event: PluginUIActionEvent): Promise<void> {
-  const location = state.favorites.find((item) => item.id === String(event.value ?? ""));
+  const location = state.favorites.find(
+    (item) => item.id === String(event.value ?? ""),
+  );
   if (!location) return;
   await loadForecast(location);
 }
@@ -192,7 +296,11 @@ async function removeLocation(event: PluginUIActionEvent): Promise<void> {
     );
     state.favorites = response.data.favorites;
   } catch (error) {
-    state.notice = { scope: "chooser", text: friendlyError(error, "remove"), error: true };
+    state.notice = {
+      scope: "chooser",
+      text: friendlyError(error, "remove"),
+      error: true,
+    };
   } finally {
     state.busy = undefined;
     await render();
@@ -216,7 +324,10 @@ async function toggleLocationChooser(): Promise<void> {
   await render();
 }
 
-async function loadForecast(location: Location, options: { preserveVisible?: boolean } = {}): Promise<void> {
+async function loadForecast(
+  location: Location,
+  options: { preserveVisible?: boolean } = {},
+): Promise<void> {
   if (state.busy === "forecast") {
     state.queuedLocation = location;
     state.pendingLocation = location;
@@ -225,7 +336,11 @@ async function loadForecast(location: Location, options: { preserveVisible?: boo
     return;
   }
   if (state.busy) return;
-  const preserveVisible = Boolean(options.preserveVisible && state.forecast && state.selected?.id === location.id);
+  const preserveVisible = Boolean(
+    options.preserveVisible &&
+      state.forecast &&
+      state.selected?.id === location.id,
+  );
   state.busy = "forecast";
   state.notice = undefined;
   state.pendingLocation = options.preserveVisible ? undefined : location;
@@ -238,16 +353,23 @@ async function loadForecast(location: Location, options: { preserveVisible?: boo
     if (state.queuedLocation) return;
     state.selected = response.data.location;
     state.forecast = response.data.forecast;
+    state.cityForecasts[response.data.location.id] = response.data.forecast;
+    state.detail = undefined;
     state.favorites = response.data.favorites;
     state.results = [];
     state.query = "";
     if (state.pendingLocation) state.chooserOpen = false;
   } catch (error) {
     if (state.queuedLocation) return;
-    const message = preserveVisible && state.forecast
-      ? translations().refreshFailed
-      : friendlyError(error, "forecast");
-    state.notice = { scope: state.forecast && !state.chooserOpen ? "weather" : "chooser", text: message, error: true };
+    const message =
+      preserveVisible && state.forecast
+        ? translations().refreshFailed
+        : friendlyError(error, "forecast");
+    state.notice = {
+      scope: state.forecast && !state.chooserOpen ? "weather" : "chooser",
+      text: message,
+      error: true,
+    };
   } finally {
     const queuedLocation = state.queuedLocation;
     state.busy = undefined;
@@ -261,38 +383,88 @@ async function loadForecast(location: Location, options: { preserveVisible?: boo
 function render(): Promise<void> {
   renderQueue = renderQueue
     .catch(() => undefined)
-    .then(() => disposed ? undefined : bridge.render(view()));
+    .then(async () => {
+      if (disposed) return;
+      await bridge.render(view());
+      await renderDetailChart();
+    });
   return renderQueue;
 }
 
 function view() {
   const t = translations();
   return (
-    <main key="weather-root" className="weather-app">
-      {state.chooserOpen && state.forecast ? locationPicker(t, "popover") : null}
+    <main
+      key="weather-root"
+      lang={state.locale}
+      className={`weather-app sky-${conditionForCode(state.forecast?.current.weather_code ?? 3, state.forecast?.current.is_day ?? true).kind}${state.sidebarCollapsed ? " sidebar-collapsed" : ""}${state.forecast?.current.is_day === false ? " weather-night" : ""}`}
+    >
+      <div key="sky" className="weather-sky" aria-hidden="true">
+        <span key="cloud-one" className="cloud cloud-one" />
+        <span key="cloud-two" className="cloud cloud-two" />
+        <span key="precipitation" className="sky-precipitation" />
+      </div>
+      {state.forecast ? citySidebar(t) : null}
+      <div
+        key="weather-content"
+        className="weather-content"
+        aria-hidden={state.detail ? true : undefined}
+      >
+        {state.chooserOpen && state.forecast
+          ? locationPicker(t, "popover")
+          : null}
 
-      {state.forecast && state.selected
-        ? forecastDashboard(state.selected, state.forecast, t)
-        : state.busy === "initial"
-          ? loadingState(t)
-          : locationPicker(t, "onboarding")}
+        {state.forecast && state.selected
+          ? forecastDashboard(state.selected, state.forecast, t)
+          : state.busy === "initial"
+            ? loadingState(t)
+            : locationPicker(t, "onboarding")}
 
-      <footer key="footer" className="footer">
-        <span key="source">{t.poweredBy}</span>
-        <span key="privacy">{t.secureBroker}</span>
-      </footer>
+        <footer key="footer" className="footer">
+          <span key="source">{t.poweredBy}</span>
+          <span key="observation">
+            {state.forecast
+              ? `${state.forecast.source === "saved" ? copy("Saved forecast", "缓存预报") + " · " : ""}${state.forecast.current.time.replace("T", " ")} · ${state.forecast.timezone}`
+              : ""}
+          </span>
+        </footer>
+      </div>
+      {weatherDetail(t)}
     </main>
   );
 }
 
-function locationPicker(t: WeatherTranslations, mode: "onboarding" | "popover") {
+function locationPicker(
+  t: WeatherTranslations,
+  mode: "onboarding" | "popover",
+) {
   const notice = state.notice?.scope === "chooser" ? state.notice : undefined;
-  const status = notice?.text ?? (state.pendingLocation ? pendingLocationLabel(t) : state.busy === "forecast" ? t.loading : "");
+  const status =
+    notice?.text ??
+    (state.pendingLocation
+      ? pendingLocationLabel(t)
+      : state.busy === "forecast"
+        ? t.loading
+        : "");
   return (
-    <section key={`location-${mode}`} className={`location-picker location-${mode}`} aria-label={t.chooseLocation}>
+    <section
+      key={`location-${mode}`}
+      className={`location-picker location-${mode}`}
+      aria-label={t.chooseLocation}
+      data-redevplugin-escape-action={
+        mode === "popover" ? "toggle-location-chooser" : undefined
+      }
+    >
       {mode === "onboarding" ? onboardingIntroduction(t) : pickerHeading(t)}
-      <form key="search-form" className="search-form" data-redevplugin-action="search-location" autoComplete="off">
-        <label key="search-label" className="sr-only" htmlFor="weather-query">{t.searchPlaceholder}</label>
+      <form
+        key="search-form"
+        className="search-form"
+        data-redevplugin-action="search-location"
+        autoComplete="off"
+      >
+        <label key="search-label" className="sr-only" htmlFor="weather-query">
+          {t.searchPlaceholder}
+        </label>
         <input
           key="search-input"
           id="weather-query"
@@ -305,17 +477,47 @@ function locationPicker(t: WeatherTranslations, mode: "onboarding" | "popover") 
           autoComplete="off"
         />
         {state.query ? (
-          <button key="clear-search" className="clear-button" type="button" title={t.remove} aria-label={t.remove} data-redevplugin-action="clear-search">×</button>
-        ) : <span key="clear-search-placeholder" />}
-        <button key="search-submit" className="primary-button" type="submit" disabled={Boolean(state.busy)}>
+          <button
+            key="clear-search"
+            className="clear-button"
+            type="button"
+            title={t.remove}
+            aria-label={t.remove}
+            data-redevplugin-action="clear-search"
+          >
+            ×
+          </button>
+        ) : (
+          <span key="clear-search-placeholder" />
+        )}
+        <button
+          key="search-submit"
+          className="primary-button"
+          type="submit"
+          disabled={Boolean(state.busy)}
+        >
           {state.busy === "search" ? t.searching : t.search}
         </button>
       </form>
-      <p key="chooser-status" className={notice?.error ? "chooser-status error" : "chooser-status"} role="status">
-        {state.busy === "forecast" ? <span key="chooser-loading" className="location-loading-mark" aria-hidden="true" /> : null}
+      <p
+        key="chooser-status"
+        className={notice?.error ? "chooser-status error" : "chooser-status"}
+        role="status"
+      >
+        {state.busy === "forecast" ? (
+          <span
+            key="chooser-loading"
+            className="location-loading-mark"
+            aria-hidden="true"
+          />
+        ) : null}
         <span key="chooser-status-text">{status}</span>
       </p>
-      {state.favorites.length > 0 ? favoritePlaces(t) : <span key="favorites-empty" />}
+      {state.favorites.length > 0 ? (
+        favoritePlaces(t)
+      ) : (
+        <span key="favorites-empty" />
+      )}
       {state.results.length > 0 ? searchResults(t) : majorCities(t)}
     </section>
   );
@@ -324,7 +526,9 @@ function locationPicker(t: WeatherTranslations, mode: "onboarding" | "popover") 
 function onboardingIntroduction(t: WeatherTranslations) {
   return (
     <div key="onboarding-introduction" className="onboarding-introduction">
-      <span key="onboarding-overline" className="chooser-overline">{t.chooseLocation}</span>
+      <span key="onboarding-overline" className="chooser-overline">
+        {t.chooseLocation}
+      </span>
       <h2 key="onboarding-title">{t.onboardingTitle}</h2>
       <p key="onboarding-body">{t.onboardingBody}</p>
     </div>
@@ -335,24 +539,51 @@ function pickerHeading(t: WeatherTranslations) {
   return (
     <div key="chooser-heading" className="chooser-heading">
       <div key="chooser-title-copy" className="chooser-title-copy">
-        <span key="chooser-overline" className="chooser-overline">{t.chooseLocation}</span>
-        <strong key="chooser-title">{state.selected?.name ?? t.majorCities}</strong>
+        <span key="chooser-overline" className="chooser-overline">
+          {t.chooseLocation}
+        </span>
+        <strong key="chooser-title">
+          {state.selected?.name ?? t.majorCities}
+        </strong>
       </div>
-      <button key="chooser-close" className="chooser-close" type="button" aria-label={t.closeLocationPicker} data-redevplugin-action="toggle-location-chooser">×</button>
+      <button
+        key="chooser-close"
+        className="chooser-close"
+        type="button"
+        aria-label={t.closeLocationPicker}
+        data-redevplugin-action="toggle-location-chooser"
+      >
+        ×
+      </button>
     </div>
   );
 }
 
 function majorCities(t: WeatherTranslations) {
   return (
-    <section key="major-cities" className="major-cities" aria-label={t.majorCities}>
-      <span key="major-cities-label" className="chooser-section-label">{t.majorCities}</span>
+    <section
+      key="major-cities"
+      className="major-cities"
+      aria-label={t.majorCities}
+    >
+      <span key="major-cities-label" className="chooser-section-label">
+        {t.majorCities}
+      </span>
       <ul key="major-cities-list">
         {majorCitiesForLocale(state.locale).map((location) => (
           <li key={`major-${location.id}`}>
-            <button key={`major-open-${location.id}`} type="button" value={location.id} disabled={Boolean(state.busy && state.busy !== "forecast")} aria-busy={state.pendingLocation?.id === location.id} data-redevplugin-action="preview-location">
+            <button
+              key={`major-open-${location.id}`}
+              type="button"
+              value={location.id}
+              disabled={Boolean(state.busy && state.busy !== "forecast")}
+              aria-busy={state.pendingLocation?.id === location.id}
+              data-redevplugin-action="preview-location"
+            >
               <strong key={`major-name-${location.id}`}>{location.name}</strong>
-              <span key={`major-country-${location.id}`}>{location.country}</span>
+              <span key={`major-country-${location.id}`}>
+                {location.country}
+              </span>
             </button>
           </li>
         ))}
@@ -363,18 +594,51 @@ function majorCities(t: WeatherTranslations) {
 
 function searchResults(t: WeatherTranslations) {
   return (
-    <section key="search-results" className="search-results" aria-label={t.search}>
-      <span key="search-results-label" className="chooser-section-label">{t.search}</span>
+    <section
+      key="search-results"
+      className="search-results"
+      aria-label={t.search}
+    >
+      <span key="search-results-label" className="chooser-section-label">
+        {t.search}
+      </span>
       <ul key="search-results-list">
         {state.results.map((location) => (
           <li key={`result-${location.id}`} className="search-result">
-            <button key={`result-open-${location.id}`} className="search-result-button" type="button" value={location.id} disabled={Boolean(state.busy && state.busy !== "forecast")} aria-busy={state.pendingLocation?.id === location.id} data-redevplugin-action="preview-location">
-              <span key={`result-pin-${location.id}`} className="location-pin" aria-hidden="true">•</span>
-              <span key={`result-copy-${location.id}`} className="location-copy">
-                <strong key={`result-name-${location.id}`}>{location.name}</strong>
-                <span key={`result-place-${location.id}`}>{locationSubtitle(location)}</span>
+            <button
+              key={`result-open-${location.id}`}
+              className="search-result-button"
+              type="button"
+              value={location.id}
+              disabled={Boolean(state.busy && state.busy !== "forecast")}
+              aria-busy={state.pendingLocation?.id === location.id}
+              data-redevplugin-action="preview-location"
+            >
+              <span
+                key={`result-pin-${location.id}`}
+                className="location-pin"
+                aria-hidden="true"
+              >
+                •
               </span>
-              <span key={`result-arrow-${location.id}`} className="result-arrow" aria-hidden="true">→</span>
+              <span
+                key={`result-copy-${location.id}`}
+                className="location-copy"
+              >
+                <strong key={`result-name-${location.id}`}>
+                  {location.name}
+                </strong>
+                <span key={`result-place-${location.id}`}>
+                  {locationSubtitle(location)}
+                </span>
+              </span>
+              <span
+                key={`result-arrow-${location.id}`}
+                className="result-arrow"
+                aria-hidden="true"
+              >
+                →
+              </span>
             </button>
           </li>
         ))}
@@ -386,7 +650,9 @@ function searchResults(t: WeatherTranslations) {
 function favoritePlaces(t: WeatherTranslations) {
   return (
     <nav key="favorites" className="favorites" aria-label={t.favorites}>
-      <span key="favorites-label" className="favorites-label">{t.favorites}</span>
+      <span key="favorites-label" className="favorites-label">
+        {t.favorites}
+      </span>
       <ul key="favorites-list">
         {state.favorites.map((location) => (
           <li key={`favorite-${location.id}`}>
@@ -399,7 +665,9 @@ function favoritePlaces(t: WeatherTranslations) {
               aria-busy={state.pendingLocation?.id === location.id}
               disabled={Boolean(state.busy && state.busy !== "forecast")}
               data-redevplugin-action="open-location"
-            >{location.name}</button>
+            >
+              {location.name}
+            </button>
             <button
               key={`favorite-remove-${location.id}`}
               className="favorite-remove"
@@ -409,7 +677,9 @@ function favoritePlaces(t: WeatherTranslations) {
               aria-label={`${t.remove} ${location.name}`}
               disabled={Boolean(state.busy)}
               data-redevplugin-action="remove-location"
-            >×</button>
+            >
+              ×
+            </button>
           </li>
         ))}
       </ul>
@@ -417,97 +687,800 @@ function favoritePlaces(t: WeatherTranslations) {
   );
 }
 
-function forecastDashboard(location: Location, forecast: Forecast, t: WeatherTranslations) {
-  const current = forecast.current;
-  const condition = conditionForCode(current.weather_code, current.is_day);
-  const notice = state.notice?.scope === "weather" ? state.notice : undefined;
-  const showProgress = Boolean(state.pendingLocation && !state.chooserOpen);
+function copy(en: string, zh: string): string {
+  return state.locale === "zh-CN" ? zh : en;
+}
+
+function weatherIcon(code: number, day = true, key = "icon") {
+  const condition = conditionForCode(code, day);
   return (
-    <article key="forecast-dashboard" className={`forecast-dashboard condition-${condition.kind}${showProgress ? " has-progress" : ""}`}>
-      {showProgress ? (
+    <span
+      key={key}
+      className={`weather-icon icon-${condition.kind}`}
+      role="img"
+      aria-label={translatedCondition(condition.kind)}
+    >
+      <span key={`${key}-sun`} className="icon-sun" />
+      <span key={`${key}-cloud`} className="icon-cloud" />
+      <span key={`${key}-drops`} className="icon-drops" />
+    </span>
+  );
+}
+
+function citySidebar(t: WeatherTranslations) {
+  return (
+    <aside
+      key="city-sidebar"
+      className="city-sidebar"
+      aria-label={t.favorites}
+      aria-hidden={state.detail ? true : undefined}
+    >
+      <div key="sidebar-toolbar" className="sidebar-toolbar">
+        <span key="sidebar-title">{copy("Weather", "天气")}</span>
+        <button
+          key="sidebar-close"
+          type="button"
+          className="plain-button"
+          aria-label={copy("Hide sidebar", "隐藏边栏")}
+          data-redevplugin-action="toggle-sidebar"
+        >
+          ◧
+        </button>
+      </div>
+      <button
+        key="sidebar-search"
+        type="button"
+        className="sidebar-search"
+        data-redevplugin-action="toggle-location-chooser"
+      >
+        ⌕　{t.searchPlaceholder}
+      </button>
+      <nav key="city-list" className="city-list">
+        {state.favorites.map((location) => {
+          const forecast = state.cityForecasts[location.id];
+          return (
+            <button
+              key={`sidebar-${location.id}`}
+              type="button"
+              value={location.id}
+              title={
+                forecast
+                  ? `${copy("Observed", "观测时间")} ${forecast.current.time.replace("T", " ")}`
+                  : undefined
+              }
+              className={`city-card sky-${conditionForCode(forecast?.current.weather_code ?? 3, forecast?.current.is_day ?? true).kind}${forecast?.current.is_day === false ? " weather-night" : ""}`}
+              aria-pressed={state.selected?.id === location.id}
+              aria-busy={state.pendingLocation?.id === location.id}
+              data-redevplugin-action="open-location"
+            >
+              <strong key={`city-name-${location.id}`}>{location.name}</strong>
+              <time key={`city-time-${location.id}`}>
+                {formatTime(state.now, location.timezone)}
+              </time>
+              <span
+                key={`city-temperature-${location.id}`}
+                className="city-temperature"
+              >
+                {forecast ? degrees(forecast.current.temperature) : "—"}
+              </span>
+              <span
+                key={`city-condition-${location.id}`}
+                className="city-condition"
+              >
+                {forecast
+                  ? translatedCondition(
+                      conditionForCode(
+                        forecast.current.weather_code,
+                        forecast.current.is_day,
+                      ).kind,
+                    )
+                  : location.country}
+              </span>
+              <span key={`city-range-${location.id}`} className="city-range">
+                {forecast?.days[0]
+                  ? `${t.high} ${degrees(forecast.days[0].temperature_max)} ${t.low} ${degrees(forecast.days[0].temperature_min)}`
+                  : ""}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+    </aside>
+  );
+}
+
+function upcomingHours(forecast: Forecast) {
+  // Provider timestamps are local wall times in the forecast timezone, not browser time.
+  return (forecast.hourly ?? [])
+    .filter((hour) => hour.time >= forecast.current.time.slice(0, 13) + ":00")
+    .slice(0, 24);
+}
+
+function forecastDashboard(
+  location: Location,
+  forecast: Forecast,
+  t: WeatherTranslations,
+) {
+  const current = forecast.current;
+  const notice = state.notice?.scope === "weather" ? state.notice : undefined;
+  const hours = upcomingHours(forecast);
+  return (
+    <article key="forecast-dashboard" className="forecast-dashboard">
+      {weatherCardControls(t)}
+      {state.pendingLocation && !state.chooserOpen ? (
         <p key="weather-progress" className="weather-progress" role="status">
-          <span key="weather-progress-mark" className="location-loading-mark" aria-hidden="true" />
-          <span key="weather-progress-text">{pendingLocationLabel(t)}</span>
+          <span key="progress-mark" className="location-loading-mark" />
+          {pendingLocationLabel(t)}
         </p>
       ) : null}
-      <section key="weather-hero" className="weather-hero">
-        {weatherCardControls(t)}
-        <div key="clock-column" className="clock-column">
-          <div key="place-heading" className="place-heading">
-            <div key="place-copy">
-              <p key="place-overline" className="overline">{locationSubtitle(location)}</p>
-              <h2 key="place-name">{location.name}</h2>
-            </div>
-          </div>
-          <time key="local-time" className="local-time" dateTime={state.now.toISOString()}>{formatTime(state.now, location.timezone)}</time>
-          <p key="local-date" className="local-date">{formatDate(state.now, location.timezone)}</p>
-        </div>
-        <div key="current-column" className="current-column">
-          <span key="condition-symbol" className="condition-symbol" role="img" aria-label={translatedCondition(condition.kind)}>{condition.symbol}</span>
-          <div key="temperature-copy" className="temperature-copy">
-            <span key="current-temperature" className="current-temperature">{degrees(current.temperature)}</span>
-            <span key="condition-label" className="condition-label">{translatedCondition(condition.kind)}</span>
-          </div>
-        </div>
-        {notice ? (
-          <p key="weather-alert" className="weather-alert" role={notice.error ? "alert" : "status"}>{notice.text}</p>
+      <header key={`weather-hero-${location.id}`} className="weather-hero">
+        <h2 key="place-name">{location.name}</h2>
+        <span key="current-temperature" className="current-temperature">
+          {degrees(current.temperature)}
+        </span>
+        <p key="hero-range" className="hero-range">
+          {forecast.days[0] ? (
+            <span key="hero-range-values">
+              <span key="hero-high-label" className="range-label">
+                {t.high}
+              </span>{" "}
+              {degrees(forecast.days[0].temperature_max)}{" "}
+              <span key="hero-low-label" className="range-label">
+                {t.low}
+              </span>{" "}
+              {degrees(forecast.days[0].temperature_min)}
+            </span>
+          ) : (
+            ""
+          )}
+        </p>
+        <p key="condition-label" className="condition-label">
+          {translatedCondition(
+            conditionForCode(current.weather_code, current.is_day).kind,
+          )}
+        </p>
+      </header>
+      {notice ? (
+        <p
+          key="weather-alert"
+          className="weather-alert"
+          role={notice.error ? "alert" : "status"}
+        >
+          {notice.text}
+        </p>
+      ) : null}
+      <div key="weather-grid" className="weather-grid">
+        {hours.length ? (
+          <section
+            key="hourly"
+            className="glass-card hourly-card"
+            aria-label={copy("Hourly forecast", "每小时天气预报")}
+          >
+            <h3 key="hourly-title">
+              ◷ {copy("Hourly forecast", "每小时天气预报")}
+            </h3>
+            <ol key="hourly-list" className="hourly-list">
+              {hours.map((hour, index) => (
+                <li key={`hour-${hour.time}`}>
+                  <button
+                    key={`hour-button-${hour.time}`}
+                    type="button"
+                    value={String(
+                      forecast.days.findIndex((day) =>
+                        hour.time.startsWith(day.date),
+                      ),
+                    )}
+                    data-redevplugin-action="open-day"
+                  >
+                    <span key={`hour-label-${hour.time}`}>
+                      {index === 0
+                        ? copy("Now", "现在")
+                        : `${Number(hour.time.slice(11, 13))}${copy(":00", "时")}`}
+                    </span>
+                    {weatherIcon(
+                      index === 0 ? current.weather_code : hour.weather_code,
+                      index === 0 ? current.is_day : hour.is_day,
+                      `hour-icon-${hour.time}`,
+                    )}
+                    <strong key={`hour-temperature-${hour.time}`}>
+                      {degrees(
+                        index === 0 ? current.temperature : hour.temperature,
+                      )}
+                    </strong>
+                    {hour.precipitation_probability >= 20 ? (
+                      <small key={`hour-rain-${hour.time}`}>
+                        {Math.round(hour.precipitation_probability)}%
+                      </small>
+                    ) : null}
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </section>
         ) : null}
-      </section>
-
-      <section key="metrics" className="metrics" aria-label={t.detailsLabel}>
-        {metric("feels-like", t.feelsLike, degrees(current.apparent_temperature))}
-        {metric("humidity", t.humidity, `${Math.round(current.humidity)}%`)}
-        {metric("wind", t.wind, `${Math.round(current.wind_speed)} km/h`)}
-        {metric("rain", t.precipitation, `${Math.round(forecast.days[0]?.precipitation_probability ?? 0)}%`)}
-      </section>
-
-      <section key="weekly-forecast" className="weekly-forecast" aria-label={t.forecastLabel}>
-        <div key="forecast-heading" className="section-heading">
-          <h3 key="forecast-title">{t.forecastTitle}</h3>
-          <span key="forecast-zone">{forecast.timezone_abbreviation || forecast.timezone}</span>
-        </div>
-        <ol key="forecast-list" className="forecast-list">
-          {forecast.days.map((day, index) => forecastRow(day, index, forecast, t))}
-        </ol>
-      </section>
+        <section
+          key="weekly-forecast"
+          className="glass-card weekly-forecast"
+          aria-label={t.forecastLabel}
+        >
+          <h3 key="forecast-title">
+            ▦{" "}
+            {forecast.days.length === 10
+              ? t.forecastTitle
+              : copy(
+                  `${forecast.days.length}-day forecast`,
+                  `${forecast.days.length}日天气预报`,
+                )}
+          </h3>
+          <ol key="forecast-list" className="forecast-list">
+            {forecast.days.map((day, index) =>
+              forecastRow(day, index, forecast, t),
+            )}
+          </ol>
+        </section>
+        {metricItems().map((item) => (
+          <button
+            key={`metric-${item.id}`}
+            type="button"
+            className={`glass-card metric metric-${item.id}`}
+            value={item.id}
+            data-redevplugin-action="open-detail"
+            aria-label={`${item.label}: ${item.value}`}
+          >
+            <span key={`metric-label-${item.id}`} className="card-label">
+              {item.symbol} {item.label}
+            </span>
+            <strong key={`metric-value-${item.id}`} className="metric-value">
+              {item.value}
+            </strong>
+            {metricIllustration(item.id)}
+            <span key={`metric-note-${item.id}`} className="metric-note">
+              {item.note}
+            </span>
+          </button>
+        ))}
+      </div>
     </article>
   );
 }
 
-function forecastRow(day: ForecastDay, index: number, forecast: Forecast, t: WeatherTranslations) {
-  const condition = conditionForCode(day.weather_code, true);
+function forecastRow(
+  day: ForecastDay,
+  index: number,
+  forecast: Forecast,
+  t: WeatherTranslations,
+) {
   const range = temperatureRangeClasses(
     forecast.days,
     day,
     index === 0 ? forecast.current.temperature : undefined,
   );
   return (
-    <li key={`day-${day.date}`} className={index === 0 ? "forecast-row today" : "forecast-row"}>
-      <span key={`day-label-${day.date}`} className="day-label">{index === 0 ? t.today : formatForecastDay(day.date)}</span>
-      <span key={`day-icon-${day.date}`} className="forecast-icon" role="img" aria-label={translatedCondition(condition.kind)}>{condition.symbol}</span>
-      <span key={`day-rain-${day.date}`} className="rain-chance">{Math.round(day.precipitation_probability)}%</span>
-      <span key={`day-low-${day.date}`} className="temperature-low" aria-label={`${t.low} ${degrees(day.temperature_min)}`}>{degrees(day.temperature_min)}</span>
-      <span key={`day-track-${day.date}`} className="range-track" aria-hidden="true">
-        <span key={`day-range-${day.date}`} className={`temperature-range ${range.startClass} ${range.widthClass}`} />
-        {range.currentClass ? <span key={`day-current-${day.date}`} className={`current-dot ${range.currentClass}`} /> : <span key={`day-current-empty-${day.date}`} />}
-      </span>
-      <span key={`day-high-${day.date}`} className="temperature-high" aria-label={`${t.high} ${degrees(day.temperature_max)}`}>{degrees(day.temperature_max)}</span>
+    <li key={`day-${day.date}`}>
+      <button
+        key={`day-button-${day.date}`}
+        type="button"
+        className="forecast-row"
+        value={String(index)}
+        data-redevplugin-action="open-day"
+      >
+        <span key={`day-label-${day.date}`} className="day-label">
+          {index === 0 ? t.today : formatForecastDay(day.date)}
+        </span>
+        <span key={`day-condition-${day.date}`} className="day-condition">
+          {weatherIcon(day.weather_code, true, `day-icon-${day.date}`)}
+          {day.precipitation_probability >= 20 ? (
+            <small key={`day-rain-${day.date}`}>
+              {Math.round(day.precipitation_probability)}%
+            </small>
+          ) : null}
+        </span>
+        <span key={`day-low-${day.date}`} className="temperature-low">
+          {degrees(day.temperature_min)}
+        </span>
+        <span
+          key={`day-track-${day.date}`}
+          className="range-track"
+          aria-hidden="true"
+        >
+          <span
+            key={`day-range-${day.date}`}
+            className={`temperature-range ${range.startClass} ${range.widthClass}`}
+          />
+          {range.currentClass ? (
+            <span
+              key={`day-current-${day.date}`}
+              className={`current-dot ${range.currentClass}`}
+            />
+          ) : null}
+        </span>
+        <span key={`day-high-${day.date}`} className="temperature-high">
+          {degrees(day.temperature_max)}
+        </span>
+      </button>
     </li>
   );
 }
 
-function metric(key: string, label: string, value: string) {
+type MetricItem = {
+  id: string;
+  label: string;
+  symbol: string;
+  value: string;
+  note: string;
+};
+function metricItems(): MetricItem[] {
+  const forecast = state.forecast;
+  if (!forecast) return [];
+  const t = translations();
+  const current = forecast.current;
+  const day = forecast.days[0];
+  const hour = upcomingHours(forecast)[0];
+  const result: MetricItem[] = [
+    {
+      id: "wind",
+      label: t.wind,
+      symbol: "≋",
+      value: `${Math.round(current.wind_speed)} km/h`,
+      note:
+        hour?.wind_gusts != null
+          ? copy(
+              `Gusts ${Math.round(hour.wind_gusts)} km/h`,
+              `阵风 ${Math.round(hour.wind_gusts)} 公里/时`,
+            )
+          : copy("Current wind speed", "当前风速"),
+    },
+    {
+      id: "feels-like",
+      label: t.feelsLike,
+      symbol: "♨",
+      value: degrees(current.apparent_temperature),
+      note: copy(
+        `Actual temperature: ${degrees(current.temperature)}`,
+        `实际气温：${degrees(current.temperature)}`,
+      ),
+    },
+    {
+      id: "humidity",
+      label: t.humidity,
+      symbol: "◉",
+      value: `${Math.round(current.humidity)}%`,
+      note: copy("Relative humidity", "当前相对湿度"),
+    },
+  ];
+  if (day)
+    result.splice(
+      1,
+      0,
+      {
+        id: "sunset",
+        label: copy("Sunset", "日落"),
+        symbol: "☀",
+        value: day.sunset.slice(11, 16) || "—",
+        note: `${copy("Sunrise", "日出")} ${day.sunrise.slice(11, 16) || "—"}`,
+      },
+      {
+        id: "rain",
+        label: copy("Precipitation", "降水"),
+        symbol: "☂",
+        value:
+          day.precipitation_sum != null
+            ? `${Math.round(day.precipitation_sum * 10) / 10} ${copy("mm", "毫米")}`
+            : `${Math.round(day.precipitation_probability)}%`,
+        note: copy(
+          `Today · ${Math.round(day.precipitation_probability)}% chance of precipitation`,
+          `今天 · 降水概率 ${Math.round(day.precipitation_probability)}%`,
+        ),
+      },
+    );
+  if (hour?.uv_index != null)
+    result.push({
+      id: "uv",
+      label: copy("UV index", "紫外线指数"),
+      symbol: "☀",
+      value: String(Math.round(hour.uv_index)),
+      note:
+        hour.uv_index < 3
+          ? copy("Low", "低")
+          : hour.uv_index < 6
+            ? copy("Moderate", "中等")
+            : hour.uv_index < 8
+              ? copy("High", "高")
+              : copy("Very high", "很高"),
+    });
+  if (hour?.visibility != null)
+    result.push({
+      id: "visibility",
+      label: copy("Visibility", "能见度"),
+      symbol: "◌",
+      value: `${Math.round(hour.visibility / 1000)} ${copy("km", "公里")}`,
+      note: copy("Horizontal visibility", "水平方向能见度"),
+    });
+  if (hour?.pressure != null)
+    result.push({
+      id: "pressure",
+      label: copy("Pressure", "气压"),
+      symbol: "◴",
+      value: `${Math.round(hour.pressure)}`,
+      note: copy("hPa · Sea level", "百帕 · 海平面气压"),
+    });
+  return result;
+}
+
+function metricIllustration(id: string) {
+  const hour = state.forecast ? upcomingHours(state.forecast)[0] : undefined;
+  if (id === "wind" && hour?.wind_direction != null)
+    return (
+      <span
+        key="compass"
+        className={`compass direction-${Math.round(hour.wind_direction / 10) % 36}`}
+        aria-hidden="true"
+      >
+        <span key="north" className="north">
+          {copy("N", "北")}
+        </span>
+        <span key="west" className="west">
+          {copy("W", "西")}
+        </span>
+        <span key="east" className="east">
+          {copy("E", "东")}
+        </span>
+        <span key="south" className="south">
+          {copy("S", "南")}
+        </span>
+        <span key="needle" className="compass-needle" />
+      </span>
+    );
+  if (id === "sunset")
+    return (
+      <span key="sun-path" className="sun-path" aria-hidden="true">
+        <span key="sun-arc" />
+      </span>
+    );
+  if (id === "uv" && hour?.uv_index != null)
+    return (
+      <span
+        key="uv-scale"
+        className={`uv-scale level-${Math.min(10, Math.round(hour.uv_index))}`}
+        aria-hidden="true"
+      />
+    );
+  if (id === "humidity")
+    return (
+      <span
+        key="humidity-scale"
+        className={`humidity-scale level-${Math.round((state.forecast?.current.humidity ?? 0) / 10)}`}
+        aria-hidden="true"
+      />
+    );
+  if (id === "pressure")
+    return (
+      <span key="pressure-dial" className="pressure-dial" aria-hidden="true" />
+    );
+  return null;
+}
+
+function detailChartData() {
+  const forecast = state.forecast;
+  const day = forecast?.days[state.detailDay];
+  const samples = (forecast?.hourly ?? [])
+    .filter((hour) => hour.time.startsWith(day?.date ?? "missing"))
+    .flatMap((hour) => {
+      const value =
+        state.detail === "temperature"
+          ? state.apparent
+            ? hour.apparent_temperature
+            : hour.temperature
+          : state.detail === "feels-like"
+            ? hour.apparent_temperature
+            : state.detail === "humidity"
+              ? hour.humidity
+              : state.detail === "wind"
+                ? hour.wind_speed
+                : state.detail === "rain"
+                  ? hour.precipitation_probability
+                  : state.detail === "uv"
+                    ? hour.uv_index
+                    : state.detail === "visibility"
+                      ? hour.visibility == null
+                        ? null
+                        : hour.visibility / 1000
+                      : hour.pressure;
+      return value == null ? [] : [{ time: hour.time, value }];
+    });
+  const values = samples.map((sample) => sample.value);
+  const isTemperature =
+    state.detail === "temperature" || state.detail === "feels-like";
+  const minimum = Math.max(
+    isTemperature ? -Infinity : 0,
+    Math.min(...values) - 2,
+  );
+  const maximum = Math.min(
+    state.detail === "humidity" || state.detail === "rain" ? 100 : Infinity,
+    Math.max(...values) + 2,
+  );
+  return { samples, values, minimum, maximum };
+}
+
+async function renderDetailChart() {
+  if (
+    !state.detail ||
+    state.detail === "sunset" ||
+    !detailChartData().samples.length
+  )
+    return;
+  if (!chartSurface) {
+    try {
+      const surface = await bridge.openCanvas("weather-chart");
+      if (disposed) return;
+      chartSurface = surface;
+      stopChartInput = bridge.onCanvasInput(surface.canvasId, (event) => {
+        if (event.type !== "resize" || !chartSurface) return;
+        chartSurface = {
+          ...chartSurface,
+          cssWidth: event.cssWidth,
+          cssHeight: event.cssHeight,
+          devicePixelRatio: event.devicePixelRatio,
+        };
+        drawDetailChart();
+      });
+      chartReady = Boolean(surface.canvas.getContext("2d"));
+      if (chartReady) await bridge.render(view());
+    } catch {
+      // Keep the accessible CSS plot if the optional canvas cannot be allocated.
+      return;
+    }
+  }
+  drawDetailChart();
+}
+
+function drawDetailChart() {
+  const surface = chartSurface;
+  if (!surface || !state.detail) return;
+  const context = surface.canvas.getContext("2d");
+  if (!context) return;
+  surface.canvas.width = Math.round(
+    surface.cssWidth * surface.devicePixelRatio,
+  );
+  surface.canvas.height = Math.round(
+    surface.cssHeight * surface.devicePixelRatio,
+  );
+  context.setTransform(
+    surface.devicePixelRatio,
+    0,
+    0,
+    surface.devicePixelRatio,
+    0,
+    0,
+  );
+  const { samples, minimum, maximum } = detailChartData();
+  drawWeatherChart(
+    context,
+    samples,
+    surface.cssWidth,
+    surface.cssHeight,
+    minimum,
+    maximum,
+  );
+}
+
+function weatherDetail(t: WeatherTranslations) {
+  const forecast = state.forecast;
+  if (!forecast) return null;
+  const metric = metricItems().find((item) => item.id === state.detail);
+  const day = forecast.days[state.detailDay];
+  const {
+    samples: hours,
+    values,
+    minimum: min,
+    maximum: max,
+  } = detailChartData();
+  const title = metric?.label ?? copy("Weather conditions", "天气状况");
+  const unit =
+    state.detail === "temperature" || state.detail === "feels-like"
+      ? "°"
+      : state.detail === "humidity" || state.detail === "rain"
+        ? "%"
+        : state.detail === "wind"
+          ? " km/h"
+          : state.detail === "visibility"
+            ? " km"
+            : state.detail === "pressure"
+              ? " hPa"
+              : "";
   return (
-    <div key={`metric-${key}`} className="metric">
-      <span key={`metric-label-${key}`}>{label}</span>
-      <strong key={`metric-value-${key}`}>{value}</strong>
-    </div>
+    <section key="detail-layer" className="detail-layer" hidden={!state.detail}>
+      <div
+        key="detail-backdrop"
+        className="detail-backdrop"
+        aria-hidden="true"
+        data-redevplugin-action="close-detail"
+      />
+      <section
+        key="weather-detail"
+        className="weather-detail"
+        role="dialog"
+        aria-modal={state.detail ? true : undefined}
+        aria-label={title}
+        data-redevplugin-escape-action="close-detail"
+      >
+        <header key="detail-heading" className="detail-heading">
+          <h2 key="detail-title">{title}</h2>
+          <button
+            key="detail-close"
+            type="button"
+            className="plain-button"
+            autoFocus={Boolean(state.detail)}
+            aria-label={copy("Close details", "关闭详情")}
+            data-redevplugin-action="close-detail"
+          >
+            ×
+          </button>
+        </header>
+        {state.detail !== "sunset" && day ? (
+          <nav
+            key="detail-days"
+            className="detail-days"
+            aria-label={t.forecastLabel}
+          >
+            {forecast.days.map((item, index) => (
+              <button
+                key={`detail-date-${item.date}`}
+                type="button"
+                value={String(index)}
+                aria-pressed={index === state.detailDay}
+                data-redevplugin-action="detail-day"
+              >
+                <span key={`detail-weekday-${item.date}`}>
+                  {formatForecastDay(item.date)}
+                </span>
+                <strong key={`detail-number-${item.date}`}>
+                  {Number(item.date.slice(8))}
+                </strong>
+              </button>
+            ))}
+          </nav>
+        ) : null}
+        <p key="detail-date" className="detail-date">
+          {day?.date}
+        </p>
+        <div key="detail-summary" className="detail-summary">
+          <strong key="detail-value">
+            {state.detail === "temperature" && state.detailDay === 0
+              ? degrees(
+                  state.apparent
+                    ? forecast.current.apparent_temperature
+                    : forecast.current.temperature,
+                )
+              : state.detailDay === 0 && metric
+                ? metric.value
+                : metric && values.length
+                  ? `${Math.round(Math.min(...values))}–${Math.round(Math.max(...values))}${unit}`
+                  : day
+                    ? `${degrees(day.temperature_max)} / ${degrees(day.temperature_min)}`
+                    : "—"}
+          </strong>
+          <p key="detail-summary-note">
+            {state.detailDay === 0 && metric
+              ? metric.note
+              : metric
+                ? copy("Daily range", "全天范围")
+                : day
+                  ? translatedCondition(
+                      conditionForCode(day.weather_code, true).kind,
+                    )
+                  : ""}
+          </p>
+        </div>
+        {state.detail === "sunset" ? (
+          <div key="sun-detail" className="sun-detail">
+            {metricIllustration("sunset")}
+            <p key="sun-caption">{metric?.note}</p>
+          </div>
+        ) : null}
+        <div
+          key="hourly-chart"
+          hidden={state.detail === "sunset" || !values.length}
+          className={chartReady ? "hourly-chart has-canvas" : "hourly-chart"}
+          role="group"
+          aria-label={`${title} · ${day?.date}`}
+        >
+          <canvas
+            key="weather-chart"
+            className="chart-canvas"
+            data-redevplugin-canvas="weather-chart"
+            aria-hidden="true"
+          />
+          <div key="chart-bounds" className="chart-bounds">
+            <span key="chart-max">
+              {Math.ceil(max)}
+              {unit}
+            </span>
+            <span key="chart-min">
+              {Math.floor(min)}
+              {unit}
+            </span>
+          </div>
+          <div key="chart-columns" className="chart-columns">
+            {values.map((value, index) => (
+              <div
+                key={`chart-${hours[index].time}`}
+                className={`chart-column chart-hour-${Number(hours[index].time.slice(11, 13))} chart-height-${Math.round(((value - min) / (max - min)) * 100)}`}
+              >
+                <button
+                  key={`chart-point-${index}`}
+                  type="button"
+                  className="chart-point"
+                  aria-label={`${hours[index].time.slice(11, 16)}: ${Math.round(value)}${unit}`}
+                >
+                  <span
+                    key={`chart-tooltip-${index}`}
+                    className="chart-tooltip"
+                  >
+                    {hours[index].time.slice(11, 16)} · {Math.round(value)}
+                    {unit}
+                  </span>
+                </button>
+              </div>
+            ))}
+          </div>
+          <div key="chart-time" className="chart-time">
+            <span key="chart-time-start">0:00</span>
+            <span key="chart-time-six">6:00</span>
+            <span key="chart-time-noon">12:00</span>
+            <span key="chart-time-eighteen">18:00</span>
+          </div>
+        </div>
+        {state.detail !== "sunset" && !values.length ? (
+          <p key="detail-no-hours" className="detail-note">
+            {copy(
+              "Hourly details are unavailable for this saved forecast. Refresh to try again.",
+              "此缓存预报暂无逐小时详情，请刷新后重试。",
+            )}
+          </p>
+        ) : null}
+        {state.detail === "temperature" ? (
+          <div
+            key="temperature-tabs"
+            className="temperature-tabs"
+            role="group"
+            aria-label={copy("Temperature type", "气温类型")}
+          >
+            <button
+              key="actual-tab"
+              type="button"
+              value="actual"
+              aria-pressed={!state.apparent}
+              data-redevplugin-action="detail-temperature"
+            >
+              {copy("Actual", "实际气温")}
+            </button>
+            <button
+              key="apparent-tab"
+              type="button"
+              value="apparent"
+              aria-pressed={state.apparent}
+              data-redevplugin-action="detail-temperature"
+            >
+              {t.feelsLike}
+            </button>
+          </div>
+        ) : null}
+        <p key="detail-attribution" className="detail-note">
+          {t.poweredBy}
+        </p>
+      </section>
+    </section>
   );
 }
 
 function loadingState(t: WeatherTranslations) {
   return (
-    <section key="loading-state" className="loading-state" aria-label={t.loading}>
+    <section
+      key="loading-state"
+      className="loading-state"
+      aria-label={t.loading}
+    >
       <span key="loading-mark" className="loading-mark" aria-hidden="true" />
       <h2 key="loading-title">{t.loading}</h2>
     </section>
@@ -515,10 +1488,32 @@ function loadingState(t: WeatherTranslations) {
 }
 
 function weatherCardControls(t: WeatherTranslations) {
-  const refreshing = state.busy === "forecast" && Boolean(state.forecast) && !state.pendingLocation;
+  const refreshing =
+    state.busy === "forecast" &&
+    Boolean(state.forecast) &&
+    !state.pendingLocation;
   const refreshLabel = refreshing ? t.refreshing : t.refresh;
   return (
     <div key="weather-card-controls" className="weather-card-controls">
+      <span key="scroll-summary" className="scroll-summary" aria-hidden="true">
+        <strong key="scroll-city">{state.selected?.name}</strong>
+        <span key="scroll-temperature">
+          {state.forecast
+            ? `${degrees(state.forecast.current.temperature)} · ${translatedCondition(conditionForCode(state.forecast.current.weather_code, state.forecast.current.is_day).kind)}`
+            : ""}
+        </span>
+      </span>
+      <button
+        key="sidebar-toggle"
+        type="button"
+        className="plain-button sidebar-toggle"
+        title={copy("Toggle sidebar", "显示或隐藏边栏")}
+        aria-label={copy("Toggle sidebar", "显示或隐藏边栏")}
+        aria-expanded={!state.sidebarCollapsed}
+        data-redevplugin-action="toggle-sidebar"
+      >
+        ◧
+      </button>
       <button
         key="location-trigger"
         className="location-trigger"
@@ -528,13 +1523,25 @@ function weatherCardControls(t: WeatherTranslations) {
         aria-expanded={state.chooserOpen}
         data-redevplugin-action="toggle-location-chooser"
       >
-        <strong key="location-trigger-name" className="location-trigger-name">{state.selected?.name ?? t.chooseLocation}</strong>
-        <span key="location-trigger-arrow" className="location-trigger-arrow" aria-hidden="true">⌄</span>
+        <strong key="location-trigger-name" className="location-trigger-name">
+          {state.selected?.name ?? t.chooseLocation}
+        </strong>
+        <span
+          key="location-trigger-arrow"
+          className="location-trigger-arrow"
+          aria-hidden="true"
+        >
+          ⌄
+        </span>
       </button>
       {state.selected ? (
         <button
           key="refresh"
-          className={refreshing ? "icon-button weather-card-refresh is-refreshing" : "icon-button weather-card-refresh"}
+          className={
+            refreshing
+              ? "icon-button weather-card-refresh is-refreshing"
+              : "icon-button weather-card-refresh"
+          }
           type="button"
           title={refreshLabel}
           aria-label={refreshLabel}
@@ -542,7 +1549,9 @@ function weatherCardControls(t: WeatherTranslations) {
           disabled={Boolean(state.busy)}
           data-redevplugin-action="refresh-weather"
         >
-          <span key="refresh-icon" className="refresh-icon" aria-hidden="true">↻</span>
+          <span key="refresh-icon" className="refresh-icon" aria-hidden="true">
+            ↻
+          </span>
         </button>
       ) : null}
     </div>
@@ -551,10 +1560,12 @@ function weatherCardControls(t: WeatherTranslations) {
 
 function locationForAction(event: PluginUIActionEvent): Location | undefined {
   const id = String(event.value ?? "");
-  return state.results.find((item) => item.id === id)
-    ?? state.favorites.find((item) => item.id === id)
-    ?? majorCitiesForLocale(state.locale).find((item) => item.id === id)
-    ?? (state.selected?.id === id ? state.selected : undefined);
+  return (
+    state.results.find((item) => item.id === id) ??
+    state.favorites.find((item) => item.id === id) ??
+    majorCitiesForLocale(state.locale).find((item) => item.id === id) ??
+    (state.selected?.id === id ? state.selected : undefined)
+  );
 }
 
 function isFavorite(id: string): boolean {
@@ -569,21 +1580,33 @@ function pendingLocationLabel(t: WeatherTranslations): string {
   return t.loadingLocation.replace("{city}", state.pendingLocation?.name ?? "");
 }
 
-function translatedCondition(kind: ReturnType<typeof conditionForCode>["kind"]): string {
+function translatedCondition(
+  kind: ReturnType<typeof conditionForCode>["kind"],
+): string {
   return translations().conditions[kind];
 }
 
 function locationSubtitle(location: Location): string {
-  return [...new Set([location.admin1, location.country].filter(Boolean))].join(", ");
+  return [...new Set([location.admin1, location.country].filter(Boolean))].join(
+    ", ",
+  );
 }
 
-function friendlyError(error: unknown, operation: "load" | "search" | "remove" | "forecast"): string {
-  if (error instanceof PluginBridgeError && error.errorCode === "PLUGIN_PERMISSION_DENIED") {
+function friendlyError(
+  error: unknown,
+  operation: "load" | "search" | "remove" | "forecast",
+): string {
+  if (
+    error instanceof PluginBridgeError &&
+    error.errorCode === "PLUGIN_PERMISSION_DENIED"
+  ) {
     return translations().permission;
   }
   if (operation === "search") return translations().searchError;
   if (operation === "forecast") return translations().unavailable;
-  return error instanceof Error && error.message ? error.message : translations().unavailable;
+  return error instanceof Error && error.message
+    ? error.message
+    : translations().unavailable;
 }
 
 function formatTime(date: Date, timezone?: string): string {
@@ -595,22 +1618,19 @@ function formatTime(date: Date, timezone?: string): string {
   });
 }
 
-function formatDate(date: Date, timezone?: string): string {
-  return safeDateFormat(date, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    ...(timezone ? { timeZone: timezone } : {}),
-  });
-}
-
 function formatForecastDay(value: string): string {
   const [year, month, day] = value.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day, 12));
-  return new Intl.DateTimeFormat(state.locale, { weekday: "short" }).format(date);
+  return new Intl.DateTimeFormat(state.locale, {
+    weekday: "short",
+    timeZone: "UTC",
+  }).format(date);
 }
 
-function safeDateFormat(date: Date, options: Intl.DateTimeFormatOptions): string {
+function safeDateFormat(
+  date: Date,
+  options: Intl.DateTimeFormatOptions,
+): string {
   try {
     return new Intl.DateTimeFormat(state.locale, options).format(date);
   } catch {
@@ -624,6 +1644,13 @@ function degrees(value: number): string {
 }
 
 function reportUnhandledFailure(error: unknown): void {
-  if (disposed && error instanceof PluginBridgeError && error.errorCode === "PLUGIN_BRIDGE_DISPOSED") return;
-  queueMicrotask(() => { throw error; });
+  if (
+    disposed &&
+    error instanceof PluginBridgeError &&
+    error.errorCode === "PLUGIN_BRIDGE_DISPOSED"
+  )
+    return;
+  queueMicrotask(() => {
+    throw error;
+  });
 }

@@ -8,16 +8,12 @@
   </head>
   <body>
     <main class="weather-app">
-      <section class="empty-state">
-        <div class="weather-card-controls">
-          <button class="location-trigger" type="button" aria-label="Choose location">
-            <strong class="location-trigger-name">Choose location</strong>
-            <span class="location-trigger-arrow" aria-hidden="true">⌄</span>
-          </button>
-        </div>
-        <span class="loading-mark"></span>
-        <h2>Loading your weather…</h2>
-      </section>
+      <div class="weather-content">
+        <section class="loading-state" aria-live="polite">
+          <span class="loading-mark" aria-hidden="true"></span>
+          <h2>Loading your weather…</h2>
+        </section>
+      </div>
     </main>
     <script type="text/redevplugin-worker" src="assets/app.js"></script>
   </body>

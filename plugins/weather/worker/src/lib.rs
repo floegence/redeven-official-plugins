@@ -36,6 +36,26 @@ struct Forecast {
     source: String,
     current: CurrentWeather,
     days: Vec<ForecastDay>,
+    #[serde(default)]
+    hourly: Vec<ForecastHour>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ForecastHour {
+    time: String,
+    temperature: f64,
+    apparent_temperature: f64,
+    weather_code: i64,
+    precipitation_probability: f64,
+    is_day: bool,
+    humidity: f64,
+    wind_speed: f64,
+    wind_direction: Option<f64>,
+    wind_gusts: Option<f64>,
+    pressure: Option<f64>,
+    visibility: Option<f64>,
+    uv_index: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +80,8 @@ struct ForecastDay {
     precipitation_probability: f64,
     sunrise: String,
     sunset: String,
+    #[serde(default)]
+    precipitation_sum: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -129,6 +151,7 @@ struct RawForecast {
     timezone_abbreviation: String,
     current: RawCurrent,
     daily: RawDaily,
+    hourly: RawHourly,
 }
 
 #[derive(Deserialize)]
@@ -143,6 +166,23 @@ struct RawCurrent {
 }
 
 #[derive(Deserialize)]
+struct RawHourly {
+    time: Vec<String>,
+    temperature_2m: Vec<f64>,
+    apparent_temperature: Vec<f64>,
+    weather_code: Vec<i64>,
+    precipitation_probability: Vec<f64>,
+    is_day: Vec<i64>,
+    relative_humidity_2m: Vec<f64>,
+    wind_speed_10m: Vec<f64>,
+    wind_direction_10m: Vec<Option<f64>>,
+    wind_gusts_10m: Vec<Option<f64>>,
+    pressure_msl: Vec<Option<f64>>,
+    visibility: Vec<Option<f64>>,
+    uv_index: Vec<Option<f64>>,
+}
+
+#[derive(Deserialize)]
 struct RawDaily {
     time: Vec<String>,
     weather_code: Vec<i64>,
@@ -151,6 +191,7 @@ struct RawDaily {
     precipitation_probability_max: Vec<f64>,
     sunrise: Vec<String>,
     sunset: Vec<String>,
+    precipitation_sum: Vec<Option<f64>>,
 }
 
 fn handle(request: WorkerRequest) -> WorkerResult {
@@ -170,6 +211,11 @@ fn load_public_state() -> WorkerResult {
         "favorites": state.favorites,
         "selected": state.selected,
         "forecast": forecast,
+        "location_summaries": state.caches.iter().filter(|cache| state.favorites.iter().any(|location| location.id == cache.location_id)).map(|cache| json!({
+            "location_id": cache.location_id,
+            "current": cache.forecast.current,
+            "today": cache.forecast.days.first(),
+        })).collect::<Vec<_>>(),
     }))
 }
 
@@ -270,8 +316,9 @@ fn forecast_url(location: &Location) -> String {
         concat!(
             "https://api.open-meteo.com/v1/forecast?latitude={:.5}&longitude={:.5}",
             "&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m",
-            "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset",
-            "&temperature_unit=celsius&wind_speed_unit=kmh&timezone={}&forecast_days=7"
+            "&hourly=temperature_2m,apparent_temperature,weather_code,precipitation_probability,is_day,relative_humidity_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,visibility,uv_index",
+            "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,precipitation_sum",
+            "&temperature_unit=celsius&wind_speed_unit=kmh&timezone={}&forecast_days=10"
         ),
         location.latitude,
         location.longitude,
@@ -282,7 +329,7 @@ fn forecast_url(location: &Location) -> String {
 fn project_forecast(raw: RawForecast) -> Result<Forecast, WorkerError> {
     let day_count = raw.daily.time.len();
     if day_count == 0
-        || day_count > 7
+        || day_count > 10
         || [
             raw.daily.weather_code.len(),
             raw.daily.temperature_2m_max.len(),
@@ -290,6 +337,7 @@ fn project_forecast(raw: RawForecast) -> Result<Forecast, WorkerError> {
             raw.daily.precipitation_probability_max.len(),
             raw.daily.sunrise.len(),
             raw.daily.sunset.len(),
+            raw.daily.precipitation_sum.len(),
         ]
         .into_iter()
         .any(|length| length != day_count)
@@ -298,6 +346,85 @@ fn project_forecast(raw: RawForecast) -> Result<Forecast, WorkerError> {
             "WEATHER_SERVICE_FAILED",
             "forecast days are incomplete",
         ));
+    }
+    let hour_count = raw.hourly.time.len();
+    if hour_count == 0
+        || hour_count > 240
+        || [
+            raw.hourly.temperature_2m.len(),
+            raw.hourly.apparent_temperature.len(),
+            raw.hourly.weather_code.len(),
+            raw.hourly.precipitation_probability.len(),
+            raw.hourly.is_day.len(),
+            raw.hourly.relative_humidity_2m.len(),
+            raw.hourly.wind_speed_10m.len(),
+            raw.hourly.wind_direction_10m.len(),
+            raw.hourly.wind_gusts_10m.len(),
+            raw.hourly.pressure_msl.len(),
+            raw.hourly.visibility.len(),
+            raw.hourly.uv_index.len(),
+        ]
+        .into_iter()
+        .any(|length| length != hour_count)
+    {
+        return Err(WorkerError::new(
+            "WEATHER_SERVICE_FAILED",
+            "forecast hours are incomplete",
+        ));
+    }
+    let mut hourly = Vec::with_capacity(hour_count);
+    for index in 0..hour_count {
+        if raw.hourly.time[index].len() != 16
+            || (index > 0 && raw.hourly.time[index] <= raw.hourly.time[index - 1])
+        {
+            return Err(WorkerError::new(
+                "WEATHER_SERVICE_FAILED",
+                "forecast hours are not ordered",
+            ));
+        }
+        hourly.push(ForecastHour {
+            time: raw.hourly.time[index].clone(),
+            temperature: finite(raw.hourly.temperature_2m[index], "hourly temperature")?,
+            apparent_temperature: finite(
+                raw.hourly.apparent_temperature[index],
+                "hourly apparent temperature",
+            )?,
+            weather_code: raw.hourly.weather_code[index],
+            precipitation_probability: bounded(
+                raw.hourly.precipitation_probability[index],
+                0.0,
+                100.0,
+                "hourly precipitation probability",
+            )?,
+            is_day: raw.hourly.is_day[index] != 0,
+            humidity: bounded(
+                raw.hourly.relative_humidity_2m[index],
+                0.0,
+                100.0,
+                "hourly humidity",
+            )?,
+            wind_speed: bounded(
+                raw.hourly.wind_speed_10m[index],
+                0.0,
+                1000.0,
+                "hourly wind speed",
+            )?,
+            wind_direction: raw.hourly.wind_direction_10m[index]
+                .map(|value| bounded(value, 0.0, 360.0, "wind direction"))
+                .transpose()?,
+            wind_gusts: raw.hourly.wind_gusts_10m[index]
+                .map(|value| bounded(value, 0.0, 1000.0, "wind gusts"))
+                .transpose()?,
+            pressure: raw.hourly.pressure_msl[index]
+                .map(|value| bounded(value, 0.0, 2000.0, "pressure"))
+                .transpose()?,
+            visibility: raw.hourly.visibility[index]
+                .map(|value| bounded(value, 0.0, 1000000.0, "visibility"))
+                .transpose()?,
+            uv_index: raw.hourly.uv_index[index]
+                .map(|value| bounded(value, 0.0, 100.0, "UV index"))
+                .transpose()?,
+        });
     }
     let current = CurrentWeather {
         time: raw.current.time,
@@ -331,6 +458,9 @@ fn project_forecast(raw: RawForecast) -> Result<Forecast, WorkerError> {
             )?,
             sunrise: raw.daily.sunrise[index].clone(),
             sunset: raw.daily.sunset[index].clone(),
+            precipitation_sum: raw.daily.precipitation_sum[index]
+                .map(|value| bounded(value, 0.0, 10000.0, "daily precipitation"))
+                .transpose()?,
         });
     }
     Ok(Forecast {
@@ -339,6 +469,7 @@ fn project_forecast(raw: RawForecast) -> Result<Forecast, WorkerError> {
         source: "network".to_string(),
         current,
         days,
+        hourly,
     })
 }
 
@@ -562,6 +693,14 @@ mod tests {
                 "wind_speed_10m": 11.2,
                 "is_day": 1
             },
+            "hourly": {
+                "time": ["2026-08-29T10:00", "2026-08-29T11:00"],
+                "temperature_2m": [19.0, 20.0], "apparent_temperature": [18.0, 19.0],
+                "weather_code": [2, 3], "precipitation_probability": [10, 20], "is_day": [1, 1],
+                "relative_humidity_2m": [58, 55], "wind_speed_10m": [11.2, 12.0],
+                "wind_direction_10m": [345, 350], "wind_gusts_10m": [20, 22],
+                "pressure_msl": [1021, 1020], "visibility": [17000, 18000], "uv_index": [3, 4]
+            },
             "daily": {
                 "time": ["2026-08-29", "2026-08-30"],
                 "weather_code": [2, 61],
@@ -569,7 +708,8 @@ mod tests {
                 "temperature_2m_min": [13.0, 11.0],
                 "precipitation_probability_max": [10, 70],
                 "sunrise": ["2026-08-29T06:10", "2026-08-30T06:12"],
-                "sunset": ["2026-08-29T19:58", "2026-08-30T19:56"]
+                "sunset": ["2026-08-29T19:58", "2026-08-30T19:56"],
+                "precipitation_sum": [0.0, 1.2]
             }
         }))
         .expect("raw forecast")
@@ -589,7 +729,8 @@ mod tests {
         assert!(url.starts_with("https://api.open-meteo.com/v1/forecast?"));
         assert!(url.contains("latitude=52.52000"));
         assert!(url.contains("timezone=Europe%2FBerlin"));
-        assert!(url.ends_with("forecast_days=7"));
+        assert!(url.ends_with("forecast_days=10"));
+        assert!(url.contains("&hourly=temperature_2m"));
     }
 
     #[test]
@@ -606,7 +747,44 @@ mod tests {
         assert_eq!(forecast.source, "network");
         assert_eq!(forecast.days.len(), 2);
         assert_eq!(forecast.days[1].precipitation_probability, 70.0);
+        assert_eq!(forecast.days[1].precipitation_sum, Some(1.2));
         assert!(forecast.current.is_day);
+    }
+
+    #[test]
+    fn hourly_projection_rejects_misaligned_and_unbounded_values() {
+        let mut raw = raw_forecast();
+        raw.hourly.temperature_2m.pop();
+        assert!(project_forecast(raw).is_err());
+        let mut raw = raw_forecast();
+        raw.hourly.precipitation_probability[0] = 101.0;
+        assert!(project_forecast(raw).is_err());
+    }
+
+    #[test]
+    fn unavailable_optional_hours_do_not_discard_the_forecast() {
+        let mut raw = raw_forecast();
+        raw.hourly.visibility[1] = None;
+        raw.hourly.uv_index[1] = None;
+        let forecast = project_forecast(raw).unwrap();
+        assert_eq!(forecast.hourly[1].visibility, None);
+        assert_eq!(forecast.hourly[1].uv_index, None);
+        assert_eq!(forecast.days.len(), 2);
+    }
+
+    #[test]
+    fn old_cached_forecasts_retain_data_without_inventing_hourly_observations() {
+        let forecast = project_forecast(raw_forecast()).unwrap();
+        assert_eq!(forecast.hourly.len(), 2);
+        assert_eq!(forecast.hourly[0].temperature, 19.0);
+        let mut old = serde_json::to_value(&forecast).unwrap();
+        old.as_object_mut().unwrap().remove("hourly");
+        for day in old["days"].as_array_mut().unwrap() {
+            day.as_object_mut().unwrap().remove("precipitation_sum");
+        }
+        let restored: Forecast = serde_json::from_value(old).unwrap();
+        assert!(restored.hourly.is_empty());
+        assert_eq!(restored.days.len(), 2);
     }
 
     #[test]
@@ -637,13 +815,23 @@ mod tests {
 
         assert_eq!(state.favorites.len(), MAX_FAVORITES);
         assert_eq!(state.favorites[0].id, format!("open-meteo:{MAX_FAVORITES}"));
-        assert_eq!(state.favorites.last().map(|item| item.id.as_str()), Some("open-meteo:1"));
+        assert_eq!(
+            state.favorites.last().map(|item| item.id.as_str()),
+            Some("open-meteo:1")
+        );
 
         let existing = state.favorites[3].clone();
         remember_location(&mut state, &existing);
         assert_eq!(state.favorites.len(), MAX_FAVORITES);
         assert_eq!(state.favorites[0], existing);
-        assert_eq!(state.favorites.iter().filter(|item| item.id == existing.id).count(), 1);
+        assert_eq!(
+            state
+                .favorites
+                .iter()
+                .filter(|item| item.id == existing.id)
+                .count(),
+            1
+        );
     }
 
     #[test]

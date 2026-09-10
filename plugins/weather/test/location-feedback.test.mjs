@@ -31,7 +31,7 @@ const forecast = {
   days: [],
 };
 
-function harness({ initial = true, locale = 'en-US' } = {}) {
+function harness({ initial = true, locale = 'en-US', dataForecast = forecast } = {}) {
   const actions = new Map();
   const calls = [];
   let tree;
@@ -43,7 +43,7 @@ function harness({ initial = true, locale = 'en-US' } = {}) {
     async render(next) { tree = next; }
     call(method, input) {
       if (method === 'weather.state.load') return Promise.resolve({ data: {
-        favorites: initial ? [beijing, tokyo] : [], selected: initial ? beijing : null, forecast: initial ? forecast : null,
+        favorites: initial ? [beijing, tokyo] : [], selected: initial ? beijing : null, forecast: initial ? dataForecast : null,
       } });
       return new Promise((resolve, reject) => calls.push({ method, input, resolve: (data) => resolve({ data }), reject, tree }));
     }
@@ -76,7 +76,7 @@ async function ready(options) {
   const app = harness(options);
   await flush();
   if (options?.initial !== false) {
-    app.calls.shift().resolve({ location: beijing, forecast, favorites: [beijing, tokyo] });
+    app.calls.shift().resolve({ location: beijing, forecast: options?.dataForecast ?? forecast, favorites: [beijing, tokyo] });
     await flush();
     app.action('toggle-location-chooser');
     await flush();
@@ -196,4 +196,54 @@ test('closing the chooser during loading leaves visible feedback and a visible e
   assert.equal(find(app.tree, 'weather-progress'), undefined);
   assert.ok(find(app.tree, 'weather-alert'));
   assert.equal(content(find(app.tree, 'place-name')), 'Beijing');
+});
+
+
+test('detail actions are bounded to forecast data and Escape closes the detail', async () => {
+  const app = await ready();
+  app.action('open-detail', { value: 'humidity' });
+  await flush();
+  assert.ok(find(app.tree, 'weather-detail'));
+  assert.match(content(find(app.tree, 'weather-detail')), /70%/u);
+  app.action('close-detail');
+  await flush();
+  assert.equal(find(app.tree, 'detail-layer').attributes.hidden, true);
+  app.action('open-day', { value: '999' });
+  await flush();
+  assert.equal(find(app.tree, 'detail-layer').attributes.hidden, true);
+});
+
+const detailedForecast = {
+  ...forecast,
+  days: [
+    { date: '2026-09-05', weather_code: 3, temperature_max: 25, temperature_min: 21, precipitation_probability: 0, sunrise: '2026-09-05T06:11', sunset: '2026-09-05T18:39' },
+    { date: '2026-09-06', weather_code: 2, temperature_max: 28, temperature_min: 20, precipitation_probability: 30, sunrise: '2026-09-06T06:12', sunset: '2026-09-06T18:38' },
+  ],
+  hourly: [
+    { ...forecast.current, time:'2026-09-05T12:00', precipitation_probability:0, wind_direction:345, wind_gusts:24, pressure:1021, visibility:17000, uv_index:3 },
+    { ...forecast.current, time:'2026-09-06T12:00', humidity:60, precipitation_probability:30, wind_direction:345, wind_gusts:24, pressure:1021, visibility:null, uv_index:null },
+  ],
+};
+
+test('day selection and actual/apparent tabs project only the chosen day', async () => {
+  const app = await ready({ dataForecast: detailedForecast });
+  app.action('open-day', { value: '1' }); await flush();
+  assert.match(content(find(app.tree, 'detail-date')), /2026-09-06/u);
+  assert.equal(find(app.tree, 'actual-tab').attributes['aria-pressed'], true);
+  app.action('detail-temperature', { value: 'apparent' }); await flush();
+  assert.equal(find(app.tree, 'apparent-tab').attributes['aria-pressed'], true);
+  app.action('detail-day', { value: '-1' }); await flush();
+  assert.match(content(find(app.tree, 'detail-date')), /2026-09-06/u);
+});
+
+test('future humidity details use percentage units and optional missing metrics stay unavailable', async () => {
+  const app = await ready({ dataForecast: detailedForecast });
+  app.action('open-detail', { value: 'humidity' }); await flush();
+  app.action('detail-day', { value: '1' }); await flush();
+  assert.match(content(find(app.tree, 'detail-value')), /60–60%/u);
+  assert.doesNotMatch(content(find(app.tree, 'detail-value')), /°/u);
+  app.action('close-detail'); await flush();
+  app.action('open-detail', { value: 'visibility' }); await flush();
+  app.action('detail-day', { value: '1' }); await flush();
+  assert.ok(find(app.tree, 'detail-no-hours'));
 });
