@@ -155,3 +155,30 @@ GPU presentation times or a guarantee for every host/window size. At a smaller
 1517×800 cloudy viewport, both versions were near the display cadence, so that
 case alone did not establish the improvement. Live installed-host verification
 is recorded separately after publication.
+
+### Installed 1.0.43 verification
+
+The immutable release was installed through Redeven's official update review on
+2026-09-10, retaining existing grants and all eight saved cities. The activity
+sidebar remained pinned. Changsha → Beijing → Tokyo and Dubai → Singapore
+finished on the requested city without reordering the list. After scrolling the
+city list to its bottom, selecting Sydney retained both its position and the
+sidebar scroll offset. Returning to Changsha and refreshing succeeded.
+
+The installed rain surface was resized repeatedly between 1102, 1202, and 1517
+pixels at 735 pixels high. Each resulting layout filled the current surface
+without a stale-size gap, and the final window was restored to 1517×735. This
+native interaction check complements the controlled frame-interval measurements
+above; it does not add a native GPU timing claim.
+
+The full-height, square-edged sidebar, single visible collapse/reopen control,
+weather-tinted cards, live temperature curve, and Escape dismissal were checked
+in the installed surface. The native macOS Weather reference was inspected again.
+No new Weather diagnostic events appeared after the pre-update sequence 330
+during installation, city switching, resizing, refresh, and detail checks.
+
+Source CI, signed release publication, and market ingestion succeeded. All eleven
+release files matched the locally verified signed output, and an independent
+ReDevPlugin 3.0.25 verification passed. The public market reported visible 1.0.43
+from tag v1.0.43 at commit ebbcd58678a0d796a2e7241d5beaee0bd510ecf1 with
+the same package digest as the downloaded release.
