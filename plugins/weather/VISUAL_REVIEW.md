@@ -93,3 +93,25 @@ eight metrics fill complete rows, row heights align, and the forecast column
 stretches to the same bottom edge. City names use the available card width.
 Responsive review covers 390-pixel, desktop, and 1880-pixel containers, including
 older seven-day data and missing optional metrics.
+
+### Live Redeven installation verification
+
+The immutable 1.0.42 release was installed through Redeven's normal official
+update review on 2026-09-10, retaining the existing grants and all eight saved
+cities. The initial live refresh replaced the old seven-day view with hourly
+observations, ten daily rows, and eight metrics without an unavailable notice.
+A second refresh and a round trip between Beijing and Changsha both succeeded.
+The host diagnostic feed recorded no new Weather method rejections during these
+checks; the previous installation had recorded repeated rejections.
+
+In the running installed surface, the sidebar city names were readable, adjacent
+metric cards shared row heights, and the forecast and metric regions ended on
+the same baseline. The lower row had no empty grid tracks. Temperature details
+rendered a live curve after changing the date and selecting apparent temperature.
+Escape, closing and reopening details, sunset, and pressure details remained
+functional. The native macOS Weather reference was inspected again during this
+pass. The implementation retains the intentional component limits above.
+
+Source CI, signed publication, and market ingestion succeeded. All eleven
+GitHub release files matched the locally verified release output byte for byte;
+the public stable market projection reported 1.0.42 with the same package hash.
