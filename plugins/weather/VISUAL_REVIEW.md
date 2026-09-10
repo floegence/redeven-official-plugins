@@ -115,3 +115,43 @@ pass. The implementation retains the intentional component limits above.
 Source CI, signed publication, and market ingestion succeeded. All eleven
 GitHub release files matched the locally verified release output byte for byte;
 the public stable market projection reported 1.0.42 with the same package hash.
+
+## Resize and selection follow-up (1.0.43)
+
+Existing city selections previously moved the city to the top of the persisted
+list. They now update metadata in place, preserving order across storage reloads.
+Cache recency independently decides eviction when adding a ninth city. The
+requested city highlights immediately; the loading status occupies the existing
+toolbar without displacing the forecast. Repeated clicks on the same selected or
+pending city do not request duplicate forecasts. Regression tests also cover
+rapid selection, last-request ownership, failed requests, and retry.
+
+The city sidebar is flush with the surface edges and has no outer rounded frame.
+Only its own collapse button is shown while expanded; the main toolbar offers a
+reopen button after explicit collapse. Narrow layouts keep the city picker.
+
+Cloud textures now have fixed raster dimensions between breakpoints and fade
+inside their bounds. Card, sidebar, toolbar, and overlay fills avoid backdrop blur,
+and precipitation overscan is limited to its animation travel. The original
+weather palettes and reduced-motion behavior remain. The final visual pass
+checked Chinese desktop, German 390-pixel layouts, rainy 2400-pixel layouts,
+city switching, and readable overlays.
+
+### Controlled resize comparison
+
+On the same macOS machine and in-app browser, the released SDK fixture surface
+ran four width sweeps between 640 and 2400 pixels at a 2400×1400 viewport with
+rain, for 240 measured frames. The baseline was the exact 1.0.42 stylesheet;
+both variants used the same current UI and fixture data.
+
+| Stylesheet | Total frame intervals | Mean | p95 | Intervals over 33.4 ms |
+| --- | --- | --- | --- | --- |
+| 1.0.42, first pass | 5417 ms | 22.6 ms | 34.0 ms | 34 |
+| 1.0.42, repeated pass | 5733 ms | 23.9 ms | 34.1 ms | 35 |
+| 1.0.43, final cloud/card treatment | 4033 ms | 16.8 ms | 17.5 ms | 0 |
+
+These are parent requestAnimationFrame intervals during resizing, not measured
+GPU presentation times or a guarantee for every host/window size. At a smaller
+1517×800 cloudy viewport, both versions were near the display cadence, so that
+case alone did not establish the improvement. Live installed-host verification
+is recorded separately after publication.

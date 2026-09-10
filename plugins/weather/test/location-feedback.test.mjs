@@ -304,3 +304,48 @@ test('a provider fallback clearly labels cached weather after refresh', async ()
   const app = await ready({ dataForecast: { ...detailedForecast, source: 'saved', hourly: [] } });
   assert.match(content(find(app.tree, 'weather-alert')), /Showing saved weather/);
 });
+
+
+test('only exposes the toolbar sidebar control when the city sidebar is collapsed', async () => {
+  const app = await ready();
+  assert.equal(find(app.tree, 'sidebar-toggle'), undefined);
+  assert.ok(find(app.tree, 'sidebar-close'));
+  app.action('toggle-sidebar');
+  await flush();
+  assert.ok(find(app.tree, 'sidebar-toggle'));
+  app.action('toggle-sidebar');
+  await flush();
+  assert.equal(find(app.tree, 'sidebar-toggle'), undefined);
+});
+
+test('city selection keeps progress inside the toolbar without displacing the dashboard', async () => {
+  const app = await ready();
+  app.action('toggle-location-chooser');
+  await flush();
+  app.action('open-location', { value: tokyo.id });
+  await flush();
+  assert.equal(find(app.tree, 'sidebar-preset:tokyo').attributes['aria-pressed'], true);
+  assert.equal(find(app.tree, 'sidebar-preset:beijing').attributes['aria-pressed'], false);
+  assert.ok(find(find(app.tree, 'weather-card-controls'), 'weather-progress'));
+  assert.equal(content(find(app.tree, 'place-name')), 'Beijing');
+  app.calls[0].resolve({ location: tokyo, forecast, favorites: [beijing, tokyo] });
+  await flush();
+  assert.deepEqual(Array.from(find(app.tree, 'city-list').children, child => child.key), ['sidebar-preset:beijing', 'sidebar-preset:tokyo']);
+  assert.equal(find(app.tree, 'weather-progress'), undefined);
+});
+
+
+test('reselecting the active or already pending city does not queue duplicate forecasts', async () => {
+  const app = await ready();
+  app.action('open-location', { value: beijing.id });
+  await flush();
+  assert.equal(app.calls.length, 0);
+  app.action('open-location', { value: tokyo.id });
+  app.action('open-location', { value: tokyo.id });
+  await flush();
+  assert.equal(app.calls.length, 1);
+  app.calls[0].resolve({ location: tokyo, forecast, favorites: [beijing, tokyo] });
+  await flush();
+  assert.equal(app.calls.length, 1);
+  assert.equal(content(find(app.tree, 'place-name')), 'Tokyo');
+});

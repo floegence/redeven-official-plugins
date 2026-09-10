@@ -19,11 +19,13 @@ await build({
   jsxImportSource: "@floegence/redevplugin-ui",
 });
 const host = `import { PluginPlatformClient, PluginSurfaceSlot } from '@floegence/redevplugin-ui';
+import { installResizeReview } from './scripts/resize-review.mjs';
 const params = new URLSearchParams(location.search);
 const client = new PluginPlatformClient({fetch: (url, init) => fetch(url + '?' + params, init)});
 const stage = document.querySelector('#stage');
 if (params.has('width')) stage.style.width = params.get('width') + 'px';
 if (params.has('height')) stage.style.height = params.get('height') + 'px';
+if (params.has('resize_review')) installResizeReview(stage, params.get('css') || 'current');
 const slot = PluginSurfaceSlot.create({stage});
 const colors = { canvas:'#f4f6fa',surface:'#ffffff',surface_elevated:'#ffffff',text:'#162033',text_muted:'#6b7485',border:'#dce1e9',accent:'#2868d8',accent_text:'#ffffff',success:'#28aa66',warning:'#dd9922',danger:'#cc4455',focus:'#3388ff' };
 client.openSurfaceInSlot(slot, {plugin_instance_id:'weather-preview',surface_id:'weather.dashboard'}, {surfaceContext: {schema_version:'redevplugin.surface_context.v1',revision:1,appearance:{color_scheme:'light',colors},locale:{language_tag:params.get('locale') || 'zh-CN',direction:'ltr'}},onError: error => {document.querySelector('#error').textContent = error.message; fetch('/review-error', {method:'POST',body:error.stack || error.message});}}).catch(error => {document.querySelector('#error').textContent = error.message;});`;
@@ -149,7 +151,13 @@ const server = createServer(async (req, res) => {
       return;
     }
     const worker = await readFile(resolve(out, "worker.js"), "utf8");
-    const css = await readFile(resolve(root, "ui/styles.css"), "utf8");
+    const css = await readFile(
+      url.searchParams.get("css") === "baseline" &&
+        process.env.WEATHER_REVIEW_BASELINE_CSS
+        ? process.env.WEATHER_REVIEW_BASELINE_CSS
+        : resolve(root, "ui/styles.css"),
+      "utf8",
+    );
     const entry = "ui/index.html",
       sha = hash("weather-review");
     const issued_at = new Date().toISOString(),
@@ -157,7 +165,7 @@ const server = createServer(async (req, res) => {
     const bootstrap = {
       plugin_id: "com.redeven.official.weather",
       plugin_instance_id: "weather-preview",
-      plugin_version: "1.0.42",
+      plugin_version: "1.0.43",
       surface_id: "weather.dashboard",
       surface_instance_id: "review-surface",
       active_fingerprint: "a".repeat(64),
@@ -245,7 +253,9 @@ const server = createServer(async (req, res) => {
           data: {
             location: params,
             forecast: fixture(params, url.searchParams),
-            favorites: [params, ...locations.filter((x) => x.id !== params.id)],
+            favorites: locations.some((x) => x.id === params.id)
+              ? locations.map((x) => (x.id === params.id ? params : x))
+              : [params, ...locations],
           },
         };
       } else if (body.method === "weather.locations.search")

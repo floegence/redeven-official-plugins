@@ -3,7 +3,7 @@
 Weather is a Redeven-maintained official plugin with an original interface
 modeled on macOS Weather: an atmospheric background, a centered current-weather
 summary, a collapsible city sidebar, a horizontal hourly forecast, a ten-day
-temperature range list, and translucent detail cards. The dashboard scrolls
+temperature range list, and weather-tinted detail cards. The dashboard scrolls
 inside its plugin surface and reflows into two-column cards on small screens.
 
 Click an hour or a forecast day to inspect its daily temperature curve and switch
@@ -13,15 +13,21 @@ support keyboard-focusable hourly values; Escape or the backdrop closes a panel.
 A single SDK-owned canvas remains mounted across date changes and panel opens.
 If canvas allocation is unavailable, an accessible CSS chart remains visible.
 
-Users can search places and automatically retain their eight most recently
-selected cities. Cached city summaries appear in the sidebar with observation
+Users can search places and retain up to eight recently selected cities.
+Existing cities keep their sidebar positions when selected; a new city appears
+at the top and replaces the least recently cached city when the list is full. Cached city summaries appear in the sidebar with observation
 times available on hover. The last successful forecast renders immediately while
 a refresh runs. Selecting a city keeps the previous forecast visible and shows
-pending feedback; rapid selections are queued, and only the latest selection can
+immediate selection feedback in the sidebar and a compact toolbar status without
+moving the dashboard. Repeated clicks on the selected or pending city do not
+queue duplicate requests; rapid selections are queued, and only the latest selection can
 replace the visible city. A failed request preserves the existing forecast and
 keeps selection and retry available.
 
-Day/night, clouds, rain, and snow use original CSS effects. Reduced-motion
+Day/night, clouds, rain, and snow use original CSS effects. Fixed-size cloud
+layers and bounded precipitation overscan avoid large texture rebuilds during
+window resizing. Weather-tinted fills replace live background blur on cards and
+controls. The city sidebar meets the surface edges without an outer rounded frame. Reduced-motion
 preferences disable decorative animation and transitions. No Apple code,
 artwork, screenshots, weather service, or proprietary visual assets are bundled.
 The earlier clock-and-weather layout was inspired by Patrick Kissling's
@@ -68,7 +74,7 @@ npm test
 npm run build
 ```
 
-The source release-train version is `1.0.42`. Official distribution uses its
+The source release-train version is `1.0.43`. Official distribution uses its
 signed release reference; a local build does not replace installed plugins.
 Build an unsigned review package from the repository root with:
 
@@ -95,6 +101,11 @@ Use `?width=390&height=700` for a narrow surface, `?locale=en-US` for English,
 for an older seven-day cache, `?metrics=6` or `?metrics=7` for incomplete provider
 metrics, and `?forecast_error=1` for a failed refresh. Restart the preview
 script after changing TypeScript; CSS is read on every surface load.
+For repeatable resize comparisons, start the preview with
+`WEATHER_REVIEW_BASELINE_CSS=/path/to/previous/styles.css` and use
+`?resize_review=1&code=61`, adding `&css=baseline` for the previous stylesheet.
+The development-only button runs four width sweeps over 240 animation frames.
+Its output measures parent frame intervals, not GPU presentation timestamps.
 The review notes are in [VISUAL_REVIEW.md](VISUAL_REVIEW.md).
 
 ## Languages

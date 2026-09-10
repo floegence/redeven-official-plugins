@@ -284,7 +284,12 @@ async function openLocation(event: PluginUIActionEvent): Promise<void> {
   const location = state.favorites.find(
     (item) => item.id === String(event.value ?? ""),
   );
-  if (!location) return;
+  if (
+    !location ||
+    state.pendingLocation?.id === location.id ||
+    (state.selected?.id === location.id && !state.pendingLocation)
+  )
+    return;
   await loadForecast(location);
 }
 
@@ -771,7 +776,9 @@ function citySidebar(t: WeatherTranslations) {
                   : undefined
               }
               className={`city-card sky-${conditionForCode(forecast?.current.weather_code ?? 3, forecast?.current.is_day ?? true).kind}${forecast?.current.is_day === false ? " weather-night" : ""}`}
-              aria-pressed={state.selected?.id === location.id}
+              aria-pressed={
+                (state.pendingLocation ?? state.selected)?.id === location.id
+              }
               aria-busy={state.pendingLocation?.id === location.id}
               data-redevplugin-action="open-location"
             >
@@ -831,12 +838,6 @@ function forecastDashboard(
   return (
     <article key="forecast-dashboard" className="forecast-dashboard">
       {weatherCardControls(t)}
-      {state.pendingLocation && !state.chooserOpen ? (
-        <p key="weather-progress" className="weather-progress" role="status">
-          <span key="progress-mark" className="location-loading-mark" />
-          {pendingLocationLabel(t)}
-        </p>
-      ) : null}
       <header key={`weather-hero-${location.id}`} className="weather-hero">
         <h2 key="place-name">
           {localizedLocation(location, state.locale).name}
@@ -1530,17 +1531,32 @@ function weatherCardControls(t: WeatherTranslations) {
             : ""}
         </span>
       </span>
-      <button
-        key="sidebar-toggle"
-        type="button"
-        className="plain-button sidebar-toggle"
-        title={message("toggleSidebar")}
-        aria-label={message("toggleSidebar")}
-        aria-expanded={!state.sidebarCollapsed}
-        data-redevplugin-action="toggle-sidebar"
-      >
-        ◧
-      </button>
+      {state.pendingLocation && !state.chooserOpen ? (
+        <p
+          key="weather-progress"
+          className="weather-progress"
+          role="status"
+          title={pendingLocationLabel(t)}
+        >
+          <span key="progress-mark" className="location-loading-mark" />
+          <span key="weather-progress-label" className="weather-progress-label">
+            {pendingLocationLabel(t)}
+          </span>
+        </p>
+      ) : null}
+      {state.sidebarCollapsed ? (
+        <button
+          key="sidebar-toggle"
+          type="button"
+          className="plain-button sidebar-toggle"
+          title={message("toggleSidebar")}
+          aria-label={message("toggleSidebar")}
+          aria-expanded={!state.sidebarCollapsed}
+          data-redevplugin-action="toggle-sidebar"
+        >
+          ◧
+        </button>
+      ) : null}
       <button
         key="location-trigger"
         className="location-trigger"

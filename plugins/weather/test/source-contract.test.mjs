@@ -94,6 +94,20 @@ describe('Weather official plugin source contract', () => {
     assert.ok(forecast.response_schema.required.includes('favorites'));
   });
 
+  it('keeps continuous weather layers free of viewport-sized blur passes', async () => {
+    const styles = await readFile(path.join(pluginRoot, 'ui', 'styles.css'), 'utf8');
+    for (const selector of ['.cloud', '.glass-card', '.city-sidebar', '.weather-sky::after']) {
+      const blocks = [...styles.matchAll(new RegExp(selector.replaceAll('.', '\\.') + '\\s*\\{([^}]+)\\}', 'gu'))];
+      assert.ok(blocks.length, selector);
+      for (const block of blocks) assert.doesNotMatch(block[1], /(?:backdrop-)?filter:\s*blur/u);
+    }
+    for (const block of styles.matchAll(/\.cloud(?:-two)?\s*\{([^}]+)\}/gu)) {
+      assert.doesNotMatch(block[1], /(?:width|height):\s*[\d.]+%/u, 'cloud rasters keep a stable size between breakpoints');
+    }
+    assert.doesNotMatch(styles, /inset:\s*-100%/u);
+    assert.doesNotMatch(styles, /@keyframes toolbar-glass[^}]*backdrop-filter/u);
+  });
+
   it('ships an original package-local icon and upstream attribution', async () => {
     const [manifest, release, readme] = await Promise.all([
       readFile(path.join(pluginRoot, 'manifest.json'), 'utf8').then(JSON.parse),

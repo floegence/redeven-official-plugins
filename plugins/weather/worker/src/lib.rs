@@ -306,7 +306,39 @@ fn forecast_for_location(location: Location) -> WorkerResult {
 }
 
 fn remember_location(state: &mut StoredState, location: &Location) {
-    state.favorites.retain(|item| item.id != location.id);
+    if let Some(existing) = state
+        .favorites
+        .iter_mut()
+        .find(|item| item.id == location.id)
+    {
+        *existing = location.clone();
+        return;
+    }
+    // Display order is stable. Cache recency decides which city leaves a full list.
+    if state.favorites.len() == MAX_FAVORITES {
+        let oldest = state
+            .favorites
+            .iter()
+            .rev()
+            .find(|city| {
+                !state
+                    .caches
+                    .iter()
+                    .any(|cache| cache.location_id == city.id)
+            })
+            .or_else(|| {
+                state.caches.iter().rev().find_map(|cache| {
+                    state
+                        .favorites
+                        .iter()
+                        .find(|city| city.id == cache.location_id)
+                })
+            })
+            .map(|city| city.id.clone());
+        if let Some(id) = oldest {
+            state.favorites.retain(|city| city.id != id);
+        }
+    }
     state.favorites.insert(0, location.clone());
     state.favorites.truncate(MAX_FAVORITES);
 }
@@ -829,7 +861,7 @@ mod tests {
     }
 
     #[test]
-    fn selected_locations_are_remembered_once_in_recent_order() {
+    fn existing_city_selection_preserves_sidebar_order_and_metadata() {
         let mut state = StoredState::default();
         for index in 0..=MAX_FAVORITES {
             let mut candidate = location();
@@ -845,10 +877,23 @@ mod tests {
             Some("open-meteo:1")
         );
 
-        let existing = state.favorites[3].clone();
+        let order: Vec<_> = state.favorites.iter().map(|city| city.id.clone()).collect();
+        let mut existing = state.favorites[3].clone();
+        existing.name = "Updated city name".to_string();
         remember_location(&mut state, &existing);
         assert_eq!(state.favorites.len(), MAX_FAVORITES);
-        assert_eq!(state.favorites[0], existing);
+        assert_eq!(state.favorites[3], existing);
+        assert_eq!(
+            state
+                .favorites
+                .iter()
+                .map(|city| city.id.clone())
+                .collect::<Vec<_>>(),
+            order
+        );
+        let restored: StoredState =
+            serde_json::from_slice(&encode_cached_state(&state).unwrap()).unwrap();
+        assert_eq!(restored.favorites, state.favorites);
         assert_eq!(
             state
                 .favorites
@@ -857,6 +902,27 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn new_city_evicts_the_oldest_cache_without_reordering_remaining_cities() {
+        let mut state = StoredState::default();
+        for index in 0..MAX_FAVORITES {
+            let mut city = location();
+            city.id = format!("city:{index}");
+            state.favorites.push(city.clone());
+            state.caches.push(ForecastCache {
+                location_id: city.id,
+                forecast: project_forecast(raw_forecast()).unwrap(),
+            });
+        }
+        state.caches.reverse();
+        let remaining = state.favorites[1..].to_vec();
+        let mut city = location();
+        city.id = "city:new".to_string();
+        remember_location(&mut state, &city);
+        assert_eq!(state.favorites[0], city);
+        assert_eq!(state.favorites[1..], remaining);
     }
 
     #[test]

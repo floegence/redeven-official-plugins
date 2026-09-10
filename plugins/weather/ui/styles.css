@@ -67,7 +67,6 @@ ol {
     var(--sky-top, #879faf),
     var(--sky-bottom, #aec0cf)
   );
-  transition: background 1s;
 }
 .sky-clear-day {
   --sky-top: #216397;
@@ -101,37 +100,36 @@ ol {
 }
 .cloud {
   position: absolute;
-  width: 145%;
-  height: 62%;
-  left: -22%;
-  top: -17%;
+  width: 1600px;
+  height: 720px;
+  left: calc(50% - 800px);
+  top: -220px;
   opacity: 0.72;
-  filter: blur(16px);
   background:
     radial-gradient(
-      ellipse at 20% 32%,
-      #f0f7fa 0,
-      #e8f3f9a8 15%,
-      transparent 36%
+      ellipse 32% 40% at 33% 50%,
+      #f0f7fa,
+      #e8f3f9a8 40%,
+      transparent 100%
     ),
     radial-gradient(
-      ellipse at 66% 20%,
-      #eaf5ff 0,
-      #e7f1f9a0 26%,
-      transparent 48%
+      ellipse 33% 46% at 65% 50%,
+      #eaf5ff,
+      #e7f1f9a0 40%,
+      transparent 100%
     ),
     radial-gradient(
-      ellipse at 98% 42%,
-      #e8f1fbbb 0,
-      #c8dce8aa 22%,
-      transparent 45%
+      ellipse 17% 36% at 82% 50%,
+      #e8f1fbbb,
+      #c8dce8aa 40%,
+      transparent 100%
     );
   transform: rotate(-9deg);
   animation: cloud-drift 70s ease-in-out infinite alternate;
 }
 .cloud-two {
-  top: 4%;
-  left: -18%;
+  top: -40px;
+  left: calc(50% - 750px);
   opacity: 0.32;
   transform: rotate(-14deg) scale(0.8);
   animation-duration: 95s;
@@ -173,7 +171,7 @@ ol {
 .sky-drizzle .sky-precipitation,
 .sky-storm .sky-precipitation {
   position: absolute;
-  inset: -100%;
+  inset: -300px -40px;
   opacity: 0.18;
   background: repeating-linear-gradient(
     102deg,
@@ -186,7 +184,7 @@ ol {
 }
 .sky-snow .sky-precipitation {
   position: absolute;
-  inset: -100%;
+  inset: -200px -84px;
   opacity: 0.45;
   background: radial-gradient(circle, #fff 0 2px, transparent 3px);
   background-size: 83px 97px;
@@ -196,11 +194,11 @@ ol {
   min-height: 0;
   overflow-y: auto;
   padding: 16px 12px;
-  margin: 8px;
-  border: 1px solid #ffffff2c;
-  border-radius: 22px;
-  background: #26323bba;
-  backdrop-filter: blur(30px);
+  margin: 0;
+  border: 0;
+  border-right: 1px solid #ffffff20;
+  border-radius: 0;
+  background: #35434fe8;
   scrollbar-width: thin;
 }
 .sidebar-toolbar {
@@ -411,8 +409,7 @@ ol {
   min-width: 0;
   border: 1px solid #eff7ff18;
   border-radius: 17px;
-  background: #354f6860;
-  backdrop-filter: blur(22px);
+  background: color-mix(in srgb, var(--sky-bottom, #aec0cf) 52%, #354f68);
   box-shadow: inset 0 1px #ffffff0a;
   overflow: hidden;
 }
@@ -854,8 +851,7 @@ button:active {
   padding: 20px;
   border: 1px solid #ffffff40;
   border-radius: 22px;
-  background: #314c65ed;
-  backdrop-filter: blur(40px);
+  background: #3d566d;
   box-shadow: 0 20px 70px #15293f55;
   overflow-y: auto;
 }
@@ -1045,7 +1041,6 @@ button:active {
 .favorite-button {
   position: relative;
 }
-.weather-progress,
 .weather-alert {
   position: sticky;
   top: 46px;
@@ -1083,7 +1078,6 @@ button:active {
   inset: 0;
   border: 0;
   background: #12283e30;
-  backdrop-filter: blur(4px);
 }
 .weather-detail {
   position: relative;
@@ -1093,8 +1087,7 @@ button:active {
   border: 1px solid #ffffff36;
   border-radius: 23px;
   padding: 18px;
-  background: #597387e6;
-  backdrop-filter: blur(48px);
+  background: #597387;
   box-shadow: 0 24px 70px #102a4055;
   animation: panel-appear 0.22s ease both;
   scrollbar-width: thin;
@@ -1988,17 +1981,19 @@ button[data-redevplugin-action] > * {
 .weather-sky::after {
   content: "";
   position: absolute;
-  inset: -15% -20% 25%;
+  width: 1800px;
+  height: 800px;
+  left: calc(50% - 900px);
+  top: -120px;
   opacity: 0.33;
-  filter: blur(9px);
   transform: rotate(-12deg);
   background:
-    radial-gradient(ellipse at 14% 15%, #eff7fb 0 4%, transparent 13%),
-    radial-gradient(ellipse at 32% 29%, #eef8ff 0 3%, transparent 12%),
-    radial-gradient(ellipse at 57% 34%, #e1eff7 0 6%, transparent 16%),
-    radial-gradient(ellipse at 83% 23%, #eff8ff 0 5%, transparent 15%),
-    radial-gradient(ellipse at 43% 70%, #708ea4 0 8%, transparent 22%),
-    radial-gradient(ellipse at 88% 55%, #7893a7 0 5%, transparent 17%);
+    radial-gradient(ellipse 9% 20% at 14% 40%, #eff7fb, transparent 100%),
+    radial-gradient(ellipse 8% 18% at 32% 45%, #eef8ff, transparent 100%),
+    radial-gradient(ellipse 14% 24% at 57% 34%, #e1eff7, transparent 100%),
+    radial-gradient(ellipse 12% 20% at 83% 45%, #eff8ff, transparent 100%),
+    radial-gradient(ellipse 17% 22% at 43% 70%, #708ea4, transparent 100%),
+    radial-gradient(ellipse 10% 20% at 88% 55%, #7893a7, transparent 100%);
   animation: cloud-drift 85s ease-in-out infinite alternate-reverse;
 }
 .sky-clear-day .weather-sky::after,
@@ -2105,11 +2100,9 @@ button[data-redevplugin-action] > * {
 @keyframes toolbar-glass {
   from {
     background: transparent;
-    backdrop-filter: blur(0);
   }
   to {
-    background: #526f8877;
-    backdrop-filter: blur(22px);
+    background: color-mix(in srgb, var(--sky-bottom, #aec0cf) 52%, #354f68);
   }
 }
 
@@ -2320,5 +2313,55 @@ button[data-redevplugin-action] > * {
 @media (max-width: 520px) {
   .metrics-grid {
     gap: 12px;
+  }
+}
+
+/* The toolbar reports pending navigation without adding a row to the forecast. */
+.weather-card-controls .weather-progress {
+  position: absolute;
+  left: 44px;
+  right: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.3;
+  pointer-events: none;
+}
+.weather-progress-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.weather-progress .location-loading-mark {
+  flex: 0 0 auto;
+}
+.weather-card-controls:has(.weather-progress) .scroll-summary {
+  visibility: hidden;
+}
+@media (max-width: 520px) {
+  .weather-card-controls .weather-progress {
+    left: 0;
+    right: 130px;
+    justify-content: flex-start;
+  }
+}
+
+/* Keep atmospheric raster dimensions stable while the foreground follows the viewport. */
+@media (max-width: 780px) {
+  .cloud {
+    width: 900px;
+    height: 620px;
+    left: calc(50% - 450px);
+  }
+  .cloud-two {
+    left: calc(50% - 400px);
+  }
+  .weather-sky::after {
+    width: 1000px;
+    height: 700px;
+    left: calc(50% - 500px);
   }
 }
