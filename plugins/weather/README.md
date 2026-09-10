@@ -65,10 +65,9 @@ npm test
 npm run build
 ```
 
-The source release-train version is `1.0.32`. These interface changes require a
-new signed release before distribution; building locally does not replace any
-published artifact or installed plugin. Build an unsigned review package from
-the repository root with:
+The source release-train version is `1.0.41`. Official distribution uses its
+signed release reference; a local build does not replace installed plugins.
+Build an unsigned review package from the repository root with:
 
 ```bash
 npm run package:weather
@@ -92,3 +91,17 @@ Use `?width=390&height=700` for a narrow surface, `?locale=en-US` for English,
 `?code=61` for rain, or `?code=0&night=1` for a clear night. Restart the preview
 script after changing TypeScript; CSS is read on every surface load.
 The review notes are in [VISUAL_REVIEW.md](VISUAL_REVIEW.md).
+
+## Languages
+
+The surface follows the host language context and supports English, Simplified
+Chinese, Traditional Chinese, Japanese, Korean, German, French, Spanish,
+Brazilian Portuguese, and Russian. Language changes relabel controls, details,
+existing notices, and known saved city presets without changing location identity.
+Search requests use the selected provider language. Names of arbitrary saved
+search results retain the provider's original spelling; no background translation
+requests are made. Unsupported languages fall back to English.
+
+Forecast dates retain the provider's civil date rather than shifting with the
+browser time zone. Numbers use locale-aware formatting; weather units remain
+metric across languages. Long labels wrap, and the date strip scrolls horizontally.

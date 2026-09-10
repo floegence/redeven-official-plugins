@@ -7,7 +7,7 @@
   "plugin": {
     "plugin_id": "com.redeven.official.weather",
     "display_name": "Weather",
-    "version": "1.0.32"
+    "version": "1.0.41"
   },
   "api": {
     "major": 1,
@@ -509,7 +509,7 @@
             "maxLength": 120
           },
           "language": {
-            "enum": ["en", "zh"]
+            "enum": ["en", "zh", "ja", "ko", "de", "fr", "es", "pt", "ru"]
           }
         }
       },

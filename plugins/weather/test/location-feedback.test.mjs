@@ -35,9 +35,10 @@ function harness({ initial = true, locale = 'en-US', dataForecast = forecast } =
   const actions = new Map();
   const calls = [];
   let tree;
+  let contextHandler;
   class TestBridge {
     async ready() {}
-    onContext(handler) { handler({ locale: { language_tag: locale } }); }
+    onContext(handler) { contextHandler = handler; handler({ locale: { language_tag: locale } }); }
     onLifecycle() {}
     onAction(name, handler) { actions.set(name, handler); }
     async render(next) { tree = next; }
@@ -53,6 +54,7 @@ function harness({ initial = true, locale = 'en-US', dataForecast = forecast } =
   });
   return {
     calls,
+    context(locale) { contextHandler({ locale: { language_tag: locale } }); },
     get tree() { return tree; },
     action(name, event = {}) { actions.get(name)(event); },
   };
@@ -228,12 +230,12 @@ const detailedForecast = {
 test('day selection and actual/apparent tabs project only the chosen day', async () => {
   const app = await ready({ dataForecast: detailedForecast });
   app.action('open-day', { value: '1' }); await flush();
-  assert.match(content(find(app.tree, 'detail-date')), /2026-09-06/u);
+  assert.equal(content(find(app.tree, 'detail-date')), 'September 6, 2026');
   assert.equal(find(app.tree, 'actual-tab').attributes['aria-pressed'], true);
   app.action('detail-temperature', { value: 'apparent' }); await flush();
   assert.equal(find(app.tree, 'apparent-tab').attributes['aria-pressed'], true);
   app.action('detail-day', { value: '-1' }); await flush();
-  assert.match(content(find(app.tree, 'detail-date')), /2026-09-06/u);
+  assert.equal(content(find(app.tree, 'detail-date')), 'September 6, 2026');
 });
 
 test('future humidity details use percentage units and optional missing metrics stay unavailable', async () => {
@@ -246,4 +248,44 @@ test('future humidity details use percentage units and optional missing metrics 
   app.action('open-detail', { value: 'visibility' }); await flush();
   app.action('detail-day', { value: '1' }); await flush();
   assert.ok(find(app.tree, 'detail-no-hours'));
+});
+
+test('language changes relabel saved presets and existing notices without changing city identity', async () => {
+  const app = await ready();
+  app.action('search-location', { form_data: { query: '' } }); await flush();
+  app.context('zh-TW'); await flush();
+  assert.equal(content(find(app.tree, 'place-name')), '北京');
+  assert.match(content(find(app.tree, 'chooser-status')), /搜尋/);
+  app.context('ja-JP'); await flush();
+  assert.match(content(find(app.tree, 'chooser-status')), /検索/);
+  assert.equal(content(find(app.tree, 'major-name-preset:tokyo')), '東京');
+});
+
+test('search forwards the supported provider language from surface context', async () => {
+  const app = await ready({ initial: false, locale: 'de-DE' });
+  app.action('search-location', { form_data: { query: 'Berlin' } }); await flush();
+  assert.equal(app.calls[0].input.language, 'de');
+});
+
+for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'de-DE', 'fr-FR', 'es-ES', 'pt-BR', 'ru-RU']) {
+  test(`${locale} renders the complete dashboard and details through the SDK`, async () => {
+    const app = await ready({ locale, dataForecast: detailedForecast });
+    assert.equal(find(app.tree, 'weather-root').attributes.lang, locale);
+    app.action('open-day', { value: '0' }); await flush();
+    const text = content(app.tree);
+    assert.doesNotMatch(text, /undefined|\{(?:city|count|chance|speed|temperature)\}/u);
+    assert.ok(content(find(app.tree, 'detail-title')));
+    assert.ok(content(find(app.tree, 'detail-date')));
+    app.action('close-detail'); await flush();
+  });
+}
+
+test('every metric opens and closes repeatedly without duplicate SDK node keys', async () => {
+  const app = await ready({ dataForecast: detailedForecast });
+  for (const metric of ['wind', 'sunset', 'rain', 'feels-like', 'humidity', 'uv', 'visibility', 'pressure', 'sunset']) {
+    app.action('open-detail', { value: metric }); await flush();
+    assert.ok(find(app.tree, 'weather-detail'));
+    app.action('close-detail'); await flush();
+    assert.equal(find(app.tree, 'detail-layer').attributes.hidden, true);
+  }
 });

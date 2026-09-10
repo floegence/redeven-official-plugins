@@ -238,7 +238,10 @@ fn search_locations(request: SearchRequest) -> WorkerResult {
             "location query must contain 2 to 120 characters",
         ));
     }
-    if request.language != "en" && request.language != "zh" {
+    if !matches!(
+        request.language.as_str(),
+        "en" | "zh" | "ja" | "ko" | "de" | "fr" | "es" | "pt" | "ru"
+    ) {
         return Err(WorkerError::invalid_request("search language is invalid"));
     }
     let url = format!(

@@ -2173,7 +2173,7 @@ button[data-redevplugin-action] > * {
   }
 }
 
-[lang="en-US"] .range-label {
+.weather-app:not([lang="zh-CN"]):not([lang="zh-TW"]) .range-label {
   width: auto;
   margin-right: 3px;
   font-size: 12px;
@@ -2269,4 +2269,54 @@ button[data-redevplugin-action] > * {
 }
 .chart-hour-23 {
   --chart-x: 100%;
+}
+
+/* Translated labels can wrap without clipping the value or the next card. */
+.range-label {
+  white-space: normal;
+}
+.metric {
+  height: auto;
+  min-height: 140px;
+  gap: 6px;
+}
+.metric .card-label {
+  overflow-wrap: anywhere;
+}
+.metric-note {
+  overflow-wrap: anywhere;
+}
+.detail-days button {
+  flex-shrink: 0;
+  min-width: 38px;
+}
+.detail-days button span {
+  white-space: nowrap;
+}
+.weather-detail h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.metric {
+  align-self: stretch;
+}
+.detail-days {
+  scrollbar-width: none;
+}
+
+.day-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.weather-app[lang="ru-RU"] .forecast-row,
+.weather-app[lang="fr-FR"] .forecast-row {
+  grid-template-columns: 76px 24px 26px minmax(18px, 1fr) 26px;
+  gap: 5px;
+}
+.weather-app[lang="ru-RU"] .day-label,
+.weather-app[lang="fr-FR"] .day-label {
+  font-size: 12px;
 }

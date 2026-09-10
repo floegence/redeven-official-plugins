@@ -51,6 +51,27 @@ wind uses km/h. The sun arc is illustrative, while its times are provider data.
 Unavailable provider fields are omitted rather than displayed as zero.
 
 The fixture host verifies the actual released iframe/worker/renderer path, but it
-is not an end-to-end test of an installed plugin in a live Redeven session. The
-new code is private feature-branch work. The generated unsigned review package
-is not a published release, and existing installations have not been replaced.
+is not an end-to-end test of an installed plugin in a live Redeven session. Release `1.0.41` contains the reviewed implementation and the ten-language
+adaptation. Installation and update state remain owned by the host.
+
+## Localization follow-up
+
+All ten supported language contexts render through SDK reconciliation tests,
+including detail panels, localized civil dates, and placeholder completeness.
+Traditional Chinese has independent copy. Context changes retranslate existing
+notices and saved preset labels. Provider search languages remain a closed list
+shared by the manifest and WASM worker. Non-preset proper names retain the
+provider's spelling rather than being guessed or translated without a request.
+
+The final localization pass exercised German details at 390 pixels, Russian
+metric cards at 320 pixels, and the Traditional Chinese dashboard and city
+picker at 390 pixels. Long metric notes wrap and adjacent cards stretch to a
+shared row height. The detail date strip stays scrollable without a bright
+platform scrollbar. Numeric precipitation totals use the locale's decimal
+separator. Automated render coverage additionally checks the other seven
+language contexts using the same released SDK reconciler.
+
+The follow-up also corrected the wider Russian/French “Today” label columns and
+an SDK-global duplicate key in the sunset illustration shared by the card and
+detail panel. A regression now opens every metric repeatedly, including sunset,
+through the released SDK tree validator.

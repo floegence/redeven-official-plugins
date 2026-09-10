@@ -157,7 +157,7 @@ const server = createServer(async (req, res) => {
     const bootstrap = {
       plugin_id: "com.redeven.official.weather",
       plugin_instance_id: "weather-preview",
-      plugin_version: "1.0.32",
+      plugin_version: "1.0.41",
       surface_id: "weather.dashboard",
       surface_instance_id: "review-surface",
       active_fingerprint: "a".repeat(64),

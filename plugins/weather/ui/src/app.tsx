@@ -8,6 +8,10 @@ import {
 } from "@floegence/redevplugin-ui/plugin";
 import {
   conditionForCode,
+  formatMessage,
+  formatCivilDate,
+  localizedLocation,
+  type WeatherMessageKey,
   localeForLanguageTag,
   majorCitiesForLocale,
   temperatureRangeClasses,
@@ -77,7 +81,11 @@ type ForecastResult = {
   favorites: Location[];
 };
 type BusyState = "initial" | "search" | "forecast" | "remove";
-type Notice = { scope: "chooser" | "weather"; text: string; error?: boolean };
+type Notice = {
+  scope: "chooser" | "weather";
+  text: WeatherMessageKey;
+  error?: boolean;
+};
 
 const bridge = new PluginBridgeClient({ timeoutMs: 20_000 });
 const state: {
@@ -179,6 +187,7 @@ async function initialize(): Promise<void> {
     const locale = localeForLanguageTag(context.locale.language_tag);
     if (locale === state.locale) return;
     state.locale = locale;
+    state.results = [];
     void render();
   });
   clockTimer = setInterval(() => {
@@ -231,7 +240,7 @@ async function searchLocations(event: PluginUIActionEvent): Promise<void> {
   const query = String(event.form_data?.query ?? "").trim();
   state.query = query;
   if ([...query].length < 2) {
-    state.notice = { scope: "chooser", text: translations().searchHint };
+    state.notice = { scope: "chooser", text: "searchHint" };
     state.results = [];
     await render();
     return;
@@ -240,15 +249,17 @@ async function searchLocations(event: PluginUIActionEvent): Promise<void> {
   state.notice = undefined;
   await render();
   try {
-    const language = state.locale === "zh-CN" ? "zh" : "en";
+    const searchLocale = state.locale;
+    const language = searchLocale.split("-")[0];
     const response = await bridge.call<PluginMethodResult<LocationsResult>>(
       "weather.locations.search",
       { query, language },
     );
+    if (state.locale !== searchLocale) return;
     state.results = response.data.locations;
     state.notice =
       state.results.length === 0
-        ? { scope: "chooser", text: translations().noResults }
+        ? { scope: "chooser", text: "noResults" }
         : undefined;
   } catch (error) {
     state.results = [];
@@ -363,7 +374,7 @@ async function loadForecast(
     if (state.queuedLocation) return;
     const message =
       preserveVisible && state.forecast
-        ? translations().refreshFailed
+        ? ("refreshFailed" as const)
         : friendlyError(error, "forecast");
     state.notice = {
       scope: state.forecast && !state.chooserOpen ? "weather" : "chooser",
@@ -424,7 +435,7 @@ function view() {
           <span key="source">{t.poweredBy}</span>
           <span key="observation">
             {state.forecast
-              ? `${state.forecast.source === "saved" ? copy("Saved forecast", "缓存预报") + " · " : ""}${state.forecast.current.time.replace("T", " ")} · ${state.forecast.timezone}`
+              ? `${state.forecast.source === "saved" ? message("savedWeather") + " · " : ""}${state.forecast.current.time.replace("T", " ")} · ${state.forecast.timezone}`
               : ""}
           </span>
         </footer>
@@ -440,7 +451,7 @@ function locationPicker(
 ) {
   const notice = state.notice?.scope === "chooser" ? state.notice : undefined;
   const status =
-    notice?.text ??
+    (notice ? message(notice.text) : undefined) ??
     (state.pendingLocation
       ? pendingLocationLabel(t)
       : state.busy === "forecast"
@@ -543,7 +554,9 @@ function pickerHeading(t: WeatherTranslations) {
           {t.chooseLocation}
         </span>
         <strong key="chooser-title">
-          {state.selected?.name ?? t.majorCities}
+          {(state.selected
+            ? localizedLocation(state.selected, state.locale).name
+            : undefined) ?? t.majorCities}
         </strong>
       </div>
       <button
@@ -580,7 +593,9 @@ function majorCities(t: WeatherTranslations) {
               aria-busy={state.pendingLocation?.id === location.id}
               data-redevplugin-action="preview-location"
             >
-              <strong key={`major-name-${location.id}`}>{location.name}</strong>
+              <strong key={`major-name-${location.id}`}>
+                {localizedLocation(location, state.locale).name}
+              </strong>
               <span key={`major-country-${location.id}`}>
                 {location.country}
               </span>
@@ -626,7 +641,7 @@ function searchResults(t: WeatherTranslations) {
                 className="location-copy"
               >
                 <strong key={`result-name-${location.id}`}>
-                  {location.name}
+                  {localizedLocation(location, state.locale).name}
                 </strong>
                 <span key={`result-place-${location.id}`}>
                   {locationSubtitle(location)}
@@ -666,15 +681,15 @@ function favoritePlaces(t: WeatherTranslations) {
               disabled={Boolean(state.busy && state.busy !== "forecast")}
               data-redevplugin-action="open-location"
             >
-              {location.name}
+              {localizedLocation(location, state.locale).name}
             </button>
             <button
               key={`favorite-remove-${location.id}`}
               className="favorite-remove"
               type="button"
               value={location.id}
-              title={`${t.remove} ${location.name}`}
-              aria-label={`${t.remove} ${location.name}`}
+              title={`${t.remove} ${localizedLocation(location, state.locale).name}`}
+              aria-label={`${t.remove} ${localizedLocation(location, state.locale).name}`}
               disabled={Boolean(state.busy)}
               data-redevplugin-action="remove-location"
             >
@@ -687,8 +702,11 @@ function favoritePlaces(t: WeatherTranslations) {
   );
 }
 
-function copy(en: string, zh: string): string {
-  return state.locale === "zh-CN" ? zh : en;
+function message(
+  key: WeatherMessageKey,
+  values: Record<string, string | number> = {},
+): string {
+  return formatMessage(state.locale, key, values);
 }
 
 function weatherIcon(code: number, day = true, key = "icon") {
@@ -716,12 +734,12 @@ function citySidebar(t: WeatherTranslations) {
       aria-hidden={state.detail ? true : undefined}
     >
       <div key="sidebar-toolbar" className="sidebar-toolbar">
-        <span key="sidebar-title">{copy("Weather", "天气")}</span>
+        <span key="sidebar-title">{message("weather")}</span>
         <button
           key="sidebar-close"
           type="button"
           className="plain-button"
-          aria-label={copy("Hide sidebar", "隐藏边栏")}
+          aria-label={message("hideSidebar")}
           data-redevplugin-action="toggle-sidebar"
         >
           ◧
@@ -745,7 +763,7 @@ function citySidebar(t: WeatherTranslations) {
               value={location.id}
               title={
                 forecast
-                  ? `${copy("Observed", "观测时间")} ${forecast.current.time.replace("T", " ")}`
+                  ? `${message("observed")} ${forecast.current.time.replace("T", " ")}`
                   : undefined
               }
               className={`city-card sky-${conditionForCode(forecast?.current.weather_code ?? 3, forecast?.current.is_day ?? true).kind}${forecast?.current.is_day === false ? " weather-night" : ""}`}
@@ -753,7 +771,9 @@ function citySidebar(t: WeatherTranslations) {
               aria-busy={state.pendingLocation?.id === location.id}
               data-redevplugin-action="open-location"
             >
-              <strong key={`city-name-${location.id}`}>{location.name}</strong>
+              <strong key={`city-name-${location.id}`}>
+                {localizedLocation(location, state.locale).name}
+              </strong>
               <time key={`city-time-${location.id}`}>
                 {formatTime(state.now, location.timezone)}
               </time>
@@ -814,7 +834,9 @@ function forecastDashboard(
         </p>
       ) : null}
       <header key={`weather-hero-${location.id}`} className="weather-hero">
-        <h2 key="place-name">{location.name}</h2>
+        <h2 key="place-name">
+          {localizedLocation(location, state.locale).name}
+        </h2>
         <span key="current-temperature" className="current-temperature">
           {degrees(current.temperature)}
         </span>
@@ -846,7 +868,7 @@ function forecastDashboard(
           className="weather-alert"
           role={notice.error ? "alert" : "status"}
         >
-          {notice.text}
+          {message(notice.text)}
         </p>
       ) : null}
       <div key="weather-grid" className="weather-grid">
@@ -854,11 +876,9 @@ function forecastDashboard(
           <section
             key="hourly"
             className="glass-card hourly-card"
-            aria-label={copy("Hourly forecast", "每小时天气预报")}
+            aria-label={message("hourly")}
           >
-            <h3 key="hourly-title">
-              ◷ {copy("Hourly forecast", "每小时天气预报")}
-            </h3>
+            <h3 key="hourly-title">◷ {message("hourly")}</h3>
             <ol key="hourly-list" className="hourly-list">
               {hours.map((hour, index) => (
                 <li key={`hour-${hour.time}`}>
@@ -873,9 +893,7 @@ function forecastDashboard(
                     data-redevplugin-action="open-day"
                   >
                     <span key={`hour-label-${hour.time}`}>
-                      {index === 0
-                        ? copy("Now", "现在")
-                        : `${Number(hour.time.slice(11, 13))}${copy(":00", "时")}`}
+                      {index === 0 ? message("now") : hour.time.slice(11, 16)}
                     </span>
                     {weatherIcon(
                       index === 0 ? current.weather_code : hour.weather_code,
@@ -907,10 +925,7 @@ function forecastDashboard(
             ▦{" "}
             {forecast.days.length === 10
               ? t.forecastTitle
-              : copy(
-                  `${forecast.days.length}-day forecast`,
-                  `${forecast.days.length}日天气预报`,
-                )}
+              : message("daysForecast", { count: forecast.days.length })}
           </h3>
           <ol key="forecast-list" className="forecast-list">
             {forecast.days.map((day, index) =>
@@ -1021,31 +1036,29 @@ function metricItems(): MetricItem[] {
       id: "wind",
       label: t.wind,
       symbol: "≋",
-      value: `${Math.round(current.wind_speed)} km/h`,
+      value: `${number(current.wind_speed)} ${message("windUnit")}`,
       note:
         hour?.wind_gusts != null
-          ? copy(
-              `Gusts ${Math.round(hour.wind_gusts)} km/h`,
-              `阵风 ${Math.round(hour.wind_gusts)} 公里/时`,
-            )
-          : copy("Current wind speed", "当前风速"),
+          ? message("gusts", {
+              speed: `${number(hour.wind_gusts)} ${message("windUnit")}`,
+            })
+          : message("currentWind"),
     },
     {
       id: "feels-like",
       label: t.feelsLike,
       symbol: "♨",
       value: degrees(current.apparent_temperature),
-      note: copy(
-        `Actual temperature: ${degrees(current.temperature)}`,
-        `实际气温：${degrees(current.temperature)}`,
-      ),
+      note: message("actualTemperature", {
+        temperature: degrees(current.temperature),
+      }),
     },
     {
       id: "humidity",
       label: t.humidity,
       symbol: "◉",
       value: `${Math.round(current.humidity)}%`,
-      note: copy("Relative humidity", "当前相对湿度"),
+      note: message("relativeHumidity"),
     },
   ];
   if (day)
@@ -1054,93 +1067,92 @@ function metricItems(): MetricItem[] {
       0,
       {
         id: "sunset",
-        label: copy("Sunset", "日落"),
+        label: message("sunset"),
         symbol: "☀",
         value: day.sunset.slice(11, 16) || "—",
-        note: `${copy("Sunrise", "日出")} ${day.sunrise.slice(11, 16) || "—"}`,
+        note: `${message("sunrise")} ${day.sunrise.slice(11, 16) || "—"}`,
       },
       {
         id: "rain",
-        label: copy("Precipitation", "降水"),
+        label: message("precipitationTotal"),
         symbol: "☂",
         value:
           day.precipitation_sum != null
-            ? `${Math.round(day.precipitation_sum * 10) / 10} ${copy("mm", "毫米")}`
+            ? `${number(day.precipitation_sum, 1)} ${message("millimeters")}`
             : `${Math.round(day.precipitation_probability)}%`,
-        note: copy(
-          `Today · ${Math.round(day.precipitation_probability)}% chance of precipitation`,
-          `今天 · 降水概率 ${Math.round(day.precipitation_probability)}%`,
-        ),
+        note: message("chanceToday", {
+          chance: `${number(day.precipitation_probability)}%`,
+        }),
       },
     );
   if (hour?.uv_index != null)
     result.push({
       id: "uv",
-      label: copy("UV index", "紫外线指数"),
+      label: message("uv"),
       symbol: "☀",
       value: String(Math.round(hour.uv_index)),
       note:
         hour.uv_index < 3
-          ? copy("Low", "低")
+          ? message("lowUV")
           : hour.uv_index < 6
-            ? copy("Moderate", "中等")
+            ? message("moderateUV")
             : hour.uv_index < 8
-              ? copy("High", "高")
-              : copy("Very high", "很高"),
+              ? message("highUV")
+              : message("veryHighUV"),
     });
   if (hour?.visibility != null)
     result.push({
       id: "visibility",
-      label: copy("Visibility", "能见度"),
+      label: message("visibility"),
       symbol: "◌",
-      value: `${Math.round(hour.visibility / 1000)} ${copy("km", "公里")}`,
-      note: copy("Horizontal visibility", "水平方向能见度"),
+      value: `${Math.round(hour.visibility / 1000)} ${message("kilometers")}`,
+      note: message("horizontalVisibility"),
     });
   if (hour?.pressure != null)
     result.push({
       id: "pressure",
-      label: copy("Pressure", "气压"),
+      label: message("pressure"),
       symbol: "◴",
       value: `${Math.round(hour.pressure)}`,
-      note: copy("hPa · Sea level", "百帕 · 海平面气压"),
+      note: message("seaLevel"),
     });
   return result;
 }
 
-function metricIllustration(id: string) {
+function metricIllustration(id: string, context = "card") {
   const hour = state.forecast ? upcomingHours(state.forecast)[0] : undefined;
   if (id === "wind" && hour?.wind_direction != null)
     return (
       <span
-        key="compass"
+        key={`${context}-compass`}
         className={`compass direction-${Math.round(hour.wind_direction / 10) % 36}`}
         aria-hidden="true"
       >
-        <span key="north" className="north">
-          {copy("N", "北")}
+        <span key={`${context}-north`} className="north">
+          {message("north")}
         </span>
-        <span key="west" className="west">
-          {copy("W", "西")}
+        <span key={`${context}-west`} className="west">
+          {message("west")}
         </span>
-        <span key="east" className="east">
-          {copy("E", "东")}
+        <span key={`${context}-east`} className="east">
+          {message("east")}
         </span>
-        <span key="south" className="south">
-          {copy("S", "南")}
+        <span key={`${context}-south`} className="south">
+          {message("south")}
         </span>
-        <span key="needle" className="compass-needle" />
+        <span key={`${context}-needle`} className="compass-needle" />
       </span>
     );
   if (id === "sunset")
     return (
-      <span key="sun-path" className="sun-path" aria-hidden="true">
-        <span key="sun-arc" />
+      <span key={`${context}-sun-path`} className="sun-path" aria-hidden="true">
+        <span key={`${context}-sun-arc`} />
       </span>
     );
   if (id === "uv" && hour?.uv_index != null)
     return (
       <span
-        key="uv-scale"
+        key={`${context}-uv-scale`}
         className={`uv-scale level-${Math.min(10, Math.round(hour.uv_index))}`}
         aria-hidden="true"
       />
@@ -1148,14 +1160,18 @@ function metricIllustration(id: string) {
   if (id === "humidity")
     return (
       <span
-        key="humidity-scale"
+        key={`${context}-humidity-scale`}
         className={`humidity-scale level-${Math.round((state.forecast?.current.humidity ?? 0) / 10)}`}
         aria-hidden="true"
       />
     );
   if (id === "pressure")
     return (
-      <span key="pressure-dial" className="pressure-dial" aria-hidden="true" />
+      <span
+        key={`${context}-pressure-dial`}
+        className="pressure-dial"
+        aria-hidden="true"
+      />
     );
   return null;
 }
@@ -1275,16 +1291,16 @@ function weatherDetail(t: WeatherTranslations) {
     minimum: min,
     maximum: max,
   } = detailChartData();
-  const title = metric?.label ?? copy("Weather conditions", "天气状况");
+  const title = metric?.label ?? message("conditionsTitle");
   const unit =
     state.detail === "temperature" || state.detail === "feels-like"
       ? "°"
       : state.detail === "humidity" || state.detail === "rain"
         ? "%"
         : state.detail === "wind"
-          ? " km/h"
+          ? ` ${message("windUnit")}`
           : state.detail === "visibility"
-            ? " km"
+            ? ` ${message("kilometers")}`
             : state.detail === "pressure"
               ? " hPa"
               : "";
@@ -1311,7 +1327,7 @@ function weatherDetail(t: WeatherTranslations) {
             type="button"
             className="plain-button"
             autoFocus={Boolean(state.detail)}
-            aria-label={copy("Close details", "关闭详情")}
+            aria-label={message("closeDetails")}
             data-redevplugin-action="close-detail"
           >
             ×
@@ -1342,7 +1358,7 @@ function weatherDetail(t: WeatherTranslations) {
           </nav>
         ) : null}
         <p key="detail-date" className="detail-date">
-          {day?.date}
+          {day ? formatCivilDate(day.date, state.locale) : ""}
         </p>
         <div key="detail-summary" className="detail-summary">
           <strong key="detail-value">
@@ -1364,7 +1380,7 @@ function weatherDetail(t: WeatherTranslations) {
             {state.detailDay === 0 && metric
               ? metric.note
               : metric
-                ? copy("Daily range", "全天范围")
+                ? message("dailyRange")
                 : day
                   ? translatedCondition(
                       conditionForCode(day.weather_code, true).kind,
@@ -1374,7 +1390,7 @@ function weatherDetail(t: WeatherTranslations) {
         </div>
         {state.detail === "sunset" ? (
           <div key="sun-detail" className="sun-detail">
-            {metricIllustration("sunset")}
+            {metricIllustration("sunset", "detail")}
             <p key="sun-caption">{metric?.note}</p>
           </div>
         ) : null}
@@ -1433,10 +1449,7 @@ function weatherDetail(t: WeatherTranslations) {
         </div>
         {state.detail !== "sunset" && !values.length ? (
           <p key="detail-no-hours" className="detail-note">
-            {copy(
-              "Hourly details are unavailable for this saved forecast. Refresh to try again.",
-              "此缓存预报暂无逐小时详情，请刷新后重试。",
-            )}
+            {message("missingHours")}
           </p>
         ) : null}
         {state.detail === "temperature" ? (
@@ -1444,7 +1457,7 @@ function weatherDetail(t: WeatherTranslations) {
             key="temperature-tabs"
             className="temperature-tabs"
             role="group"
-            aria-label={copy("Temperature type", "气温类型")}
+            aria-label={message("temperatureType")}
           >
             <button
               key="actual-tab"
@@ -1453,7 +1466,7 @@ function weatherDetail(t: WeatherTranslations) {
               aria-pressed={!state.apparent}
               data-redevplugin-action="detail-temperature"
             >
-              {copy("Actual", "实际气温")}
+              {message("actual")}
             </button>
             <button
               key="apparent-tab"
@@ -1496,7 +1509,11 @@ function weatherCardControls(t: WeatherTranslations) {
   return (
     <div key="weather-card-controls" className="weather-card-controls">
       <span key="scroll-summary" className="scroll-summary" aria-hidden="true">
-        <strong key="scroll-city">{state.selected?.name}</strong>
+        <strong key="scroll-city">
+          {state.selected
+            ? localizedLocation(state.selected, state.locale).name
+            : undefined}
+        </strong>
         <span key="scroll-temperature">
           {state.forecast
             ? `${degrees(state.forecast.current.temperature)} · ${translatedCondition(conditionForCode(state.forecast.current.weather_code, state.forecast.current.is_day).kind)}`
@@ -1507,8 +1524,8 @@ function weatherCardControls(t: WeatherTranslations) {
         key="sidebar-toggle"
         type="button"
         className="plain-button sidebar-toggle"
-        title={copy("Toggle sidebar", "显示或隐藏边栏")}
-        aria-label={copy("Toggle sidebar", "显示或隐藏边栏")}
+        title={message("toggleSidebar")}
+        aria-label={message("toggleSidebar")}
         aria-expanded={!state.sidebarCollapsed}
         data-redevplugin-action="toggle-sidebar"
       >
@@ -1519,12 +1536,14 @@ function weatherCardControls(t: WeatherTranslations) {
         className="location-trigger"
         type="button"
         title={t.chooseLocation}
-        aria-label={`${t.chooseLocation}: ${state.selected?.name ?? t.chooseLocation}`}
+        aria-label={`${t.chooseLocation}: ${(state.selected ? localizedLocation(state.selected, state.locale).name : undefined) ?? t.chooseLocation}`}
         aria-expanded={state.chooserOpen}
         data-redevplugin-action="toggle-location-chooser"
       >
         <strong key="location-trigger-name" className="location-trigger-name">
-          {state.selected?.name ?? t.chooseLocation}
+          {(state.selected
+            ? localizedLocation(state.selected, state.locale).name
+            : undefined) ?? t.chooseLocation}
         </strong>
         <span
           key="location-trigger-arrow"
@@ -1577,7 +1596,12 @@ function translations(): WeatherTranslations {
 }
 
 function pendingLocationLabel(t: WeatherTranslations): string {
-  return t.loadingLocation.replace("{city}", state.pendingLocation?.name ?? "");
+  return t.loadingLocation.replace(
+    "{city}",
+    (state.pendingLocation
+      ? localizedLocation(state.pendingLocation, state.locale).name
+      : undefined) ?? "",
+  );
 }
 
 function translatedCondition(
@@ -1587,26 +1611,25 @@ function translatedCondition(
 }
 
 function locationSubtitle(location: Location): string {
-  return [...new Set([location.admin1, location.country].filter(Boolean))].join(
-    ", ",
-  );
+  const localized = localizedLocation(location, state.locale);
+  return [
+    ...new Set([localized.admin1, localized.country].filter(Boolean)),
+  ].join(", ");
 }
 
 function friendlyError(
   error: unknown,
   operation: "load" | "search" | "remove" | "forecast",
-): string {
+): WeatherMessageKey {
   if (
     error instanceof PluginBridgeError &&
     error.errorCode === "PLUGIN_PERMISSION_DENIED"
   ) {
-    return translations().permission;
+    return "permission";
   }
-  if (operation === "search") return translations().searchError;
-  if (operation === "forecast") return translations().unavailable;
-  return error instanceof Error && error.message
-    ? error.message
-    : translations().unavailable;
+  if (operation === "search") return "searchError";
+  if (operation === "forecast") return "unavailable";
+  return "unavailable";
 }
 
 function formatTime(date: Date, timezone?: string): string {
@@ -1619,12 +1642,7 @@ function formatTime(date: Date, timezone?: string): string {
 }
 
 function formatForecastDay(value: string): string {
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day, 12));
-  return new Intl.DateTimeFormat(state.locale, {
-    weekday: "short",
-    timeZone: "UTC",
-  }).format(date);
+  return formatCivilDate(value, state.locale, true);
 }
 
 function safeDateFormat(
@@ -1639,8 +1657,14 @@ function safeDateFormat(
   }
 }
 
+function number(value: number, fractionDigits = 0): string {
+  return new Intl.NumberFormat(state.locale, {
+    maximumFractionDigits: fractionDigits,
+    useGrouping: false,
+  }).format(value);
+}
 function degrees(value: number): string {
-  return `${Math.round(value)}°`;
+  return `${number(value)}°`;
 }
 
 function reportUnhandledFailure(error: unknown): void {
