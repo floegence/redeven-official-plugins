@@ -289,3 +289,18 @@ test('every metric opens and closes repeatedly without duplicate SDK node keys',
     assert.equal(find(app.tree, 'detail-layer').attributes.hidden, true);
   }
 });
+
+for (const dataForecast of [detailedForecast, { ...detailedForecast, hourly: [] }]) {
+  test(`metric cards remain a complete independent group with ${dataForecast.hourly.length ? 'full' : 'cached'} data`, async () => {
+    const app = await ready({ dataForecast });
+    const metrics = find(app.tree, 'metrics-grid');
+    assert.ok(metrics);
+    assert.equal(metrics.children.filter(child => child.type !== 'text').length, dataForecast.hourly.length ? 8 : 5);
+    assert.ok(find(app.tree, 'weekly-forecast'));
+  });
+}
+
+test('a provider fallback clearly labels cached weather after refresh', async () => {
+  const app = await ready({ dataForecast: { ...detailedForecast, source: 'saved', hourly: [] } });
+  assert.match(content(find(app.tree, 'weather-alert')), /Showing saved weather/);
+});

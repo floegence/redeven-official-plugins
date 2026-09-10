@@ -364,6 +364,10 @@ async function loadForecast(
     if (state.queuedLocation) return;
     state.selected = response.data.location;
     state.forecast = response.data.forecast;
+    state.notice =
+      response.data.forecast.source === "saved"
+        ? { scope: "weather", text: "refreshFailed" }
+        : undefined;
     state.cityForecasts[response.data.location.id] = response.data.forecast;
     state.detail = undefined;
     state.favorites = response.data.favorites;
@@ -933,27 +937,33 @@ function forecastDashboard(
             )}
           </ol>
         </section>
-        {metricItems().map((item) => (
-          <button
-            key={`metric-${item.id}`}
-            type="button"
-            className={`glass-card metric metric-${item.id}`}
-            value={item.id}
-            data-redevplugin-action="open-detail"
-            aria-label={`${item.label}: ${item.value}`}
-          >
-            <span key={`metric-label-${item.id}`} className="card-label">
-              {item.symbol} {item.label}
-            </span>
-            <strong key={`metric-value-${item.id}`} className="metric-value">
-              {item.value}
-            </strong>
-            {metricIllustration(item.id)}
-            <span key={`metric-note-${item.id}`} className="metric-note">
-              {item.note}
-            </span>
-          </button>
-        ))}
+        <section
+          key="metrics-grid"
+          className="metrics-grid"
+          aria-label={t.detailsLabel}
+        >
+          {metricItems().map((item) => (
+            <button
+              key={`metric-${item.id}`}
+              type="button"
+              className={`glass-card metric metric-${item.id}`}
+              value={item.id}
+              data-redevplugin-action="open-detail"
+              aria-label={`${item.label}: ${item.value}`}
+            >
+              <span key={`metric-label-${item.id}`} className="card-label">
+                {item.symbol} {item.label}
+              </span>
+              <strong key={`metric-value-${item.id}`} className="metric-value">
+                {item.value}
+              </strong>
+              {metricIllustration(item.id)}
+              <span key={`metric-note-${item.id}`} className="metric-note">
+                {item.note}
+              </span>
+            </button>
+          ))}
+        </section>
       </div>
     </article>
   );

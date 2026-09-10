@@ -35,7 +35,10 @@ the dashboard. The provider can return up to ten days and 240 hourly observation
 Unavailable optional UV, visibility, pressure, or wind observations remain absent;
 they are never substituted with zero. Existing stored forecasts remain readable
 and show their original day count until refreshed. Hourly details are not
-fabricated for older cached forecasts.
+fabricated for cached forecasts. Persistent caches retain current conditions and
+daily summaries within a 40 KiB JSON budget, leaving room for the SDK control
+envelope. Full hourly observations remain in live responses; they are fetched
+again when a city opens. Existing locations and daily caches survive an upgrade.
 
 Air-quality maps, severe-weather alerts, lunar imagery, historical averages,
 Apple's volumetric sky renderer, and platform-native window chrome are outside
@@ -51,7 +54,7 @@ The sunset arc is illustrative; the displayed sunrise/sunset times are data.
   HTTPS origins and the Host-owned user KV store for recent cities and caches.
 - Plugin-local response schemas in the manifest describe hourly observations
   and cached sidebar summaries. No platform protocol or host policy is forked.
-- English and Simplified Chinese follow the surface locale. Weather determines
+- All ten supported languages follow the surface locale. Weather determines
   the atmospheric palette rather than the host shell's light/dark background.
 
 ## Build and test
@@ -65,7 +68,7 @@ npm test
 npm run build
 ```
 
-The source release-train version is `1.0.41`. Official distribution uses its
+The source release-train version is `1.0.42`. Official distribution uses its
 signed release reference; a local build does not replace installed plugins.
 Build an unsigned review package from the repository root with:
 
@@ -88,7 +91,9 @@ WASM worker or a live Redeven session. It is not an installation or admission
 path and is excluded from plugin packages.
 
 Use `?width=390&height=700` for a narrow surface, `?locale=en-US` for English,
-`?code=61` for rain, or `?code=0&night=1` for a clear night. Restart the preview
+`?code=61` for rain, or `?code=0&night=1` for a clear night. Use `?saved=1`
+for an older seven-day cache, `?metrics=6` or `?metrics=7` for incomplete provider
+metrics, and `?forecast_error=1` for a failed refresh. Restart the preview
 script after changing TypeScript; CSS is read on every surface load.
 The review notes are in [VISUAL_REVIEW.md](VISUAL_REVIEW.md).
 

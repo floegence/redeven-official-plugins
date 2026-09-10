@@ -13,6 +13,8 @@ const STATE_KEY: &str = "state-v1.json";
 const STATE_SCHEMA_VERSION: u32 = 1;
 const MAX_FAVORITES: usize = 8;
 const MAX_RESPONSE_BYTES: usize = 512 * 1024;
+// KV values are base64 inside a 64 KiB control envelope, including response metadata.
+const MAX_CACHED_STATE_BYTES: usize = 40 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -36,7 +38,7 @@ struct Forecast {
     source: String,
     current: CurrentWeather,
     days: Vec<ForecastDay>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     hourly: Vec<ForecastHour>,
 }
 
@@ -507,9 +509,7 @@ fn load_state() -> Result<StoredState, WorkerError> {
 }
 
 fn save_state(state: &StoredState) -> Result<(), WorkerError> {
-    validate_state(state)?;
-    let bytes = serde_json::to_vec(state)
-        .map_err(|error| WorkerError::hostcall(format!("encode weather state: {error}")))?;
+    let bytes = encode_cached_state(state)?;
     let value_base64 = base64::engine::general_purpose::STANDARD.encode(bytes);
     kv::put(kv::PutRequest {
         store_id: STORE_ID.to_string(),
@@ -517,6 +517,28 @@ fn save_state(state: &StoredState) -> Result<(), WorkerError> {
         value_base64,
     })?;
     Ok(())
+}
+
+fn encode_cached_state(state: &StoredState) -> Result<Vec<u8>, WorkerError> {
+    validate_state(state)?;
+    // Persist current conditions and daily summaries. Full hourly detail stays in the
+    // live response, rather than multiplying a large payload by every saved city.
+    let mut cached = state.clone();
+    for cache in &mut cached.caches {
+        cache.forecast.hourly.clear();
+    }
+    loop {
+        let bytes = serde_json::to_vec(&cached)
+            .map_err(|error| WorkerError::hostcall(format!("encode weather state: {error}")))?;
+        if bytes.len() <= MAX_CACHED_STATE_BYTES {
+            return Ok(bytes);
+        }
+        if cached.caches.pop().is_none() {
+            return Err(WorkerError::hostcall(
+                "weather location metadata exceeds the storage control limit",
+            ));
+        }
+    }
 }
 
 fn validate_state(state: &StoredState) -> Result<(), WorkerError> {
@@ -855,5 +877,69 @@ mod tests {
         assert_eq!(cached.source, "saved");
         assert_eq!(stored.source, "network");
         assert_eq!(state.caches[0].forecast.source, "network");
+    }
+    #[test]
+    fn full_forecasts_fit_the_storage_control_envelope_without_losing_live_hours() {
+        let forecast = project_forecast(
+            serde_json::from_str(include_str!("../testdata/open-meteo-ten-days.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(forecast.days.len(), 10);
+        assert_eq!(forecast.hourly.len(), 240);
+        let mut state = StoredState::default();
+        for index in 0..MAX_FAVORITES {
+            let mut city = location();
+            city.id = format!("city:{index}");
+            state.favorites.push(city.clone());
+            state.caches.push(ForecastCache {
+                location_id: city.id,
+                forecast: forecast.clone(),
+            });
+        }
+        state.selected = Some(state.favorites[0].clone());
+        let mut upgrading = state.clone();
+        for cache in upgrading.caches.iter_mut().skip(1) {
+            cache.forecast.hourly.clear();
+            cache.forecast.days.truncate(7);
+        }
+        let old_bytes = serde_json::to_vec(&upgrading).unwrap();
+        assert!(
+            old_bytes.len() * 4 / 3 > MAX_IO_CHUNK_BYTES,
+            "the old complete-cache write must reproduce the control limit"
+        );
+        let bytes = encode_cached_state(&state).unwrap();
+        let request = serde_json::to_vec(&json!({
+            "plugin_api": 1, "operation": "storage.kv", "arguments": {
+                "operation": "put", "store_id": STORE_ID, "key": STATE_KEY,
+                "value_base64": base64::engine::general_purpose::STANDARD.encode(&bytes),
+            }
+        }))
+        .unwrap();
+        assert!(request.len() < MAX_IO_CHUNK_BYTES);
+        let cached: StoredState = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(cached.favorites, state.favorites);
+        assert_eq!(cached.selected, state.selected);
+        assert_eq!(cached.caches.len(), MAX_FAVORITES);
+        assert!(
+            cached
+                .caches
+                .iter()
+                .all(|cache| cache.forecast.days.len() == 10 && cache.forecast.hourly.is_empty())
+        );
+        assert!(
+            state
+                .caches
+                .iter()
+                .all(|cache| cache.forecast.hourly.len() == 240)
+        );
+        assert_eq!(
+            encode_cached_state(&cached).unwrap(),
+            bytes,
+            "saving a migrated cache is idempotent"
+        );
+        assert_eq!(
+            cached.caches[0].forecast.current.temperature,
+            forecast.current.temperature
+        );
     }
 }

@@ -97,15 +97,15 @@ function fixture(location, query) {
       wind_speed: 14,
       wind_direction: 345,
       wind_gusts: 36,
-      pressure: 1021,
-      visibility: 17000,
+      pressure: Number(query.get("metrics") ?? 8) < 8 ? null : 1021,
+      visibility: Number(query.get("metrics") ?? 8) < 7 ? null : 17000,
       uv_index: h >= 7 && h < 18 ? 3 : 0,
     })),
   );
   return {
     timezone: location.timezone,
     timezone_abbreviation: "CST",
-    source: "network",
+    source: query.has("saved") ? "saved" : "network",
     current: {
       time: "2026-09-10T09:00",
       temperature: 23,
@@ -115,8 +115,8 @@ function fixture(location, query) {
       wind_speed: 14,
       is_day,
     },
-    days,
-    hourly,
+    days: query.has("saved") ? days.slice(0, 7) : days,
+    hourly: query.has("saved") ? [] : hourly,
   };
 }
 const hash = (value) =>
@@ -157,7 +157,7 @@ const server = createServer(async (req, res) => {
     const bootstrap = {
       plugin_id: "com.redeven.official.weather",
       plugin_instance_id: "weather-preview",
-      plugin_version: "1.0.41",
+      plugin_version: "1.0.42",
       surface_id: "weather.dashboard",
       surface_instance_id: "review-surface",
       active_fingerprint: "a".repeat(64),
@@ -238,6 +238,8 @@ const server = createServer(async (req, res) => {
           },
         };
       else if (body.method === "weather.forecast") {
+        if (url.searchParams.has("forecast_error"))
+          throw new Error("Fixture forecast is unavailable");
         await new Promise((resolve) => setTimeout(resolve, 500));
         data = {
           data: {
@@ -287,6 +289,6 @@ server.listen(
   "127.0.0.1",
   () =>
     console.log(
-      "Weather fixture review: http://127.0.0.1:4178 (released opaque sandbox, synthetic weather)",
+      `Weather fixture review: http://127.0.0.1:${process.env.WEATHER_PREVIEW_PORT || 4178} (released opaque sandbox, synthetic weather)`,
     ),
 );

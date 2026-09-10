@@ -75,3 +75,21 @@ The follow-up also corrected the wider Russian/French “Today” label columns 
 an SDK-global duplicate key in the sunset illustration shared by the card and
 detail panel. A regression now opens every metric repeatedly, including sunset,
 through the released SDK tree validator.
+
+## Installed-release regression follow-up (1.0.42)
+
+The installed 1.0.41 release exposed two gaps in the fixture-only review. A live
+240-hour response plus saved cities exceeded the SDK's 64 KiB control envelope
+when encoded as one base64 KV value. Separately, the 1400-pixel breakpoint mixed
+daily-row spans with optional metric spans and left holes for older caches.
+
+Version 1.0.42 caps persisted JSON at 40 KiB and keeps hourly detail in live
+responses. A captured ten-day provider fixture reproduces the previous overflow
+and checks all eight saved cities, retained daily summaries, full live hours,
+and repeatable cache writes. Failed refreshes explicitly identify saved weather.
+
+The daily forecast and metrics now occupy independent grid regions. Five to
+eight metrics fill complete rows, row heights align, and the forecast column
+stretches to the same bottom edge. City names use the available card width.
+Responsive review covers 390-pixel, desktop, and 1880-pixel containers, including
+older seven-day data and missing optional metrics.
