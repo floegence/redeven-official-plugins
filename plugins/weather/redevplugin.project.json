@@ -1,0 +1,7 @@
+{
+  "schema_version": "redevplugin.project.v1",
+  "output": "dist",
+  "build": ["npm", "run", "build"],
+  "test": ["npm", "test"],
+  "watch": ["ui", "worker/src", "manifest.json", "vite.config.ts", "scripts/build.mjs"]
+}

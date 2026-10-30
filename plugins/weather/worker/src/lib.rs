@@ -251,7 +251,7 @@ fn search_locations(request: SearchRequest) -> WorkerResult {
         percent_encode(query),
         request.language,
     );
-    let response: GeocodingResponse = http_get_json(&url)?;
+    let response: GeocodingResponse = http_get_json("geocoding", &url)?;
     let locations = response
         .results
         .into_iter()
@@ -344,7 +344,7 @@ fn remember_location(state: &mut StoredState, location: &Location) {
 }
 
 fn fetch_forecast(location: &Location) -> Result<Forecast, WorkerError> {
-    let raw: RawForecast = http_get_json(&forecast_url(location))?;
+    let raw: RawForecast = http_get_json("forecast", &forecast_url(location))?;
     project_forecast(raw)
 }
 
@@ -626,8 +626,9 @@ fn validate_id(id: &str) -> Result<(), WorkerError> {
     Ok(())
 }
 
-fn http_get_json<T: DeserializeOwned>(url: &str) -> Result<T, WorkerError> {
+fn http_get_json<T: DeserializeOwned>(connector_id: &str, url: &str) -> Result<T, WorkerError> {
     let request = RequestBody::begin(HttpRequest {
+        connector_id: connector_id.to_string(),
         method: "GET".to_string(),
         url: url.to_string(),
         headers: Vec::new(),

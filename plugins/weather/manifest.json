@@ -7,14 +7,18 @@
   "plugin": {
     "plugin_id": "com.redeven.official.weather",
     "display_name": "Weather",
-    "version": "1.0.43"
+    "version": "1.0.44"
   },
   "api": {
     "major": 1,
-    "required_features": ["net.http.v1"],
+    "required_features": [
+      "net.http.v1"
+    ],
     "optional_features": []
   },
-  "permissions": ["network.client"],
+  "permissions": [
+    "network.client"
+  ],
   "presentation": {
     "icon": {
       "path": "ui/assets/weather-plugin.png"
@@ -34,6 +38,10 @@
       "default_size": {
         "width": 1040,
         "height": 760
+      },
+      "web": {
+        "root": "ui",
+        "spa": false
       }
     }
   ],
@@ -59,7 +67,9 @@
         "storage": [
           {
             "store_id": "weather",
-            "operations": ["get"]
+            "operations": [
+              "get"
+            ]
           }
         ]
       },
@@ -71,7 +81,11 @@
       "response_schema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["favorites", "selected", "forecast"],
+        "required": [
+          "favorites",
+          "selected",
+          "forecast"
+        ],
         "properties": {
           "favorites": {
             "type": "array",
@@ -106,7 +120,11 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["location_id", "current", "today"],
+              "required": [
+                "location_id",
+                "current",
+                "today"
+              ],
               "properties": {
                 "location_id": {
                   "type": "string",
@@ -279,7 +297,10 @@
                 "type": "string"
               },
               "source": {
-                "enum": ["network", "saved"]
+                "enum": [
+                  "network",
+                  "saved"
+                ]
               },
               "current": {
                 "type": "object",
@@ -493,15 +514,22 @@
           {
             "connector_id": "geocoding",
             "transport": "http",
-            "operations": ["http"],
-            "http_methods": ["GET"]
+            "operations": [
+              "http"
+            ],
+            "http_methods": [
+              "GET"
+            ]
           }
         ]
       },
       "request_schema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["query", "language"],
+        "required": [
+          "query",
+          "language"
+        ],
         "properties": {
           "query": {
             "type": "string",
@@ -509,14 +537,26 @@
             "maxLength": 120
           },
           "language": {
-            "enum": ["en", "zh", "ja", "ko", "de", "fr", "es", "pt", "ru"]
+            "enum": [
+              "en",
+              "zh",
+              "ja",
+              "ko",
+              "de",
+              "fr",
+              "es",
+              "pt",
+              "ru"
+            ]
           }
         }
       },
       "response_schema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["locations"],
+        "required": [
+          "locations"
+        ],
         "properties": {
           "locations": {
             "type": "array",
@@ -590,14 +630,19 @@
         "storage": [
           {
             "store_id": "weather",
-            "operations": ["get", "put"]
+            "operations": [
+              "get",
+              "put"
+            ]
           }
         ]
       },
       "request_schema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id"],
+        "required": [
+          "id"
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -609,7 +654,9 @@
       "response_schema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["favorites"],
+        "required": [
+          "favorites"
+        ],
         "properties": {
           "favorites": {
             "type": "array",
@@ -671,15 +718,22 @@
         "storage": [
           {
             "store_id": "weather",
-            "operations": ["get", "put"]
+            "operations": [
+              "get",
+              "put"
+            ]
           }
         ],
         "network": [
           {
             "connector_id": "forecast",
             "transport": "http",
-            "operations": ["http"],
-            "http_methods": ["GET"]
+            "operations": [
+              "http"
+            ],
+            "http_methods": [
+              "GET"
+            ]
           }
         ]
       },
@@ -734,7 +788,11 @@
       "response_schema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["location", "forecast", "favorites"],
+        "required": [
+          "location",
+          "forecast",
+          "favorites"
+        ],
         "properties": {
           "location": {
             "$ref": "#/$defs/location"
@@ -764,7 +822,10 @@
                 "type": "string"
               },
               "source": {
-                "enum": ["network", "saved"]
+                "enum": [
+                  "network",
+                  "saved"
+                ]
               },
               "current": {
                 "type": "object",
@@ -1022,13 +1083,17 @@
         "connector_id": "geocoding",
         "transport": "http",
         "scope": "user",
-        "destinations": ["https://geocoding-api.open-meteo.com"]
+        "destinations": [
+          "https://geocoding-api.open-meteo.com"
+        ]
       },
       {
         "connector_id": "forecast",
         "transport": "http",
         "scope": "user",
-        "destinations": ["https://api.open-meteo.com"]
+        "destinations": [
+          "https://api.open-meteo.com"
+        ]
       }
     ]
   }

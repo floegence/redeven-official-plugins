@@ -53,6 +53,15 @@ export const supportedLocales = [
 ] as const;
 const translations = {
   "en-US": {
+    pickerHint: "Find a city, keep its weather close.",
+    manageLocations: "Manage",
+    done: "Done",
+    clearSearch: "Clear search",
+    searchResults: "Search results",
+    currentLocation: "Current",
+    searchRetryHint: "Try another city or a nearby place.",
+    removeRecent: "Remove from recent locations",
+
     chooseLocation: "Choose location",
     majorCities: "Major cities",
     closeLocationPicker: "Close location picker",
@@ -142,6 +151,15 @@ const translations = {
     windUnit: "km/h",
   },
   "zh-CN": {
+    pickerHint: "找到一座城市，随时查看它的天气。",
+    manageLocations: "管理",
+    done: "完成",
+    clearSearch: "清空搜索",
+    searchResults: "搜索结果",
+    currentLocation: "当前",
+    searchRetryHint: "试试其他城市或附近的地点。",
+    removeRecent: "从最近地点移除",
+
     chooseLocation: "选择城市",
     majorCities: "全球主要城市",
     closeLocationPicker: "关闭城市选择",
@@ -228,6 +246,15 @@ const translations = {
     windUnit: "公里/时",
   },
   "zh-TW": {
+    pickerHint: "找到一座城市，隨時查看它的天氣。",
+    manageLocations: "管理",
+    done: "完成",
+    clearSearch: "清除搜尋",
+    searchResults: "搜尋結果",
+    currentLocation: "目前",
+    searchRetryHint: "試試其他城市或附近的地點。",
+    removeRecent: "從最近地點移除",
+
     chooseLocation: "選擇城市",
     majorCities: "全球主要城市",
     closeLocationPicker: "關閉城市選擇",
@@ -314,6 +341,15 @@ const translations = {
     windUnit: "公里/時",
   },
   "ja-JP": {
+    pickerHint: "街を見つけて、天気を身近に。",
+    manageLocations: "管理",
+    done: "完了",
+    clearSearch: "検索をクリア",
+    searchResults: "検索結果",
+    currentLocation: "現在",
+    searchRetryHint: "別の都市や近くの場所をお試しください。",
+    removeRecent: "最近の場所から削除",
+
     chooseLocation: "都市を選択",
     majorCities: "世界の主要都市",
     closeLocationPicker: "都市の選択を閉じる",
@@ -403,6 +439,15 @@ const translations = {
     windUnit: "km/h",
   },
   "ko-KR": {
+    pickerHint: "도시를 찾아 날씨를 확인하세요.",
+    manageLocations: "관리",
+    done: "완료",
+    clearSearch: "검색 지우기",
+    searchResults: "검색 결과",
+    currentLocation: "현재",
+    searchRetryHint: "다른 도시나 가까운 장소를 검색해 보세요.",
+    removeRecent: "최근 장소에서 삭제",
+
     chooseLocation: "도시 선택",
     majorCities: "세계 주요 도시",
     closeLocationPicker: "도시 선택 닫기",
@@ -492,6 +537,15 @@ const translations = {
     windUnit: "km/h",
   },
   "de-DE": {
+    pickerHint: "Finde eine Stadt und behalte ihr Wetter im Blick.",
+    manageLocations: "Verwalten",
+    done: "Fertig",
+    clearSearch: "Suche löschen",
+    searchResults: "Suchergebnisse",
+    currentLocation: "Aktuell",
+    searchRetryHint: "Versuche eine andere Stadt oder einen Ort in der Nähe.",
+    removeRecent: "Aus letzten Orten entfernen",
+
     chooseLocation: "Ort auswählen",
     majorCities: "Großstädte",
     closeLocationPicker: "Ortsauswahl schließen",
@@ -583,6 +637,15 @@ const translations = {
     windUnit: "km/h",
   },
   "fr-FR": {
+    pickerHint: "Trouvez une ville et gardez sa météo à portée de main.",
+    manageLocations: "Gérer",
+    done: "Terminé",
+    clearSearch: "Effacer la recherche",
+    searchResults: "Résultats",
+    currentLocation: "Actuelle",
+    searchRetryHint: "Essayez une autre ville ou un lieu à proximité.",
+    removeRecent: "Retirer des lieux récents",
+
     chooseLocation: "Choisir un lieu",
     majorCities: "Grandes villes",
     closeLocationPicker: "Fermer le choix du lieu",
@@ -674,6 +737,15 @@ const translations = {
     windUnit: "km/h",
   },
   "es-ES": {
+    pickerHint: "Encuentra una ciudad y consulta su tiempo.",
+    manageLocations: "Gestionar",
+    done: "Listo",
+    clearSearch: "Borrar búsqueda",
+    searchResults: "Resultados",
+    currentLocation: "Actual",
+    searchRetryHint: "Prueba otra ciudad o un lugar cercano.",
+    removeRecent: "Quitar de lugares recientes",
+
     chooseLocation: "Elegir ubicación",
     majorCities: "Ciudades principales",
     closeLocationPicker: "Cerrar selección de ubicación",
@@ -765,6 +837,15 @@ const translations = {
     windUnit: "km/h",
   },
   "pt-BR": {
+    pickerHint: "Encontre uma cidade e acompanhe o tempo.",
+    manageLocations: "Gerenciar",
+    done: "Concluir",
+    clearSearch: "Limpar busca",
+    searchResults: "Resultados",
+    currentLocation: "Atual",
+    searchRetryHint: "Tente outra cidade ou um lugar próximo.",
+    removeRecent: "Remover dos locais recentes",
+
     chooseLocation: "Escolher local",
     majorCities: "Principais cidades",
     closeLocationPicker: "Fechar seleção de local",
@@ -856,6 +937,15 @@ const translations = {
     windUnit: "km/h",
   },
   "ru-RU": {
+    pickerHint: "Найдите город и следите за погодой.",
+    manageLocations: "Управлять",
+    done: "Готово",
+    clearSearch: "Очистить поиск",
+    searchResults: "Результаты поиска",
+    currentLocation: "Текущий",
+    searchRetryHint: "Попробуйте другой город или место поблизости.",
+    removeRecent: "Удалить из недавних мест",
+
     chooseLocation: "Выбрать город",
     majorCities: "Крупные города",
     closeLocationPicker: "Закрыть выбор города",

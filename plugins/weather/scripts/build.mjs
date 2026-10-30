@@ -33,8 +33,6 @@ await mkdir(resolve(root, "dist/workers"), { recursive: true });
 await mkdir(resolve(root, "dist/licenses"), { recursive: true });
 await Promise.all([
   copyFile(resolve(root, "manifest.json"), resolve(root, "dist/manifest.json")),
-  copyFile(resolve(root, "ui/index.html"), resolve(root, "dist/ui/index.html")),
-  copyFile(resolve(root, "ui/styles.css"), resolve(root, "dist/ui/assets/styles.css")),
   copyFile(resolve(root, "assets/weather-plugin.png"), resolve(root, "dist/ui/assets/weather-plugin.png")),
   copyFile(resolve(root, "THIRD_PARTY_NOTICES.txt"), resolve(root, "dist/licenses/THIRD_PARTY_NOTICES.txt")),
   copyFile(workerSource, resolve(root, "dist/workers/weather.wasm")),

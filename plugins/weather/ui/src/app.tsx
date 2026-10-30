@@ -1,23 +1,19 @@
+import { For, Show, createEffect, onCleanup, onMount } from "solid-js";
+import { createMutable } from "solid-js/store";
+import { render as mount } from "solid-js/web";
+import { FloeProvider } from "@floegence/floe-webapp-core/app";
+import { deferAfterPaint, useTheme } from "@floegence/floe-webapp-core";
+import { Search, X, Check, ChevronRight, MapPinIcon, Globe, Trash } from "@floegence/floe-webapp-core/icons";
+import { Button, Dialog, Input } from "@floegence/floe-webapp-core/ui";
+import { PluginBridgeClient, PluginBridgeError, type PluginMethodResult } from "@floegence/redevplugin-ui/plugin";
+import "@floegence/floe-webapp-core/styles";
+import "../styles.css";
+import { WeatherIcon, MetricIllustration } from "./weather-visuals";
 import { drawWeatherChart } from "./weather-chart.js";
 import {
-  PluginBridgeClient,
-  PluginBridgeError,
-  type PluginMethodResult,
-  type PluginUIActionEvent,
-  type PluginCanvasSurface,
-} from "@floegence/redevplugin-ui/plugin";
-import {
-  conditionForCode,
-  formatMessage,
-  formatCivilDate,
-  localizedLocation,
-  type WeatherMessageKey,
-  localeForLanguageTag,
-  majorCitiesForLocale,
-  temperatureRangeClasses,
-  translationsForLocale,
-  type MajorCityLocation,
-  type SupportedLocale,
+  conditionForCode, formatMessage, formatCivilDate, localizedLocation,
+  localeForLanguageTag, majorCitiesForLocale, translationsForLocale,
+  type MajorCityLocation, type SupportedLocale, type WeatherMessageKey,
   type WeatherTranslations,
 } from "./weather-model.js";
 
@@ -88,10 +84,13 @@ type Notice = {
 };
 
 const bridge = new PluginBridgeClient({ timeoutMs: 20_000 });
-const state: {
+const state = createMutable<{
+  colorScheme: "light" | "dark";
   locale: SupportedLocale;
   favorites: Location[];
   results: Location[];
+  searched: boolean;
+  managingLocations: boolean;
   selected?: Location;
   pendingLocation?: Location;
   queuedLocation?: Location;
@@ -106,10 +105,13 @@ const state: {
   detailDay: number;
   apparent: boolean;
   cityForecasts: Record<string, Pick<Forecast, "current" | "days">>;
-} = {
+}>({
+  colorScheme: "light",
   locale: "en-US",
   favorites: [],
   results: [],
+  searched: false,
+  managingLocations: false,
   query: "",
   busy: "initial",
   now: new Date(),
@@ -118,77 +120,23 @@ const state: {
   detailDay: 0,
   apparent: false,
   cityForecasts: {},
-};
+});
 
-let chartSurface: PluginCanvasSurface | undefined;
-let chartReady = false;
-let stopChartInput: (() => void) | undefined;
 let disposed = false;
-
-function resetChart() {
-  chartSurface = undefined;
-  chartReady = false;
-  stopChartInput?.();
-  stopChartInput = undefined;
-}
+let searchRevision = 0;
 let clockTimer: ReturnType<typeof setInterval> | undefined;
-let renderQueue = Promise.resolve();
-
-bridge.onAction("search-location", (event) => void searchLocations(event));
-bridge.onAction("preview-location", (event) => void previewLocation(event));
-bridge.onAction("open-location", (event) => void openLocation(event));
-bridge.onAction("remove-location", (event) => void removeLocation(event));
-bridge.onAction("refresh-weather", () => void refreshWeather());
-bridge.onAction("clear-search", () => void clearSearch());
-bridge.onAction("toggle-location-chooser", () => void toggleLocationChooser());
-bridge.onAction("toggle-sidebar", () => {
-  state.sidebarCollapsed = !state.sidebarCollapsed;
-  void render();
-});
-bridge.onAction("open-detail", (event) => {
-  if (!metricItems().some((item) => item.id === event.value)) return;
-  state.detail = String(event.value);
-  state.detailDay = 0;
-  void render();
-});
-bridge.onAction("open-day", (event) => {
-  const day = Number(event.value);
-  if (!Number.isInteger(day) || !state.forecast?.days[day]) return;
-  state.detail = "temperature";
-  state.detailDay = day;
-  void render();
-});
-bridge.onAction("detail-day", (event) => {
-  const day = Number(event.value);
-  if (!Number.isInteger(day) || !state.forecast?.days[day]) return;
-  state.detailDay = day;
-  void render();
-});
-bridge.onAction("detail-temperature", (event) => {
-  state.apparent = event.value === "apparent";
-  void render();
-});
-bridge.onAction("close-detail", () => {
-  state.detail = undefined;
-  void render();
-});
-bridge.onLifecycle((event) => {
-  if (event.type !== "dispose") return;
-  disposed = true;
-  resetChart();
-  if (clockTimer !== undefined) clearInterval(clockTimer);
-});
-
-void initialize().catch(reportUnhandledFailure);
 
 async function initialize(): Promise<void> {
   await bridge.ready();
   bridge.onContext((context) => {
+    state.colorScheme = context.appearance.color_scheme;
+    document.documentElement.dir = context.locale.direction;
     const locale = localeForLanguageTag(context.locale.language_tag);
     if (locale === state.locale) return;
     state.locale = locale;
     state.results = [];
-    void render();
+    state.searched = false;
+    searchRevision++;
   });
   clockTimer = setInterval(() => {
     const next = new Date();
@@ -198,9 +146,9 @@ async function initialize(): Promise<void> {
     )
       return;
     state.now = next;
-    void render();
+
   }, 15_000);
-  await render();
+  await afterPaint();
   try {
     const response = await bridge.call<PluginMethodResult<StateLoad>>(
       "weather.state.load",
@@ -219,10 +167,10 @@ async function initialize(): Promise<void> {
       state.cityForecasts[state.selected.id] = state.forecast;
     state.busy = undefined;
     if (response.data.selected) {
-      await render();
+      await afterPaint();
       void loadForecast(response.data.selected, { preserveVisible: true });
     } else {
-      await render();
+      await afterPaint();
     }
   } catch (error) {
     state.busy = undefined;
@@ -231,23 +179,26 @@ async function initialize(): Promise<void> {
       text: friendlyError(error, "load"),
       error: true,
     };
-    await render();
+    await afterPaint();
   }
 }
 
-async function searchLocations(event: PluginUIActionEvent): Promise<void> {
-  if (state.busy) return;
-  const query = String(event.form_data?.query ?? "").trim();
+async function searchLocations(): Promise<void> {
+  if (disposed || state.busy) return;
+  const query = state.query.trim();
   state.query = query;
   if ([...query].length < 2) {
     state.notice = { scope: "chooser", text: "searchHint" };
     state.results = [];
-    await render();
+    await afterPaint();
     return;
   }
+  const revision = ++searchRevision;
   state.busy = "search";
+  state.results = [];
+  state.searched = true;
   state.notice = undefined;
-  await render();
+  await afterPaint();
   try {
     const searchLocale = state.locale;
     const language = searchLocale.split("-")[0];
@@ -255,13 +206,14 @@ async function searchLocations(event: PluginUIActionEvent): Promise<void> {
       "weather.locations.search",
       { query, language },
     );
-    if (state.locale !== searchLocale) return;
+    if (disposed || revision !== searchRevision || state.locale !== searchLocale) return;
     state.results = response.data.locations;
     state.notice =
       state.results.length === 0
         ? { scope: "chooser", text: "noResults" }
         : undefined;
   } catch (error) {
+    if (disposed || revision !== searchRevision) return;
     state.results = [];
     state.notice = {
       scope: "chooser",
@@ -270,19 +222,19 @@ async function searchLocations(event: PluginUIActionEvent): Promise<void> {
     };
   } finally {
     state.busy = undefined;
-    await render();
+    await afterPaint();
   }
 }
 
-async function previewLocation(event: PluginUIActionEvent): Promise<void> {
+async function previewLocation(event: string): Promise<void> {
   const location = locationForAction(event);
   if (!location) return;
   await loadForecast(location);
 }
 
-async function openLocation(event: PluginUIActionEvent): Promise<void> {
+async function openLocation(event: string): Promise<void> {
   const location = state.favorites.find(
-    (item) => item.id === String(event.value ?? ""),
+    (item) => item.id === event,
   );
   if (
     !location ||
@@ -298,13 +250,13 @@ async function refreshWeather(): Promise<void> {
   await loadForecast(state.selected, { preserveVisible: true });
 }
 
-async function removeLocation(event: PluginUIActionEvent): Promise<void> {
-  if (state.busy) return;
-  const id = String(event.value ?? "");
+async function removeLocation(event: string): Promise<void> {
+  if (disposed || state.busy) return;
+  const id = event;
   if (!isFavorite(id)) return;
   state.busy = "remove";
   state.notice = undefined;
-  await render();
+  await afterPaint();
   try {
     const response = await bridge.call<PluginMethodResult<FavoritesResult>>(
       "weather.locations.remove",
@@ -319,39 +271,45 @@ async function removeLocation(event: PluginUIActionEvent): Promise<void> {
     };
   } finally {
     state.busy = undefined;
-    await render();
+    await afterPaint();
   }
 }
 
 async function clearSearch(): Promise<void> {
+  searchRevision++;
+  state.searched = false;
   state.query = "";
   state.results = [];
   state.notice = undefined;
-  await render();
+  await afterPaint();
 }
 
 async function toggleLocationChooser(): Promise<void> {
   state.chooserOpen = !state.chooserOpen;
   if (!state.chooserOpen) {
+    searchRevision++;
+    state.searched = false;
+    state.managingLocations = false;
     state.query = "";
     state.results = [];
     state.notice = undefined;
   }
-  await render();
+  await afterPaint();
 }
 
 async function loadForecast(
   location: Location,
   options: { preserveVisible?: boolean } = {},
 ): Promise<void> {
+  if (disposed) return;
   if (state.busy === "forecast") {
     state.queuedLocation = location;
     state.pendingLocation = location;
     state.notice = undefined;
-    await render();
+    await afterPaint();
     return;
   }
-  if (state.busy) return;
+  if (disposed || state.busy) return;
   const preserveVisible = Boolean(
     options.preserveVisible &&
       state.forecast &&
@@ -360,13 +318,21 @@ async function loadForecast(
   state.busy = "forecast";
   state.notice = undefined;
   state.pendingLocation = options.preserveVisible ? undefined : location;
-  await render();
+  await afterPaint();
   try {
     const response = await bridge.call<PluginMethodResult<ForecastResult>>(
       "weather.forecast",
-      location,
+      {
+        id: location.id,
+        name: location.name,
+        admin1: location.admin1,
+        country: location.country,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        timezone: location.timezone,
+      },
     );
-    if (state.queuedLocation) return;
+    if (disposed || state.queuedLocation) return;
     state.selected = response.data.location;
     state.forecast = response.data.forecast;
     state.notice =
@@ -377,10 +343,12 @@ async function loadForecast(
     state.detail = undefined;
     state.favorites = response.data.favorites;
     state.results = [];
+    state.searched = false;
+    state.managingLocations = false;
     state.query = "";
     if (state.pendingLocation) state.chooserOpen = false;
   } catch (error) {
-    if (state.queuedLocation) return;
+    if (disposed || state.queuedLocation) return;
     const message =
       preserveVisible && state.forecast
         ? ("refreshFailed" as const)
@@ -395,637 +363,9 @@ async function loadForecast(
     state.busy = undefined;
     state.pendingLocation = undefined;
     state.queuedLocation = undefined;
-    if (queuedLocation) await loadForecast(queuedLocation);
-    else await render();
+    if (queuedLocation && !disposed) await loadForecast(queuedLocation);
+    else await afterPaint();
   }
-}
-
-function render(): Promise<void> {
-  renderQueue = renderQueue
-    .catch(() => undefined)
-    .then(async () => {
-      if (disposed) return;
-      await bridge.render(view());
-      await renderDetailChart();
-    });
-  return renderQueue;
-}
-
-function view() {
-  const t = translations();
-  return (
-    <main
-      key="weather-root"
-      lang={state.locale}
-      className={`weather-app sky-${conditionForCode(state.forecast?.current.weather_code ?? 3, state.forecast?.current.is_day ?? true).kind}${state.sidebarCollapsed ? " sidebar-collapsed" : ""}${state.forecast?.current.is_day === false ? " weather-night" : ""}`}
-    >
-      <div key="sky" className="weather-sky" aria-hidden="true">
-        <span key="cloud-one" className="cloud cloud-one" />
-        <span key="cloud-two" className="cloud cloud-two" />
-        <span key="precipitation" className="sky-precipitation" />
-      </div>
-      {state.forecast ? citySidebar(t) : null}
-      <div
-        key="weather-content"
-        className="weather-content"
-        aria-hidden={state.detail ? true : undefined}
-      >
-        {state.chooserOpen && state.forecast
-          ? locationPicker(t, "popover")
-          : null}
-
-        {state.forecast && state.selected
-          ? forecastDashboard(state.selected, state.forecast, t)
-          : state.busy === "initial"
-            ? loadingState(t)
-            : locationPicker(t, "onboarding")}
-
-        <footer key="footer" className="footer">
-          <span key="source">{t.poweredBy}</span>
-          <span key="observation">
-            {state.forecast
-              ? `${state.forecast.source === "saved" ? message("savedWeather") + " · " : ""}${state.forecast.current.time.replace("T", " ")} · ${state.forecast.timezone}`
-              : ""}
-          </span>
-        </footer>
-      </div>
-      {weatherDetail(t)}
-    </main>
-  );
-}
-
-function locationPicker(
-  t: WeatherTranslations,
-  mode: "onboarding" | "popover",
-) {
-  const notice = state.notice?.scope === "chooser" ? state.notice : undefined;
-  const status =
-    (notice ? message(notice.text) : undefined) ??
-    (state.pendingLocation
-      ? pendingLocationLabel(t)
-      : state.busy === "forecast"
-        ? t.loading
-        : "");
-  return (
-    <section
-      key={`location-${mode}`}
-      className={`location-picker location-${mode}`}
-      aria-label={t.chooseLocation}
-      data-redevplugin-escape-action={
-        mode === "popover" ? "toggle-location-chooser" : undefined
-      }
-    >
-      {mode === "onboarding" ? onboardingIntroduction(t) : pickerHeading(t)}
-      <form
-        key="search-form"
-        className="search-form"
-        data-redevplugin-action="search-location"
-        autoComplete="off"
-      >
-        <label key="search-label" className="sr-only" htmlFor="weather-query">
-          {t.searchPlaceholder}
-        </label>
-        <input
-          key="search-input"
-          id="weather-query"
-          name="query"
-          type="search"
-          value={state.query}
-          placeholder={t.searchPlaceholder}
-          maxLength={120}
-          disabled={Boolean(state.busy)}
-          autoComplete="off"
-        />
-        {state.query ? (
-          <button
-            key="clear-search"
-            className="clear-button"
-            type="button"
-            title={t.remove}
-            aria-label={t.remove}
-            data-redevplugin-action="clear-search"
-          >
-            ×
-          </button>
-        ) : (
-          <span key="clear-search-placeholder" />
-        )}
-        <button
-          key="search-submit"
-          className="primary-button"
-          type="submit"
-          disabled={Boolean(state.busy)}
-        >
-          {state.busy === "search" ? t.searching : t.search}
-        </button>
-      </form>
-      <p
-        key="chooser-status"
-        className={notice?.error ? "chooser-status error" : "chooser-status"}
-        role="status"
-      >
-        {state.busy === "forecast" ? (
-          <span
-            key="chooser-loading"
-            className="location-loading-mark"
-            aria-hidden="true"
-          />
-        ) : null}
-        <span key="chooser-status-text">{status}</span>
-      </p>
-      {state.favorites.length > 0 ? (
-        favoritePlaces(t)
-      ) : (
-        <span key="favorites-empty" />
-      )}
-      {state.results.length > 0 ? searchResults(t) : majorCities(t)}
-    </section>
-  );
-}
-
-function onboardingIntroduction(t: WeatherTranslations) {
-  return (
-    <div key="onboarding-introduction" className="onboarding-introduction">
-      <span key="onboarding-overline" className="chooser-overline">
-        {t.chooseLocation}
-      </span>
-      <h2 key="onboarding-title">{t.onboardingTitle}</h2>
-      <p key="onboarding-body">{t.onboardingBody}</p>
-    </div>
-  );
-}
-
-function pickerHeading(t: WeatherTranslations) {
-  return (
-    <div key="chooser-heading" className="chooser-heading">
-      <div key="chooser-title-copy" className="chooser-title-copy">
-        <span key="chooser-overline" className="chooser-overline">
-          {t.chooseLocation}
-        </span>
-        <strong key="chooser-title">
-          {(state.selected
-            ? localizedLocation(state.selected, state.locale).name
-            : undefined) ?? t.majorCities}
-        </strong>
-      </div>
-      <button
-        key="chooser-close"
-        className="chooser-close"
-        type="button"
-        aria-label={t.closeLocationPicker}
-        data-redevplugin-action="toggle-location-chooser"
-      >
-        ×
-      </button>
-    </div>
-  );
-}
-
-function majorCities(t: WeatherTranslations) {
-  return (
-    <section
-      key="major-cities"
-      className="major-cities"
-      aria-label={t.majorCities}
-    >
-      <span key="major-cities-label" className="chooser-section-label">
-        {t.majorCities}
-      </span>
-      <ul key="major-cities-list">
-        {majorCitiesForLocale(state.locale).map((location) => (
-          <li key={`major-${location.id}`}>
-            <button
-              key={`major-open-${location.id}`}
-              type="button"
-              value={location.id}
-              disabled={Boolean(state.busy && state.busy !== "forecast")}
-              aria-busy={state.pendingLocation?.id === location.id}
-              data-redevplugin-action="preview-location"
-            >
-              <strong key={`major-name-${location.id}`}>
-                {localizedLocation(location, state.locale).name}
-              </strong>
-              <span key={`major-country-${location.id}`}>
-                {location.country}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function searchResults(t: WeatherTranslations) {
-  return (
-    <section
-      key="search-results"
-      className="search-results"
-      aria-label={t.search}
-    >
-      <span key="search-results-label" className="chooser-section-label">
-        {t.search}
-      </span>
-      <ul key="search-results-list">
-        {state.results.map((location) => (
-          <li key={`result-${location.id}`} className="search-result">
-            <button
-              key={`result-open-${location.id}`}
-              className="search-result-button"
-              type="button"
-              value={location.id}
-              disabled={Boolean(state.busy && state.busy !== "forecast")}
-              aria-busy={state.pendingLocation?.id === location.id}
-              data-redevplugin-action="preview-location"
-            >
-              <span
-                key={`result-pin-${location.id}`}
-                className="location-pin"
-                aria-hidden="true"
-              >
-                •
-              </span>
-              <span
-                key={`result-copy-${location.id}`}
-                className="location-copy"
-              >
-                <strong key={`result-name-${location.id}`}>
-                  {localizedLocation(location, state.locale).name}
-                </strong>
-                <span key={`result-place-${location.id}`}>
-                  {locationSubtitle(location)}
-                </span>
-              </span>
-              <span
-                key={`result-arrow-${location.id}`}
-                className="result-arrow"
-                aria-hidden="true"
-              >
-                →
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function favoritePlaces(t: WeatherTranslations) {
-  return (
-    <nav key="favorites" className="favorites" aria-label={t.favorites}>
-      <span key="favorites-label" className="favorites-label">
-        {t.favorites}
-      </span>
-      <ul key="favorites-list">
-        {state.favorites.map((location) => (
-          <li key={`favorite-${location.id}`}>
-            <button
-              key={`favorite-open-${location.id}`}
-              className="favorite-button"
-              type="button"
-              value={location.id}
-              aria-pressed={state.selected?.id === location.id}
-              aria-busy={state.pendingLocation?.id === location.id}
-              disabled={Boolean(state.busy && state.busy !== "forecast")}
-              data-redevplugin-action="open-location"
-            >
-              {localizedLocation(location, state.locale).name}
-            </button>
-            <button
-              key={`favorite-remove-${location.id}`}
-              className="favorite-remove"
-              type="button"
-              value={location.id}
-              title={`${t.remove} ${localizedLocation(location, state.locale).name}`}
-              aria-label={`${t.remove} ${localizedLocation(location, state.locale).name}`}
-              disabled={Boolean(state.busy)}
-              data-redevplugin-action="remove-location"
-            >
-              ×
-            </button>
-          </li>
-        ))}
-      </ul>
-    </nav>
-  );
-}
-
-function message(
-  key: WeatherMessageKey,
-  values: Record<string, string | number> = {},
-): string {
-  return formatMessage(state.locale, key, values);
-}
-
-function weatherIcon(code: number, day = true, key = "icon") {
-  const condition = conditionForCode(code, day);
-  return (
-    <span
-      key={key}
-      className={`weather-icon icon-${condition.kind}`}
-      role="img"
-      aria-label={translatedCondition(condition.kind)}
-    >
-      <span key={`${key}-sun`} className="icon-sun" />
-      <span key={`${key}-cloud`} className="icon-cloud" />
-      <span key={`${key}-drops`} className="icon-drops" />
-    </span>
-  );
-}
-
-function citySidebar(t: WeatherTranslations) {
-  return (
-    <aside
-      key="city-sidebar"
-      className="city-sidebar"
-      aria-label={t.favorites}
-      aria-hidden={state.detail ? true : undefined}
-    >
-      <div key="sidebar-toolbar" className="sidebar-toolbar">
-        <span key="sidebar-title">{message("weather")}</span>
-        <button
-          key="sidebar-close"
-          type="button"
-          className="plain-button"
-          aria-label={message("hideSidebar")}
-          data-redevplugin-action="toggle-sidebar"
-        >
-          ◧
-        </button>
-      </div>
-      <button
-        key="sidebar-search"
-        type="button"
-        className="sidebar-search"
-        data-redevplugin-action="toggle-location-chooser"
-      >
-        ⌕　{t.searchPlaceholder}
-      </button>
-      <nav key="city-list" className="city-list">
-        {state.favorites.map((location) => {
-          const forecast = state.cityForecasts[location.id];
-          return (
-            <button
-              key={`sidebar-${location.id}`}
-              type="button"
-              value={location.id}
-              title={
-                forecast
-                  ? `${message("observed")} ${forecast.current.time.replace("T", " ")}`
-                  : undefined
-              }
-              className={`city-card sky-${conditionForCode(forecast?.current.weather_code ?? 3, forecast?.current.is_day ?? true).kind}${forecast?.current.is_day === false ? " weather-night" : ""}`}
-              aria-pressed={
-                (state.pendingLocation ?? state.selected)?.id === location.id
-              }
-              aria-busy={state.pendingLocation?.id === location.id}
-              data-redevplugin-action="open-location"
-            >
-              <strong key={`city-name-${location.id}`}>
-                {localizedLocation(location, state.locale).name}
-              </strong>
-              <time key={`city-time-${location.id}`}>
-                {formatTime(state.now, location.timezone)}
-              </time>
-              <span
-                key={`city-temperature-${location.id}`}
-                className="city-temperature"
-              >
-                {forecast ? degrees(forecast.current.temperature) : "—"}
-              </span>
-              <span
-                key={`city-condition-${location.id}`}
-                className="city-condition"
-              >
-                {forecast
-                  ? translatedCondition(
-                      conditionForCode(
-                        forecast.current.weather_code,
-                        forecast.current.is_day,
-                      ).kind,
-                    )
-                  : location.country}
-              </span>
-              <span key={`city-range-${location.id}`} className="city-range">
-                {forecast?.days[0]
-                  ? `${t.high} ${degrees(forecast.days[0].temperature_max)} ${t.low} ${degrees(forecast.days[0].temperature_min)}`
-                  : ""}
-              </span>
-            </button>
-          );
-        })}
-      </nav>
-    </aside>
-  );
-}
-
-function upcomingHours(forecast: Forecast) {
-  // Provider timestamps are local wall times in the forecast timezone, not browser time.
-  return (forecast.hourly ?? [])
-    .filter((hour) => hour.time >= forecast.current.time.slice(0, 13) + ":00")
-    .slice(0, 24);
-}
-
-function forecastDashboard(
-  location: Location,
-  forecast: Forecast,
-  t: WeatherTranslations,
-) {
-  const current = forecast.current;
-  const notice = state.notice?.scope === "weather" ? state.notice : undefined;
-  const hours = upcomingHours(forecast);
-  return (
-    <article key="forecast-dashboard" className="forecast-dashboard">
-      {weatherCardControls(t)}
-      <header key={`weather-hero-${location.id}`} className="weather-hero">
-        <h2 key="place-name">
-          {localizedLocation(location, state.locale).name}
-        </h2>
-        <span key="current-temperature" className="current-temperature">
-          {degrees(current.temperature)}
-        </span>
-        <p key="hero-range" className="hero-range">
-          {forecast.days[0] ? (
-            <span key="hero-range-values">
-              <span key="hero-high-label" className="range-label">
-                {t.high}
-              </span>{" "}
-              {degrees(forecast.days[0].temperature_max)}{" "}
-              <span key="hero-low-label" className="range-label">
-                {t.low}
-              </span>{" "}
-              {degrees(forecast.days[0].temperature_min)}
-            </span>
-          ) : (
-            ""
-          )}
-        </p>
-        <p key="condition-label" className="condition-label">
-          {translatedCondition(
-            conditionForCode(current.weather_code, current.is_day).kind,
-          )}
-        </p>
-      </header>
-      {notice ? (
-        <p
-          key="weather-alert"
-          className="weather-alert"
-          role={notice.error ? "alert" : "status"}
-        >
-          {message(notice.text)}
-        </p>
-      ) : null}
-      <div key="weather-grid" className="weather-grid">
-        {hours.length ? (
-          <section
-            key="hourly"
-            className="glass-card hourly-card"
-            aria-label={message("hourly")}
-          >
-            <h3 key="hourly-title">◷ {message("hourly")}</h3>
-            <ol key="hourly-list" className="hourly-list">
-              {hours.map((hour, index) => (
-                <li key={`hour-${hour.time}`}>
-                  <button
-                    key={`hour-button-${hour.time}`}
-                    type="button"
-                    value={String(
-                      forecast.days.findIndex((day) =>
-                        hour.time.startsWith(day.date),
-                      ),
-                    )}
-                    data-redevplugin-action="open-day"
-                  >
-                    <span key={`hour-label-${hour.time}`}>
-                      {index === 0 ? message("now") : hour.time.slice(11, 16)}
-                    </span>
-                    {weatherIcon(
-                      index === 0 ? current.weather_code : hour.weather_code,
-                      index === 0 ? current.is_day : hour.is_day,
-                      `hour-icon-${hour.time}`,
-                    )}
-                    <strong key={`hour-temperature-${hour.time}`}>
-                      {degrees(
-                        index === 0 ? current.temperature : hour.temperature,
-                      )}
-                    </strong>
-                    {hour.precipitation_probability >= 20 ? (
-                      <small key={`hour-rain-${hour.time}`}>
-                        {Math.round(hour.precipitation_probability)}%
-                      </small>
-                    ) : null}
-                  </button>
-                </li>
-              ))}
-            </ol>
-          </section>
-        ) : null}
-        <section
-          key="weekly-forecast"
-          className="glass-card weekly-forecast"
-          aria-label={t.forecastLabel}
-        >
-          <h3 key="forecast-title">
-            ▦{" "}
-            {forecast.days.length === 10
-              ? t.forecastTitle
-              : message("daysForecast", { count: forecast.days.length })}
-          </h3>
-          <ol key="forecast-list" className="forecast-list">
-            {forecast.days.map((day, index) =>
-              forecastRow(day, index, forecast, t),
-            )}
-          </ol>
-        </section>
-        <section
-          key="metrics-grid"
-          className="metrics-grid"
-          aria-label={t.detailsLabel}
-        >
-          {metricItems().map((item) => (
-            <button
-              key={`metric-${item.id}`}
-              type="button"
-              className={`glass-card metric metric-${item.id}`}
-              value={item.id}
-              data-redevplugin-action="open-detail"
-              aria-label={`${item.label}: ${item.value}`}
-            >
-              <span key={`metric-label-${item.id}`} className="card-label">
-                {item.symbol} {item.label}
-              </span>
-              <strong key={`metric-value-${item.id}`} className="metric-value">
-                {item.value}
-              </strong>
-              {metricIllustration(item.id)}
-              <span key={`metric-note-${item.id}`} className="metric-note">
-                {item.note}
-              </span>
-            </button>
-          ))}
-        </section>
-      </div>
-    </article>
-  );
-}
-
-function forecastRow(
-  day: ForecastDay,
-  index: number,
-  forecast: Forecast,
-  t: WeatherTranslations,
-) {
-  const range = temperatureRangeClasses(
-    forecast.days,
-    day,
-    index === 0 ? forecast.current.temperature : undefined,
-  );
-  return (
-    <li key={`day-${day.date}`}>
-      <button
-        key={`day-button-${day.date}`}
-        type="button"
-        className="forecast-row"
-        value={String(index)}
-        data-redevplugin-action="open-day"
-      >
-        <span key={`day-label-${day.date}`} className="day-label">
-          {index === 0 ? t.today : formatForecastDay(day.date)}
-        </span>
-        <span key={`day-condition-${day.date}`} className="day-condition">
-          {weatherIcon(day.weather_code, true, `day-icon-${day.date}`)}
-          {day.precipitation_probability >= 20 ? (
-            <small key={`day-rain-${day.date}`}>
-              {Math.round(day.precipitation_probability)}%
-            </small>
-          ) : null}
-        </span>
-        <span key={`day-low-${day.date}`} className="temperature-low">
-          {degrees(day.temperature_min)}
-        </span>
-        <span
-          key={`day-track-${day.date}`}
-          className="range-track"
-          aria-hidden="true"
-        >
-          <span
-            key={`day-range-${day.date}`}
-            className={`temperature-range ${range.startClass} ${range.widthClass}`}
-          />
-          {range.currentClass ? (
-            <span
-              key={`day-current-${day.date}`}
-              className={`current-dot ${range.currentClass}`}
-            />
-          ) : null}
-        </span>
-        <span key={`day-high-${day.date}`} className="temperature-high">
-          {degrees(day.temperature_max)}
-        </span>
-      </button>
-    </li>
-  );
 }
 
 type MetricItem = {
@@ -1124,67 +464,10 @@ function metricItems(): MetricItem[] {
       id: "pressure",
       label: message("pressure"),
       symbol: "◴",
-      value: `${Math.round(hour.pressure)}`,
+      value: `${Math.round(hour.pressure)} hPa`,
       note: message("seaLevel"),
     });
   return result;
-}
-
-function metricIllustration(id: string, context = "card") {
-  const hour = state.forecast ? upcomingHours(state.forecast)[0] : undefined;
-  if (id === "wind" && hour?.wind_direction != null)
-    return (
-      <span
-        key={`${context}-compass`}
-        className={`compass direction-${Math.round(hour.wind_direction / 10) % 36}`}
-        aria-hidden="true"
-      >
-        <span key={`${context}-north`} className="north">
-          {message("north")}
-        </span>
-        <span key={`${context}-west`} className="west">
-          {message("west")}
-        </span>
-        <span key={`${context}-east`} className="east">
-          {message("east")}
-        </span>
-        <span key={`${context}-south`} className="south">
-          {message("south")}
-        </span>
-        <span key={`${context}-needle`} className="compass-needle" />
-      </span>
-    );
-  if (id === "sunset")
-    return (
-      <span key={`${context}-sun-path`} className="sun-path" aria-hidden="true">
-        <span key={`${context}-sun-arc`} />
-      </span>
-    );
-  if (id === "uv" && hour?.uv_index != null)
-    return (
-      <span
-        key={`${context}-uv-scale`}
-        className={`uv-scale level-${Math.min(10, Math.round(hour.uv_index))}`}
-        aria-hidden="true"
-      />
-    );
-  if (id === "humidity")
-    return (
-      <span
-        key={`${context}-humidity-scale`}
-        className={`humidity-scale level-${Math.round((state.forecast?.current.humidity ?? 0) / 10)}`}
-        aria-hidden="true"
-      />
-    );
-  if (id === "pressure")
-    return (
-      <span
-        key={`${context}-pressure-dial`}
-        className="pressure-dial"
-        aria-hidden="true"
-      />
-    );
-  return null;
 }
 
 function detailChartData() {
@@ -1229,382 +512,8 @@ function detailChartData() {
   return { samples, values, minimum, maximum };
 }
 
-async function renderDetailChart() {
-  if (
-    !state.detail ||
-    state.detail === "sunset" ||
-    !detailChartData().samples.length
-  )
-    return;
-  if (!chartSurface) {
-    try {
-      const surface = await bridge.openCanvas("weather-chart");
-      if (disposed) return;
-      chartSurface = surface;
-      stopChartInput = bridge.onCanvasInput(surface.canvasId, (event) => {
-        if (event.type !== "resize" || !chartSurface) return;
-        chartSurface = {
-          ...chartSurface,
-          cssWidth: event.cssWidth,
-          cssHeight: event.cssHeight,
-          devicePixelRatio: event.devicePixelRatio,
-        };
-        drawDetailChart();
-      });
-      chartReady = Boolean(surface.canvas.getContext("2d"));
-      if (chartReady) await bridge.render(view());
-    } catch {
-      // Keep the accessible CSS plot if the optional canvas cannot be allocated.
-      return;
-    }
-  }
-  drawDetailChart();
-}
-
-function drawDetailChart() {
-  const surface = chartSurface;
-  if (!surface || !state.detail) return;
-  const context = surface.canvas.getContext("2d");
-  if (!context) return;
-  surface.canvas.width = Math.round(
-    surface.cssWidth * surface.devicePixelRatio,
-  );
-  surface.canvas.height = Math.round(
-    surface.cssHeight * surface.devicePixelRatio,
-  );
-  context.setTransform(
-    surface.devicePixelRatio,
-    0,
-    0,
-    surface.devicePixelRatio,
-    0,
-    0,
-  );
-  const { samples, minimum, maximum } = detailChartData();
-  drawWeatherChart(
-    context,
-    samples,
-    surface.cssWidth,
-    surface.cssHeight,
-    minimum,
-    maximum,
-  );
-}
-
-function weatherDetail(t: WeatherTranslations) {
-  const forecast = state.forecast;
-  if (!forecast) return null;
-  const metric = metricItems().find((item) => item.id === state.detail);
-  const day = forecast.days[state.detailDay];
-  const {
-    samples: hours,
-    values,
-    minimum: min,
-    maximum: max,
-  } = detailChartData();
-  const title = metric?.label ?? message("conditionsTitle");
-  const unit =
-    state.detail === "temperature" || state.detail === "feels-like"
-      ? "°"
-      : state.detail === "humidity" || state.detail === "rain"
-        ? "%"
-        : state.detail === "wind"
-          ? ` ${message("windUnit")}`
-          : state.detail === "visibility"
-            ? ` ${message("kilometers")}`
-            : state.detail === "pressure"
-              ? " hPa"
-              : "";
-  return (
-    <section key="detail-layer" className="detail-layer" hidden={!state.detail}>
-      <div
-        key="detail-backdrop"
-        className="detail-backdrop"
-        aria-hidden="true"
-        data-redevplugin-action="close-detail"
-      />
-      <section
-        key="weather-detail"
-        className="weather-detail"
-        role="dialog"
-        aria-modal={state.detail ? true : undefined}
-        aria-label={title}
-        data-redevplugin-escape-action="close-detail"
-      >
-        <header key="detail-heading" className="detail-heading">
-          <h2 key="detail-title">{title}</h2>
-          <button
-            key="detail-close"
-            type="button"
-            className="plain-button"
-            autoFocus={Boolean(state.detail)}
-            aria-label={message("closeDetails")}
-            data-redevplugin-action="close-detail"
-          >
-            ×
-          </button>
-        </header>
-        {state.detail !== "sunset" && day ? (
-          <nav
-            key="detail-days"
-            className="detail-days"
-            aria-label={t.forecastLabel}
-          >
-            {forecast.days.map((item, index) => (
-              <button
-                key={`detail-date-${item.date}`}
-                type="button"
-                value={String(index)}
-                aria-pressed={index === state.detailDay}
-                data-redevplugin-action="detail-day"
-              >
-                <span key={`detail-weekday-${item.date}`}>
-                  {formatForecastDay(item.date)}
-                </span>
-                <strong key={`detail-number-${item.date}`}>
-                  {Number(item.date.slice(8))}
-                </strong>
-              </button>
-            ))}
-          </nav>
-        ) : null}
-        <p key="detail-date" className="detail-date">
-          {day ? formatCivilDate(day.date, state.locale) : ""}
-        </p>
-        <div key="detail-summary" className="detail-summary">
-          <strong key="detail-value">
-            {state.detail === "temperature" && state.detailDay === 0
-              ? degrees(
-                  state.apparent
-                    ? forecast.current.apparent_temperature
-                    : forecast.current.temperature,
-                )
-              : state.detailDay === 0 && metric
-                ? metric.value
-                : metric && values.length
-                  ? `${Math.round(Math.min(...values))}–${Math.round(Math.max(...values))}${unit}`
-                  : day
-                    ? `${degrees(day.temperature_max)} / ${degrees(day.temperature_min)}`
-                    : "—"}
-          </strong>
-          <p key="detail-summary-note">
-            {state.detailDay === 0 && metric
-              ? metric.note
-              : metric
-                ? message("dailyRange")
-                : day
-                  ? translatedCondition(
-                      conditionForCode(day.weather_code, true).kind,
-                    )
-                  : ""}
-          </p>
-        </div>
-        {state.detail === "sunset" ? (
-          <div key="sun-detail" className="sun-detail">
-            {metricIllustration("sunset", "detail")}
-            <p key="sun-caption">{metric?.note}</p>
-          </div>
-        ) : null}
-        <div
-          key="hourly-chart"
-          hidden={state.detail === "sunset" || !values.length}
-          className={chartReady ? "hourly-chart has-canvas" : "hourly-chart"}
-          role="group"
-          aria-label={`${title} · ${day?.date}`}
-        >
-          <canvas
-            key="weather-chart"
-            className="chart-canvas"
-            data-redevplugin-canvas="weather-chart"
-            aria-hidden="true"
-          />
-          <div key="chart-bounds" className="chart-bounds">
-            <span key="chart-max">
-              {Math.ceil(max)}
-              {unit}
-            </span>
-            <span key="chart-min">
-              {Math.floor(min)}
-              {unit}
-            </span>
-          </div>
-          <div key="chart-columns" className="chart-columns">
-            {values.map((value, index) => (
-              <div
-                key={`chart-${hours[index].time}`}
-                className={`chart-column chart-hour-${Number(hours[index].time.slice(11, 13))} chart-height-${Math.round(((value - min) / (max - min)) * 100)}`}
-              >
-                <button
-                  key={`chart-point-${index}`}
-                  type="button"
-                  className="chart-point"
-                  aria-label={`${hours[index].time.slice(11, 16)}: ${Math.round(value)}${unit}`}
-                >
-                  <span
-                    key={`chart-tooltip-${index}`}
-                    className="chart-tooltip"
-                  >
-                    {hours[index].time.slice(11, 16)} · {Math.round(value)}
-                    {unit}
-                  </span>
-                </button>
-              </div>
-            ))}
-          </div>
-          <div key="chart-time" className="chart-time">
-            <span key="chart-time-start">0:00</span>
-            <span key="chart-time-six">6:00</span>
-            <span key="chart-time-noon">12:00</span>
-            <span key="chart-time-eighteen">18:00</span>
-          </div>
-        </div>
-        {state.detail !== "sunset" && !values.length ? (
-          <p key="detail-no-hours" className="detail-note">
-            {message("missingHours")}
-          </p>
-        ) : null}
-        {state.detail === "temperature" ? (
-          <div
-            key="temperature-tabs"
-            className="temperature-tabs"
-            role="group"
-            aria-label={message("temperatureType")}
-          >
-            <button
-              key="actual-tab"
-              type="button"
-              value="actual"
-              aria-pressed={!state.apparent}
-              data-redevplugin-action="detail-temperature"
-            >
-              {message("actual")}
-            </button>
-            <button
-              key="apparent-tab"
-              type="button"
-              value="apparent"
-              aria-pressed={state.apparent}
-              data-redevplugin-action="detail-temperature"
-            >
-              {t.feelsLike}
-            </button>
-          </div>
-        ) : null}
-        <p key="detail-attribution" className="detail-note">
-          {t.poweredBy}
-        </p>
-      </section>
-    </section>
-  );
-}
-
-function loadingState(t: WeatherTranslations) {
-  return (
-    <section
-      key="loading-state"
-      className="loading-state"
-      aria-label={t.loading}
-    >
-      <span key="loading-mark" className="loading-mark" aria-hidden="true" />
-      <h2 key="loading-title">{t.loading}</h2>
-    </section>
-  );
-}
-
-function weatherCardControls(t: WeatherTranslations) {
-  const refreshing =
-    state.busy === "forecast" &&
-    Boolean(state.forecast) &&
-    !state.pendingLocation;
-  const refreshLabel = refreshing ? t.refreshing : t.refresh;
-  return (
-    <div key="weather-card-controls" className="weather-card-controls">
-      <span key="scroll-summary" className="scroll-summary" aria-hidden="true">
-        <strong key="scroll-city">
-          {state.selected
-            ? localizedLocation(state.selected, state.locale).name
-            : undefined}
-        </strong>
-        <span key="scroll-temperature">
-          {state.forecast
-            ? `${degrees(state.forecast.current.temperature)} · ${translatedCondition(conditionForCode(state.forecast.current.weather_code, state.forecast.current.is_day).kind)}`
-            : ""}
-        </span>
-      </span>
-      {state.pendingLocation && !state.chooserOpen ? (
-        <p
-          key="weather-progress"
-          className="weather-progress"
-          role="status"
-          title={pendingLocationLabel(t)}
-        >
-          <span key="progress-mark" className="location-loading-mark" />
-          <span key="weather-progress-label" className="weather-progress-label">
-            {pendingLocationLabel(t)}
-          </span>
-        </p>
-      ) : null}
-      {state.sidebarCollapsed ? (
-        <button
-          key="sidebar-toggle"
-          type="button"
-          className="plain-button sidebar-toggle"
-          title={message("toggleSidebar")}
-          aria-label={message("toggleSidebar")}
-          aria-expanded={!state.sidebarCollapsed}
-          data-redevplugin-action="toggle-sidebar"
-        >
-          ◧
-        </button>
-      ) : null}
-      <button
-        key="location-trigger"
-        className="location-trigger"
-        type="button"
-        title={t.chooseLocation}
-        aria-label={`${t.chooseLocation}: ${(state.selected ? localizedLocation(state.selected, state.locale).name : undefined) ?? t.chooseLocation}`}
-        aria-expanded={state.chooserOpen}
-        data-redevplugin-action="toggle-location-chooser"
-      >
-        <strong key="location-trigger-name" className="location-trigger-name">
-          {(state.selected
-            ? localizedLocation(state.selected, state.locale).name
-            : undefined) ?? t.chooseLocation}
-        </strong>
-        <span
-          key="location-trigger-arrow"
-          className="location-trigger-arrow"
-          aria-hidden="true"
-        >
-          ⌄
-        </span>
-      </button>
-      {state.selected ? (
-        <button
-          key="refresh"
-          className={
-            refreshing
-              ? "icon-button weather-card-refresh is-refreshing"
-              : "icon-button weather-card-refresh"
-          }
-          type="button"
-          title={refreshLabel}
-          aria-label={refreshLabel}
-          aria-busy={refreshing}
-          disabled={Boolean(state.busy)}
-          data-redevplugin-action="refresh-weather"
-        >
-          <span key="refresh-icon" className="refresh-icon" aria-hidden="true">
-            ↻
-          </span>
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function locationForAction(event: PluginUIActionEvent): Location | undefined {
-  const id = String(event.value ?? "");
+function locationForAction(event: string): Location | undefined {
+  const id = event;
   return (
     state.results.find((item) => item.id === id) ??
     state.favorites.find((item) => item.id === id) ??
@@ -1649,7 +558,7 @@ function friendlyError(
 ): WeatherMessageKey {
   if (
     error instanceof PluginBridgeError &&
-    error.errorCode === "PLUGIN_PERMISSION_DENIED"
+    ["PLUGIN_PERMISSION_DENIED", "permission_required"].includes(error.errorCode)
   ) {
     return "permission";
   }
@@ -1693,14 +602,253 @@ function degrees(value: number): string {
   return `${number(value)}°`;
 }
 
-function reportUnhandledFailure(error: unknown): void {
-  if (
-    disposed &&
-    error instanceof PluginBridgeError &&
-    error.errorCode === "PLUGIN_BRIDGE_DISPOSED"
-  )
-    return;
-  queueMicrotask(() => {
-    throw error;
-  });
+
+function openDetail(id: string) {
+  if (!metricItems().some((item) => item.id === id)) return;
+  state.detailDay = 0;
+  state.detail = id;
+}
+function openDay(index: number) {
+  if (!Number.isInteger(index) || !state.forecast?.days[index]) return;
+  state.detailDay = index;
+  state.detail = "temperature";
+}
+function upcomingHours(forecast: Forecast) {
+  // Provider timestamps are local wall times, not browser-zone timestamps.
+  return (forecast.hourly ?? []).filter((hour) => hour.time >= forecast.current.time.slice(0, 13) + ":00").slice(0, 24);
+}
+function weatherClass(current?: CurrentWeather) {
+  return current ? "sky-" + conditionForCode(current.weather_code, current.is_day).kind + (current.is_day ? "" : " weather-night") : "sky-neutral";
+}
+function sunProgress() {
+  const forecast = state.forecast, day = forecast?.days[0];
+  if (!forecast || !day) return 0;
+  const minutes = (value: string) => Number(value.slice(11, 13)) * 60 + Number(value.slice(14, 16));
+  return Math.max(0, Math.min(1, (minutes(forecast.current.time) - minutes(day.sunrise)) / Math.max(1, minutes(day.sunset) - minutes(day.sunrise))));
+}
+function LocationButton(props: { location: Location; source: "major" | "result" | "favorite" }) {
+  const current = () => state.selected?.id === props.location.id;
+  const pending = () => state.pendingLocation?.id === props.location.id;
+  const summary = () => state.cityForecasts[props.location.id];
+  const select = () => {
+    if (current() && !state.pendingLocation && state.chooserOpen) { void toggleLocationChooser(); return; }
+    void (props.source === "favorite" ? openLocation(props.location.id) : previewLocation(props.location.id));
+  };
+  return <Button variant="ghost" class="location-choice" data-location-id={props.location.id}
+    aria-current={current() ? "true" : undefined} aria-busy={pending()} title={localizedLocation(props.location, state.locale).name + " · " + locationSubtitle(props.location)}
+    disabled={Boolean(state.busy && state.busy !== "forecast")} onClick={select}>
+    <Show when={props.source !== "major"}><span class="location-marker" aria-hidden="true"><MapPinIcon size={18} /></span></Show>
+    <span class="location-copy"><span class="location-name"><strong>{localizedLocation(props.location, state.locale).name}</strong>
+      <Show when={current()}><span class="current-label">{message("currentLocation")}</span></Show>
+    </span><small title={locationSubtitle(props.location)}>{props.source === "major" ? localizedLocation(props.location, state.locale).country : locationSubtitle(props.location)}</small></span>
+    <Show when={props.source === "favorite" && summary()}>{(weather) => <span class="location-weather" title={weather().current.time.replace("T", " ")}>
+      <WeatherIcon code={weather().current.weather_code} day={weather().current.is_day} label={translatedCondition(conditionForCode(weather().current.weather_code, weather().current.is_day).kind)} />
+      <span>{degrees(weather().current.temperature)}</span></span>}</Show>
+    <span class="location-trailing" aria-hidden="true"><Show when={pending()} fallback={<Show when={current()} fallback={<ChevronRight size={16} />}><Check size={16} /></Show>}><span class="loading-mark" /></Show></span>
+  </Button>;
+}
+function LocationPicker() {
+  let queryInput!: HTMLInputElement;
+  const status = () => {
+    if (state.pendingLocation) return pendingLocationLabel(translations());
+    // Empty search states own their feedback; populated results still need errors.
+    if (state.notice?.scope === "chooser" && (!state.searched || state.results.length > 0)) return message(state.notice.text);
+    return "";
+  };
+  const suggested = () => majorCitiesForLocale(state.locale).filter((city) => !state.favorites.some((favorite) => favorite.id === city.id));
+  const clear = () => { void clearSearch(); queryInput.focus(); };
+  return <section class="location-picker" aria-label={translations().chooseLocation}>
+    <div class="picker-search-area">
+      <p class="picker-intro">{message("pickerHint")}</p>
+      <form class="search-form" onSubmit={(event) => { event.preventDefault(); void searchLocations(); }}>
+        <div class="search-input-wrap"><Search size={18} class="search-icon" aria-hidden="true" />
+          <label class="sr-only" for="weather-query">{translations().searchPlaceholder}</label>
+          <Input ref={queryInput} id="weather-query" name="query" type="search" value={state.query}
+            onInput={(event) => { state.query = event.currentTarget.value; if (state.searched) { searchRevision++; state.searched = false; state.results = []; state.notice = undefined; } }}
+            placeholder={translations().searchPlaceholder} maxLength={120} autocomplete="off" enterkeyhint="search" spellcheck={false}
+            disabled={Boolean(state.busy && state.busy !== "search")} />
+          <Show when={state.query}><Button variant="ghost" class="clear-search" type="button" aria-label={message("clearSearch")} onClick={clear}><X size={16} aria-hidden="true" /></Button></Show>
+        </div>
+        <Button type="submit" class="search-submit" disabled={Boolean(state.busy)} aria-label={translations().search} aria-busy={state.busy === "search"}>
+          <Show when={state.busy === "search"} fallback={<ChevronRight size={20} aria-hidden="true" />}><span class="loading-mark" aria-hidden="true" /></Show>
+        </Button>
+      </form>
+      <p class="chooser-status" classList={{ error: state.notice?.scope === "chooser" && Boolean(state.notice.error), "has-status": Boolean(status()) }} role="status" aria-atomic="true">{status()}</p>
+    </div>
+    <div class="picker-scroll">
+      <Show when={state.searched} fallback={<>
+        <Show when={state.favorites.length}>
+          <section class="picker-section recent-locations" aria-label={translations().favorites}>
+            <div class="picker-section-heading"><h3>{translations().favorites}<span class="location-count">{state.favorites.length}</span></h3>
+              <Button variant="ghost" class="manage-locations" onClick={() => { state.managingLocations = !state.managingLocations; }}>{message(state.managingLocations ? "done" : "manageLocations")}</Button>
+            </div>
+            <ul class="location-list recent-list"><For each={state.favorites}>{(location) => <li>
+              <LocationButton location={location} source="favorite" />
+              <Show when={state.managingLocations}><Button variant="ghost" class="remove-location" disabled={Boolean(state.busy)}
+                aria-label={translations().remove + " " + localizedLocation(location, state.locale).name} title={message("removeRecent")}
+                onClick={() => void removeLocation(location.id)}><Trash size={17} aria-hidden="true" /></Button></Show>
+            </li>}</For></ul>
+          </section>
+        </Show>
+        <Show when={suggested().length}><section class="picker-section suggested-locations" aria-label={translations().majorCities}>
+          <div class="picker-section-heading"><h3>{translations().majorCities}</h3><span class="section-decoration" aria-hidden="true"><Globe size={15} /></span></div>
+          <ul class="location-list suggested-list"><For each={suggested()}>{(location) => <li><LocationButton location={location} source="major" /></li>}</For></ul>
+        </section></Show>
+      </>}>
+        <section class="picker-section search-results" aria-label={message("searchResults")}>
+          <div class="picker-section-heading"><h3>{message("searchResults")}<Show when={state.busy !== "search"}><span class="location-count">{state.results.length}</span></Show></h3></div>
+          <Show when={state.results.length} fallback={<div class="location-empty" role="status" aria-atomic="true"><Search size={28} aria-hidden="true" /><p>{state.busy === "search" ? translations().searching : state.notice?.error ? message(state.notice.text) : translations().noResults}</p><Show when={state.busy !== "search"}><small>{message("searchRetryHint")}</small></Show></div>}>
+            <ul class="location-list results-list"><For each={state.results}>{(location) => <li><LocationButton location={location} source="result" /></li>}</For></ul>
+          </Show>
+        </section>
+      </Show>
+    </div>
+  </section>;
+}
+function CitySidebar() {
+  return <aside class="city-sidebar" aria-label={translations().favorites}>
+    <div class="sidebar-toolbar"><strong>{message("weather")}</strong>
+      <Button variant="ghost" aria-label={message("hideSidebar")} onClick={() => { state.sidebarCollapsed = true; }}>◧</Button>
+    </div>
+    <Button variant="outline" class="sidebar-search" onClick={() => void toggleLocationChooser()}>{translations().searchPlaceholder}</Button>
+    <nav class="city-list"><For each={state.favorites}>{(location) => <button type="button" class={"city-card " + weatherClass(state.cityForecasts[location.id]?.current)}
+      data-city-id={location.id} aria-pressed={(state.pendingLocation ?? state.selected)?.id === location.id}
+      aria-busy={state.pendingLocation?.id === location.id} onClick={() => void openLocation(location.id)}>
+      <strong>{localizedLocation(location, state.locale).name}</strong><time>{formatTime(state.now, location.timezone)}</time>
+      <span class="city-temperature">{state.cityForecasts[location.id] ? degrees(state.cityForecasts[location.id].current.temperature) : "—"}</span>
+      <span class="city-condition">{state.cityForecasts[location.id] ? translatedCondition(conditionForCode(state.cityForecasts[location.id].current.weather_code, state.cityForecasts[location.id].current.is_day).kind) : location.country}</span>
+      <Show when={state.cityForecasts[location.id]?.days[0]}>{(day) => <small>{translations().high} {degrees(day().temperature_max)} · {translations().low} {degrees(day().temperature_min)}</small>}</Show>
+    </button>}</For></nav>
+  </aside>;
+}
+function WeatherToolbar() {
+  return <div class="weather-toolbar">
+    <Show when={state.sidebarCollapsed}><Button variant="ghost" aria-label={message("toggleSidebar")} onClick={() => { state.sidebarCollapsed = false; }}>◧</Button></Show>
+    <Button variant="outline" aria-label={translations().chooseLocation} aria-expanded={state.chooserOpen}
+      onClick={() => void toggleLocationChooser()}>{state.selected ? localizedLocation(state.selected, state.locale).name : translations().chooseLocation} <span aria-hidden="true">⌄</span></Button>
+    <p class="weather-progress" role="status"><Show when={state.pendingLocation && !state.chooserOpen}>{pendingLocationLabel(translations())}</Show></p>
+    <Button variant="ghost" aria-label={state.busy === "forecast" && !state.pendingLocation ? translations().refreshing : translations().refresh}
+      disabled={Boolean(state.busy)} aria-busy={state.busy === "forecast" && !state.pendingLocation} onClick={() => void refreshWeather()}><span aria-hidden="true">↻</span></Button>
+  </div>;
+}
+function ForecastRow(props: { day: ForecastDay; index: number; forecast: Forecast }) {
+  const low = () => Math.min(...props.forecast.days.map((day) => day.temperature_min));
+  const span = () => Math.max(1, Math.max(...props.forecast.days.map((day) => day.temperature_max)) - low());
+  return <li><button type="button" class="forecast-row" onClick={() => openDay(props.index)}>
+    <span>{props.index === 0 ? translations().today : formatForecastDay(props.day.date)}</span>
+    <span class="day-condition"><WeatherIcon code={props.day.weather_code} label={translatedCondition(conditionForCode(props.day.weather_code, true).kind)} /><Show when={props.day.precipitation_probability >= 20}><small>{Math.round(props.day.precipitation_probability)}%</small></Show></span>
+    <span>{degrees(props.day.temperature_min)}</span>
+    <span class="range-track" aria-hidden="true"><span class="temperature-range" style={{ left: ((props.day.temperature_min - low()) / span() * 100) + "%", width: ((props.day.temperature_max - props.day.temperature_min) / span() * 100) + "%" }} /><Show when={props.index === 0}><span class="current-dot" style={{ left: (Math.max(0, Math.min(1, (props.forecast.current.temperature - low()) / span())) * 100) + "%" }} /></Show></span>
+    <span>{degrees(props.day.temperature_max)}</span>
+  </button></li>;
+}
+function Dashboard() {
+  return <article class="forecast-dashboard">
+    <WeatherToolbar />
+    <header class="weather-hero"><h1 data-testid="place-name">{state.selected ? localizedLocation(state.selected, state.locale).name : ""}</h1>
+      <span class="current-temperature">{state.forecast ? degrees(state.forecast.current.temperature) : ""}</span>
+      <p>{state.forecast ? translatedCondition(conditionForCode(state.forecast.current.weather_code, state.forecast.current.is_day).kind) : ""}</p>
+      <Show when={state.forecast?.days[0]}>{(day) => <p class="hero-range">{translations().high} {degrees(day().temperature_max)} · {translations().low} {degrees(day().temperature_min)}</p>}</Show>
+    </header>
+    <Show when={state.notice?.scope === "weather"}><p class="weather-alert" role={state.notice?.error ? "alert" : "status"}>{state.notice ? message(state.notice.text) : ""}</p></Show>
+    <div class="weather-grid">
+      <Show when={state.forecast && upcomingHours(state.forecast).length}>
+        <section class="weather-card hourly-card" aria-label={message("hourly")}><h2>{message("hourly")}</h2>
+          <ol class="hourly-list"><For each={state.forecast ? upcomingHours(state.forecast) : []}>{(hour, index) => <li><button type="button"
+            onClick={() => openDay(state.forecast?.days.findIndex((day) => hour.time.startsWith(day.date)) ?? -1)}>
+            <span>{index() === 0 ? message("now") : hour.time.slice(11, 16)}</span><WeatherIcon code={index() === 0 ? state.forecast!.current.weather_code : hour.weather_code} day={index() === 0 ? state.forecast!.current.is_day : hour.is_day} label={translatedCondition(conditionForCode(index() === 0 ? state.forecast!.current.weather_code : hour.weather_code, index() === 0 ? state.forecast!.current.is_day : hour.is_day).kind)} />
+            <strong>{degrees(index() === 0 ? state.forecast!.current.temperature : hour.temperature)}</strong><Show when={hour.precipitation_probability >= 20}><small>{Math.round(hour.precipitation_probability)}%</small></Show>
+          </button></li>}</For></ol>
+        </section>
+      </Show>
+      <section class="weather-card weekly-forecast" aria-label={translations().forecastLabel}><h2>{state.forecast?.days.length === 10 ? translations().forecastTitle : message("daysForecast", { count: state.forecast?.days.length ?? 0 })}</h2>
+        <ol class="forecast-list"><For each={state.forecast?.days ?? []}>{(day, index) => <ForecastRow day={day} index={index()} forecast={state.forecast!} />}</For></ol>
+      </section>
+      <section class="metrics-grid" aria-label={translations().detailsLabel}><For each={metricItems()}>{(item) => <button type="button" class={"weather-card metric metric-" + item.id}
+        data-metric={item.id} aria-label={item.label + ": " + item.value} onClick={() => openDetail(item.id)}>
+        <span class="card-label">{item.symbol} {item.label}</span><strong class="metric-value">{item.value}</strong>
+        <MetricIllustration id={item.id} humidity={state.forecast!.current.humidity} direction={upcomingHours(state.forecast!)[0]?.wind_direction}
+          uv={upcomingHours(state.forecast!)[0]?.uv_index} pressure={upcomingHours(state.forecast!)[0]?.pressure}
+          sunProgress={sunProgress()} compassLabels={[message("north"), message("east"), message("south"), message("west")]} />
+        <span class="metric-note">{item.note}<Show when={item.id === "wind" && state.forecast && upcomingHours(state.forecast)[0]?.wind_direction != null}> · {state.forecast ? number(upcomingHours(state.forecast)[0].wind_direction!) : ""}°</Show></span>
+      </button>}</For></section>
+    </div>
+  </article>;
+}
+function DetailChart() {
+  let canvas!: HTMLCanvasElement;
+  const paint = () => {
+    const { samples, minimum, maximum } = detailChartData();
+    const context = canvas?.getContext("2d");
+    if (!context) return;
+    const width = canvas.clientWidth, height = canvas.clientHeight;
+    const scale = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * scale); canvas.height = Math.round(height * scale);
+    context.setTransform(scale, 0, 0, scale, 0, 0);
+    drawWeatherChart(context, samples, width, height, minimum, maximum, getComputedStyle(canvas).color);
+  };
+  createEffect(() => { detailChartData(); state.colorScheme; queueMicrotask(paint); });
+  onMount(() => { const observer = new ResizeObserver(paint); observer.observe(canvas); onCleanup(() => observer.disconnect()); paint(); });
+  return <div class="hourly-chart"><canvas ref={canvas} class="chart-canvas" aria-hidden="true" />
+    <div class="chart-values" aria-label={message("hourly")}><For each={detailChartData().samples}>{(sample) => <span tabindex="0" title={sample.time.slice(11, 16) + ": " + number(sample.value)}><small>{sample.time.slice(11, 16)}</small><strong>{number(sample.value)}</strong></span>}</For></div>
+  </div>;
+}
+function WeatherDetail() {
+  const metric = () => metricItems().find((item) => item.id === state.detail);
+  const day = () => state.forecast?.days[state.detailDay];
+  const unit = () => state.detail === "temperature" || state.detail === "feels-like" ? "°" : state.detail === "humidity" || state.detail === "rain" ? "%" : state.detail === "wind" ? " " + message("windUnit") : state.detail === "visibility" ? " " + message("kilometers") : state.detail === "pressure" ? " hPa" : "";
+  const value = () => {
+    if (state.detail === "temperature" && state.detailDay === 0 && state.forecast) return degrees(state.apparent ? state.forecast.current.apparent_temperature : state.forecast.current.temperature);
+    if (state.detailDay === 0 && metric()) return metric()!.value;
+    const values = detailChartData().values;
+    if (metric()) return values.length ? Math.round(Math.min(...values)) + "–" + Math.round(Math.max(...values)) + unit() : "—";
+    return day() ? degrees(day()!.temperature_max) + " / " + degrees(day()!.temperature_min) : "—";
+  };
+  return <Dialog open={Boolean(state.detail)} onOpenChange={(open) => { if (!open) state.detail = undefined; }} title={metric()?.label ?? message("conditionsTitle")}
+    closeLabel={message("closeDetails")} escapeKeyPhase="bubble" class="weather-detail">
+    <Show when={state.detail !== "sunset"}><nav class="detail-days" aria-label={translations().forecastLabel}><For each={state.forecast?.days ?? []}>{(item, index) =>
+      <Button variant="ghost" aria-pressed={index() === state.detailDay} onClick={() => { state.detailDay = index(); }}>{formatForecastDay(item.date)} {Number(item.date.slice(8))}</Button>
+    }</For></nav></Show>
+    <p class="detail-date">{day() ? formatCivilDate(day()!.date, state.locale) : ""}</p>
+    <div class="detail-summary"><strong data-testid="detail-value">{value()}</strong><p>{state.detailDay === 0 && metric() ? metric()!.note : metric() ? message("dailyRange") : day() ? translatedCondition(conditionForCode(day()!.weather_code, true).kind) : ""}</p></div>
+    <Show when={state.detail !== "sunset"}>
+      <Show when={detailChartData().samples.length} fallback={<p class="detail-note">{message("missingHours")}</p>}><DetailChart /></Show>
+    </Show>
+    <Show when={state.detail === "temperature"}><div class="temperature-tabs" role="group" aria-label={message("temperatureType")}>
+      <Button variant="ghost" aria-pressed={!state.apparent} onClick={() => { state.apparent = false; }}>{message("actual")}</Button>
+      <Button variant="ghost" aria-pressed={state.apparent} onClick={() => { state.apparent = true; }}>{translations().feelsLike}</Button>
+    </div></Show>
+    <p class="detail-note">{translations().poweredBy}</p>
+  </Dialog>;
+}
+function WeatherApp() {
+  const theme = useTheme();
+  createEffect(() => theme.setTheme(state.colorScheme));
+  onMount(() => { void initialize().catch((error) => { if (!disposed) { state.busy = undefined; state.notice = { scope: "chooser", text: friendlyError(error, "load"), error: true }; } }); });
+  onCleanup(() => { disposed = true; if (clockTimer !== undefined) clearInterval(clockTimer); });
+  return <main lang={state.locale} class={"weather-app " + weatherClass(state.forecast?.current)} classList={{ "sidebar-collapsed": state.sidebarCollapsed }}>
+    <div class="weather-sky" aria-hidden="true"><span class="cloud cloud-one" /><span class="cloud cloud-two" /><span class="sky-precipitation" /></div>
+    <Show when={state.forecast}><CitySidebar /></Show>
+    <div class="weather-content"><Show when={state.forecast && state.selected} fallback={
+      <Show when={state.busy !== "initial"} fallback={<section class="loading-state" role="status"><span class="loading-mark" />{translations().loading}</section>}>
+        <div class="onboarding"><h1>{translations().onboardingTitle}</h1><p>{translations().onboardingBody}</p><LocationPicker /></div>
+      </Show>
+    }><Dashboard /></Show>
+      <footer class="footer"><span>{translations().poweredBy}</span><Show when={state.forecast}><span>{state.forecast?.source === "saved" ? message("savedWeather") + " · " : ""}{state.forecast?.current.time.replace("T", " ")} · {state.forecast?.timezone}</span></Show></footer>
+    </div>
+    <Dialog open={Boolean(state.chooserOpen && state.forecast)} onOpenChange={(open) => { if (open !== state.chooserOpen) void toggleLocationChooser(); }} title={translations().chooseLocation} closeLabel={translations().closeLocationPicker} escapeKeyPhase="bubble" class="weather-chooser" contentClass="weather-chooser-body"
+      header={<div class="picker-dialog-header"><h2>{translations().chooseLocation}</h2><Button variant="ghost" class="picker-close" aria-label={translations().closeLocationPicker} onClick={() => void toggleLocationChooser()}><X size={20} aria-hidden="true" /></Button></div>}><LocationPicker /></Dialog>
+    <WeatherDetail />
+  </main>;
+}
+const root = document.getElementById("app");
+if (!root) throw new Error("Weather application root is missing");
+const unmount = mount(() => <FloeProvider config={{ theme: { defaultTheme: "light", defaultSurfaceStyle: "soft-neumorphic" }, storage: { namespace: "weather", enabled: false } }}><WeatherApp /></FloeProvider>, root);
+bridge.onLifecycle((event) => { if (event.type === "dispose") unmount(); });
+
+function afterPaint(): Promise<void> {
+  return new Promise((resolve) => deferAfterPaint(resolve));
+}
+function message(key: WeatherMessageKey, values: Record<string, string | number> = {}): string {
+  return formatMessage(state.locale, key, values);
 }

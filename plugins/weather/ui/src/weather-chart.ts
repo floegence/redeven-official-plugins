@@ -16,12 +16,13 @@ export function chartPoints(
 
 // Monotone cubic interpolation keeps the line within measured hourly extrema.
 export function drawWeatherChart(
-  context: OffscreenCanvasRenderingContext2D,
+  context: CanvasRenderingContext2D,
   samples: ChartSample[],
   width: number,
   height: number,
   minimum: number,
   maximum: number,
+  color = "currentColor",
 ) {
   context.clearRect(0, 0, width, height);
   const points = chartPoints(samples, width, height, minimum, maximum);
@@ -60,14 +61,13 @@ export function drawWeatherChart(
   context.lineTo(points.at(-1)!.x, height);
   context.lineTo(points[0].x, height);
   context.closePath();
-  const fill = context.createLinearGradient(0, 0, 0, height);
-  fill.addColorStop(0, "#ffcf5a55");
-  fill.addColorStop(1, "#ffcf5a03");
-  context.fillStyle = fill;
+  context.fillStyle = color;
+  context.globalAlpha = 0.12;
   context.fill();
+  context.globalAlpha = 1;
   context.beginPath();
   line();
-  context.strokeStyle = "#ffd15b";
+  context.strokeStyle = color;
   context.lineWidth = 3;
   context.lineCap = "round";
   context.stroke();

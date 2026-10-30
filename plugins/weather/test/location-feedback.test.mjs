@@ -1,351 +1,245 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
-import { build } from 'esbuild';
-import vm from 'node:vm';
-import { majorCitiesForLocale } from '../ui/src/weather-model.ts';
+import { before, after, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { createServer } from 'vite';
+import { chromium } from 'playwright';
 
-const bundle = await build({
-  entryPoints: [new URL('../ui/src/app.tsx', import.meta.url).pathname],
-  bundle: true,
-  write: false,
-  format: 'iife',
-  platform: 'browser',
-  jsx: 'automatic',
-  jsxImportSource: '@floegence/redevplugin-ui',
-  plugins: [{
-    name: 'controlled-weather-bridge',
-    setup(builder) {
-      builder.onResolve({ filter: /^@floegence\/redevplugin-ui\/plugin$/ }, () => ({ path: 'bridge', namespace: 'test' }));
-      builder.onLoad({ filter: /.*/, namespace: 'test' }, () => ({ contents: `
-        export const PluginBridgeClient = globalThis.TestBridge;
-        export class PluginBridgeError extends Error {}
-      ` }));
-    },
-  }],
+let server, browser, base;
+before(async () => {
+  server = await createServer({ configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
+    resolve: { alias: [{ find: '@floegence/redevplugin-ui/plugin', replacement: fileURLToPath(new URL('./fixtures/bridge.ts', import.meta.url)) }] },
+    server: { host:'127.0.0.1', port:0 }, logLevel:'error',
+  });
+  await server.listen();
+  base = 'http://127.0.0.1:' + server.httpServer.address().port;
+  browser = await chromium.launch({ headless:true });
+});
+after(async () => { await browser?.close(); await server?.close(); });
+const pending = (page) => page.evaluate(() => window.__weatherTest.pending());
+async function settle(page, options = {}) { await page.waitForFunction(() => window.__weatherTest.pending().length > 0); await page.evaluate((options) => window.__weatherTest.settle(options), options); }
+async function ready(t, { initial=true, locale='en-US', width=1280, height=900, fixture='sparse', sky='cloudy' } = {}) {
+  const page = await browser.newPage({ viewport:{width,height} });
+  const errors=[]; page.on('pageerror', (error) => errors.push(error.message));
+  t.after(async () => { await page.close(); assert.deepEqual(errors, [], 'no application errors'); });
+  await page.goto(base + '/?initial=' + initial + '&locale=' + locale + '&fixture=' + fixture + '&sky=' + sky);
+  if (initial) { await settle(page); await page.locator('.weather-toolbar button:last-child:not([disabled])').waitFor(); await page.waitForFunction(() => window.__weatherTest.pending().length === 0); }
+  else await page.locator('#weather-query').waitFor();
+  return page;
+}
+async function capture(page, options) {
+  await page.waitForFunction(() => [...document.querySelectorAll('[role=dialog]')].every(el => el.getAttribute('data-floating-presence') === 'open' && Number(getComputedStyle(el).opacity) === 1));
+  await page.screenshot({ ...options, animations:'disabled' });
+}
+async function chooser(page) { await page.getByRole('button',{name:'Choose location',exact:true}).click(); const dialog=page.getByRole('dialog'); await dialog.waitFor(); await page.waitForFunction(() => [...document.querySelectorAll('[role=dialog]')].every(el => el.getAttribute('data-floating-presence') === 'open' && Number(getComputedStyle(el).opacity) === 1)); return dialog; }
+async function city(scope, id) { await scope.locator('[data-location-id="preset:' + id + '"]').first().click(); }
+async function place(page,name) { await page.waitForFunction((name) => document.querySelector('[data-testid="place-name"]')?.textContent === name,name); }
+
+test('city selection keeps the visible forecast and only commits the latest queued city', async (t) => {
+  const page=await ready(t); const dialog=await chooser(page);
+  await city(dialog,'tokyo'); await page.waitForFunction(() => window.__weatherTest.pending().length === 1);
+  assert.equal(await page.getByTestId('place-name').textContent(),'Beijing');
+  assert.match(await dialog.locator('[role=status]').textContent(),/Tokyo/);
+  await city(dialog,'singapore'); assert.equal((await pending(page)).length,1);
+  await settle(page); await page.waitForFunction(() => window.__weatherTest.pending()[0]?.input.id === 'preset:singapore');
+  assert.equal(await page.getByTestId('place-name').textContent(),'Beijing');
+  await settle(page); await place(page,'Singapore'); await dialog.waitFor({state:'hidden'});
 });
 
-const [beijing, tokyo, singapore] = majorCitiesForLocale('en-US');
-const forecast = {
-  timezone: 'Asia/Shanghai', timezone_abbreviation: 'CST', source: 'saved',
-  current: { time: '2026-09-05T12:00', temperature: 22, apparent_temperature: 23, humidity: 70, weather_code: 3, wind_speed: 6, is_day: true },
-  days: [],
-};
+test('failed city requests keep prior content, permit retry, and restore focus on Escape',async(t)=>{
+  const page=await ready(t);const dialog=await chooser(page);await city(dialog,'tokyo');await settle(page,{fail:true});
+  await dialog.locator('.chooser-status.error').waitFor();assert.equal(await page.getByTestId('place-name').textContent(),'Beijing');
+  await city(dialog,'tokyo');await settle(page);await place(page,'Tokyo');
+  await chooser(page);await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+  assert.equal(await page.getByRole('button',{name:'Choose location',exact:true}).evaluate(el=>document.activeElement===el),true);
+});
 
-function harness({ initial = true, locale = 'en-US', dataForecast = forecast } = {}) {
-  const actions = new Map();
-  const calls = [];
-  let tree;
-  let contextHandler;
-  class TestBridge {
-    async ready() {}
-    onContext(handler) { contextHandler = handler; handler({ locale: { language_tag: locale } }); }
-    onLifecycle() {}
-    onAction(name, handler) { actions.set(name, handler); }
-    async render(next) { tree = next; }
-    call(method, input) {
-      if (method === 'weather.state.load') return Promise.resolve({ data: {
-        favorites: initial ? [beijing, tokyo] : [], selected: initial ? beijing : null, forecast: initial ? dataForecast : null,
-      } });
-      return new Promise((resolve, reject) => calls.push({ method, input, resolve: (data) => resolve({ data }), reject, tree }));
-    }
+test('native input retains its node, composition value and selection during context changes',async(t)=>{
+  const page=await ready(t,{initial:false,locale:'zh-CN'});const input=page.locator('#weather-query');await input.fill('北京天气');
+  await input.evaluate(el=>{window.__input=el;el.focus();el.setSelectionRange(1,3);el.dispatchEvent(new CompositionEvent('compositionstart',{data:'北京'}));});
+  await page.evaluate(()=>window.__weatherTest.context('zh-TW','dark'));
+  assert.equal(await input.evaluate(el=>el===window.__input && document.activeElement===el),true);
+  assert.equal(await input.inputValue(),'北京天气');
+  assert.deepEqual(await input.evaluate(el=>[el.selectionStart,el.selectionEnd]),[1,3]);
+  await input.evaluate(el=>el.dispatchEvent(new CompositionEvent('compositionend',{data:'北京天气'})));
+  await input.press('Enter');await page.waitForFunction(()=>window.__weatherTest.pending().length===1);
+  assert.deepEqual((await pending(page))[0].input,{query:'北京天气',language:'zh'});await settle(page);
+  await page.getByRole('button',{name:/東京/}).first().waitFor();
+});
+
+test('cached refresh failure remains explicit and metric details use native Canvas',async(t)=>{
+  const page=await ready(t);await page.getByRole('button',{name:'Refresh',exact:true}).click();await settle(page,{source:'saved'});
+  await page.locator('.weather-alert').waitFor();assert.match(await page.locator('.weather-alert').textContent(),/saved weather/);
+  await page.locator('[data-metric=humidity]').click();const dialog=page.getByRole('dialog');await dialog.waitFor();
+  assert.equal(await page.getByTestId('detail-value').textContent(),'70%');
+  await dialog.getByRole('button',{name:/Sun 6/}).click();assert.equal(await page.getByTestId('detail-value').textContent(),'60–60%');
+  assert.equal(await dialog.locator('canvas').evaluate(el=>el.width>0 && el.getContext('2d')!==null),true);
+  await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+});
+
+test('selecting an active or pending sidebar city never duplicates a forecast',async(t)=>{
+  const page=await ready(t);await page.locator('[data-city-id="preset:beijing"]').click();assert.equal((await pending(page)).length,0);
+  await page.locator('[data-city-id="preset:tokyo"]').click();await page.locator('[data-city-id="preset:tokyo"]').click();
+  await page.waitForFunction(()=>window.__weatherTest.pending().length===1);await settle(page);await place(page,'Tokyo');assert.equal((await pending(page)).length,0);
+});
+
+for (const locale of ['en-US','zh-CN','zh-TW','ja-JP','ko-KR','de-DE','fr-FR','es-ES','pt-BR','ru-RU']) {
+ test(locale+' renders localized dashboard and details',async(t)=>{
+  const page=await ready(t,{locale});await page.locator('[data-metric=humidity]').click();const dialog=page.getByRole('dialog');await dialog.waitFor();
+  assert.equal(await page.locator('main').getAttribute('lang'),locale);assert.doesNotMatch(await dialog.textContent(),/undefined|\{(?:city|count|chance|speed|temperature)\}/);
+  await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+ });
+}
+for(const width of [390,430,768,1280]) for(const theme of ['light','dark']) {
+ test(width+'px '+theme+' keeps controls and panels within the viewport',async(t)=>{
+  const page=await ready(t,{width,fixture:'full'});await page.evaluate(theme=>window.__weatherTest.context('en-US',theme),theme);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
+  const dialog=await chooser(page);const bounds=await dialog.boundingBox();assert.ok(bounds.x>=0 && bounds.x+bounds.width<=width);
+  const evidence=process.env.WEATHER_BROWSER_EVIDENCE_DIR;
+  if(evidence){await page.waitForTimeout(250); await capture(page,{path:evidence+'/weather-dialog-'+width+'-'+theme+'.png'}); await page.keyboard.press('Escape'); await dialog.waitFor({state:'hidden'}); await page.waitForTimeout(200); await capture(page,{path:evidence+'/weather-'+width+'-'+theme+'.png'});}
+ });
+}
+
+test('closing the picker during a slow request keeps feedback and exposes failure on the dashboard',async(t)=>{
+ const page=await ready(t);const dialog=await chooser(page);await city(dialog,'tokyo');await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+ assert.match(await page.locator('.weather-progress').textContent(),/Tokyo/);await settle(page,{fail:true});
+ await page.locator('.weather-alert').waitFor();assert.equal(await page.getByTestId('place-name').textContent(),'Beijing');
+});
+test('day and temperature controls change the chosen data without remounting the canvas',async(t)=>{
+ const page=await ready(t);await page.locator('.forecast-list button').nth(1).click();const dialog=page.getByRole('dialog');await dialog.waitFor();
+ assert.equal(await dialog.locator('.detail-date').textContent(),'September 6, 2026');
+ await dialog.locator('canvas').evaluate(el=>window.__chart=el);
+ await dialog.getByRole('button',{name:'Feels like',exact:true}).click();assert.equal(await dialog.getByRole('button',{name:'Feels like',exact:true}).getAttribute('aria-pressed'),'true');
+ await dialog.getByRole('button',{name:/Sat 5/}).click();
+ assert.equal(await dialog.locator('canvas').evaluate(el=>el===window.__chart),true);assert.equal(await page.getByTestId('detail-value').textContent(),'23°');
+});
+test('optional missing metrics and forecasts without hourly data remain explicitly unavailable',async(t)=>{
+ const page=await ready(t);await page.locator('[data-metric=visibility]').click();const dialog=page.getByRole('dialog');await dialog.waitFor();
+ await dialog.getByRole('button',{name:/Sun 6/}).click();assert.equal(await page.getByTestId('detail-value').textContent(),'—');
+ assert.match(await dialog.textContent(),/Hourly details are unavailable/);await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+ await page.getByRole('button',{name:'Refresh',exact:true}).click();await settle(page,{hourly:false});await page.locator('[data-metric=uv]').waitFor({state:'hidden'});
+ assert.equal(await page.locator('.metric').count(),5);
+});
+test('all eight metric details can reopen and dismissed dialogs release keyboard ownership',async(t)=>{
+ const page=await ready(t);for(const metric of ['wind','sunset','rain','feels-like','humidity','uv','visibility','pressure']){
+  await page.locator('[data-metric='+metric+']').click();const dialog=page.getByRole('dialog');await dialog.waitFor();await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+ }
+ await chooser(page);await page.locator('#weather-query').fill('Berlin');await page.locator('#weather-query').press('Enter');await page.waitForFunction(()=>window.__weatherTest.pending().length===1);await settle(page);
+});
+
+
+test('complete forecast preserves all days, hours and metric illustrations', async(t) => {
+ const page = await ready(t, { fixture:'full', width:390 });
+ assert.equal(await page.locator('.forecast-list > li').count(),10);
+ assert.equal(await page.locator('.hourly-list > li').count(),24);
+ assert.equal(await page.locator('.metric').count(),8);
+ assert.equal(await page.locator('.metric-illustration').count(),8);
+ assert.equal(await page.locator('.hourly-list button').first().locator('strong').textContent(),'22°');
+ assert.match(await page.locator('[data-metric=pressure]').textContent(),/1021 hPa/);
+ assert.equal(await page.locator('.weather-icon .icon-cloud').count() >= 34,true);
+ await page.locator('.hourly-list').evaluate(el => el.scrollLeft = el.scrollWidth);
+ await page.locator('.hourly-list button').last().click();
+ await page.getByRole('dialog').waitFor();
+ assert.equal(await page.locator('.detail-date').textContent(),'September 6, 2026');
+});
+for (const [sky, kind] of [['sunny','clear-day'],['night','clear-night'],['cloudy','cloudy'],['rain','rain'],['snow','snow'],['fog','fog'],['storm','storm']]) {
+ test('weather backdrop reflects '+sky+' independently of shell theme', async(t) => {
+  const page=await ready(t,{fixture:'full',sky,width:390});
+  const backdrop=page.locator('.weather-app');
+  assert.match(await backdrop.getAttribute('class'),new RegExp('sky-'+kind));
+  assert.equal(await page.locator('.weather-sky').getAttribute('aria-hidden'),'true');
+  assert.equal(await page.locator('.weather-sky').evaluate(el => getComputedStyle(el).pointerEvents),'none');
+  assert.match(await backdrop.evaluate(el => getComputedStyle(el).backgroundImage),/gradient/);
+  await page.evaluate(()=>window.__weatherTest.context('en-US','dark'));
+  assert.match(await backdrop.getAttribute('class'),new RegExp('sky-'+kind));
+  await page.emulateMedia({reducedMotion:'reduce'});
+  assert.equal(await page.locator('.weather-sky .cloud').first().evaluate(el=>getComputedStyle(el).animationName),'none');
+ });
+}
+
+
+test('picker gives recent cities full-width targets and separates management',async(t)=>{
+ const page=await ready(t,{width:390,fixture:'full'});const dialog=await chooser(page);
+ assert.equal(await dialog.locator('.recent-locations .location-choice').count(),3);
+ assert.equal(await dialog.locator('.remove-location:visible').count(),0);
+ const rows=await dialog.locator('.recent-locations .location-choice').evaluateAll(items=>items.map(el=>({x:el.getBoundingClientRect().x,width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height})));
+ assert.ok(rows.every(row=>row.width>280&&row.height>=60));assert.equal(new Set(rows.map(row=>row.x)).size,1);
+ assert.equal(await dialog.locator('[data-location-id="preset:beijing"]').count(),1);
+ assert.equal(await dialog.locator('[data-location-id="preset:beijing"]').getAttribute('aria-current'),'true');
+ await dialog.getByRole('button',{name:'Manage',exact:true}).click();
+ const remove=dialog.getByRole('button',{name:'Remove Tokyo',exact:true});const rect=await remove.boundingBox();assert.ok(rect.width>=44&&rect.height>=44);
+ const evidence=process.env.WEATHER_BROWSER_EVIDENCE_DIR;if(evidence) await capture(page,{path:evidence+'/weather-picker-manage.png'});
+ await remove.click();await settle(page);await remove.waitFor({state:'hidden'});
+ await dialog.getByRole('button',{name:'Done',exact:true}).click();
+ assert.equal(await dialog.locator('.remove-location:visible').count(),0);
+});
+
+test('selecting the current city dismisses the picker without another request',async(t)=>{
+ const page=await ready(t,{width:390});const dialog=await chooser(page);
+ await city(dialog,'beijing');await dialog.waitFor({state:'hidden'});
+ assert.deepEqual(await pending(page),[]);
+});
+
+test('picker search results and empty state replace unrelated choices',async(t)=>{
+ const page=await ready(t,{width:390,fixture:'full'});const dialog=await chooser(page);const input=dialog.locator('#weather-query');
+ await input.fill('Unknown town');await input.press('Enter');
+ const evidence=process.env.WEATHER_BROWSER_EVIDENCE_DIR;if(evidence){await page.waitForFunction(()=>window.__weatherTest.pending().length===1);await capture(page,{path:evidence+'/weather-picker-search-loading.png'});}
+ await settle(page,{empty:true});
+ await dialog.locator('.location-empty').waitFor();assert.match(await dialog.textContent(),/No matching places found/);
+ assert.equal(await dialog.locator('.location-choice').count(),0);
+ if(evidence) await capture(page,{path:evidence+'/weather-picker-search-empty.png'});
+ await dialog.getByRole('button',{name:'Clear search',exact:true}).click();
+ assert.equal(await input.inputValue(),'');assert.equal(await input.evaluate(el=>document.activeElement===el),true);
+ await input.fill('Tokyo');await input.press('Enter');await settle(page);
+ await dialog.locator('.search-results').waitFor();if(evidence) await capture(page,{path:evidence+'/weather-picker-search-result.png'});assert.equal(await dialog.locator('.location-choice').count(),1);
+ await city(dialog,'tokyo');await settle(page);await place(page,'Tokyo');await dialog.waitFor({state:'hidden'});
+});
+
+test('failed forecast from a search result stays visible and supports retry',async(t)=>{
+ const page=await ready(t,{width:390,fixture:'full'});const dialog=await chooser(page);
+ const input=dialog.locator('#weather-query');await input.fill('Tokyo');await input.press('Enter');await settle(page);
+ await dialog.locator('.search-results').waitFor();await city(dialog,'tokyo');await settle(page,{fail:true});
+ const error=dialog.locator('.chooser-status.error');await error.waitFor();
+ assert.match(await error.textContent(),/Live weather is unavailable/);
+ assert.equal(await page.getByTestId('place-name').textContent(),'Beijing');
+ assert.equal(await dialog.locator('.search-results .location-choice').count(),1);
+ assert.ok((await dialog.boundingBox()).height<=480,'a single result does not leave a full-height empty dialog');
+ const evidence=process.env.WEATHER_BROWSER_EVIDENCE_DIR;if(evidence) await capture(page,{path:evidence+'/weather-picker-forecast-error.png'});
+ await city(dialog,'tokyo');await settle(page);await place(page,'Tokyo');await dialog.waitFor({state:'hidden'});
+});
+
+test('picker keeps search reachable in a short viewport and avoids background scrolling',async(t)=>{
+ const page=await ready(t,{width:390,height:520,fixture:'full'});const dialog=await chooser(page);
+ const bounds=await dialog.boundingBox();assert.ok(bounds.y>=0&&bounds.y+bounds.height<=520);
+ const input=dialog.locator('#weather-query');const before=await input.boundingBox();
+ const background=await page.locator('.weather-content').evaluate(el=>el.scrollTop);
+ await dialog.locator('.picker-scroll').evaluate(el=>el.scrollTop=el.scrollHeight);
+ const after=await input.boundingBox();assert.ok(Math.abs(before.y-after.y)<1);
+ assert.equal(await page.locator('.weather-content').evaluate(el=>el.scrollTop),background);
+ const evidence=process.env.WEATHER_BROWSER_EVIDENCE_DIR;if(evidence) await capture(page,{path:evidence+'/weather-picker-short-viewport.png'});
+ await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+});
+
+test('clearing an in-flight search cannot restore stale results',async(t)=>{
+ const page=await ready(t,{width:390});const dialog=await chooser(page);const input=dialog.locator('#weather-query');
+ await input.fill('Tokyo');await input.press('Enter');await page.waitForFunction(()=>window.__weatherTest.pending().length===1);
+ await dialog.getByRole('button',{name:'Clear search',exact:true}).click();await settle(page);
+ assert.equal(await input.inputValue(),'');assert.equal(await dialog.locator('.search-results').count(),0);
+ assert.equal(await dialog.locator('.recent-locations .location-choice').count(),3);
+});
+
+for(const locale of ['en-US','zh-CN','zh-TW','ja-JP','ko-KR','de-DE','fr-FR','es-ES','pt-BR','ru-RU']) {
+ test(locale+' picker keeps native fields, readable targets and localized states on mobile',async(t)=>{
+  const page=await ready(t,{width:390,locale,fixture:'full'});
+  await page.locator('.weather-toolbar button').first().click();const dialog=page.getByRole('dialog');await dialog.waitFor();
+  assert.doesNotMatch(await dialog.textContent(),/undefined|\{(?:city|count)\}/);
+  const input=dialog.locator('#weather-query');assert.ok((await input.boundingBox()).width>=180);
+  const checks=await dialog.locator('.location-choice').evaluateAll(items=>items.map(el=>({width:el.clientWidth,overflow:el.scrollWidth>el.clientWidth,height:el.clientHeight})));
+  assert.ok(checks.every(item=>!item.overflow&&item.height>=60));
+  await dialog.locator('.manage-locations').click();await dialog.locator('.remove-location').first().waitFor();
+  const evidence=process.env.WEATHER_BROWSER_EVIDENCE_DIR;
+  if(evidence&&locale==='zh-CN'){
+   await dialog.locator('.manage-locations').click();await page.waitForTimeout(100);await capture(page,{path:evidence+'/weather-picker-zh-CN-light.png'});
+   await page.evaluate(()=>window.__weatherTest.context('zh-CN','dark'));await page.waitForTimeout(100);await capture(page,{path:evidence+'/weather-picker-zh-CN-dark.png'});
   }
-  vm.runInNewContext(bundle.outputFiles[0].text, {
-    TestBridge, setInterval: () => 1, clearInterval() {}, queueMicrotask,
-  });
-  return {
-    calls,
-    context(locale) { contextHandler({ locale: { language_tag: locale } }); },
-    get tree() { return tree; },
-    action(name, event = {}) { actions.get(name)(event); },
-  };
+ });
 }
-
-function find(node, key) {
-  if (node?.key === key) return node;
-  for (const child of node?.children ?? []) {
-    const found = find(child, key);
-    if (found) return found;
-  }
-}
-
-function content(node) {
-  return node?.type === 'text' ? node.text : (node?.children ?? []).map(content).join('');
-}
-
-async function flush() { await new Promise((resolve) => setImmediate(resolve)); }
-
-async function ready(options) {
-  const app = harness(options);
-  await flush();
-  if (options?.initial !== false) {
-    app.calls.shift().resolve({ location: beijing, forecast: options?.dataForecast ?? forecast, favorites: [beijing, tokyo] });
-    await flush();
-    app.action('toggle-location-chooser');
-    await flush();
-  }
-  return app;
-}
-
-for (const [action, key] of [['preview-location', 'major-open-preset:tokyo'], ['open-location', 'favorite-open-preset:tokyo']]) {
-  test(`${action} displays pending feedback before a slow forecast and commits only on success`, async () => {
-    const app = await ready();
-    app.action(action, { value: tokyo.id });
-    await flush();
-    const pending = app.calls[0];
-    assert.equal(pending.method, 'weather.forecast');
-    assert.ok(find(pending.tree, 'location-popover'), 'keep the picker stable during the request');
-    assert.equal(find(pending.tree, key).attributes['aria-busy'], true);
-    assert.match(content(find(pending.tree, 'chooser-status')), /Tokyo/u);
-    assert.equal(content(find(pending.tree, 'place-name')), 'Beijing', 'keep old weather bound to its own city');
-    app.action('preview-location', { value: singapore.id });
-    await flush();
-    assert.equal(app.calls.length, 1, 'queue city changes instead of starting parallel requests');
-    assert.equal(find(app.tree, 'major-open-preset:singapore').attributes['aria-busy'], true);
-    assert.equal(find(app.tree, key).attributes.disabled, false);
-    assert.match(content(find(app.tree, 'chooser-status')), /Singapore/u);
-    pending.resolve({ location: tokyo, forecast: { ...forecast, timezone: tokyo.timezone }, favorites: [tokyo, beijing] });
-    await flush();
-    assert.equal(app.calls.length, 2, 'start the queued city after the active request finishes');
-    const queued = app.calls[1];
-    assert.equal(queued.method, 'weather.forecast');
-    assert.equal(queued.input.id, singapore.id);
-    assert.equal(content(find(app.tree, 'place-name')), 'Beijing', 'keep the previous weather visible while queued city loads');
-    queued.resolve({ location: singapore, forecast: { ...forecast, timezone: singapore.timezone }, favorites: [singapore, tokyo] });
-    await flush();
-    assert.equal(find(app.tree, 'location-popover'), undefined);
-    assert.equal(content(find(app.tree, 'place-name')), 'Singapore');
-    assert.equal(find(app.tree, 'refresh').attributes.disabled, false);
-  });
-}
-
-for (const fails of [false, true]) {
-  test(`latest city selection wins when the superseded request ${fails ? 'fails' : 'succeeds'}`, async () => {
-    const app = await ready();
-    app.action('preview-location', { value: tokyo.id });
-    await flush();
-    app.action('preview-location', { value: singapore.id });
-    app.action('open-location', { value: beijing.id });
-    await flush();
-    assert.equal(app.calls.length, 1);
-    assert.match(content(find(app.tree, 'chooser-status')), /Beijing/u);
-    assert.equal(find(app.tree, 'major-open-preset:singapore').attributes['aria-busy'], false);
-    assert.equal(find(app.tree, 'favorite-open-preset:beijing').attributes['aria-busy'], true);
-    assert.equal(find(app.tree, 'favorite-remove-preset:beijing').attributes.disabled, true);
-    assert.equal(find(app.tree, 'refresh').attributes.disabled, true);
-    if (fails) app.calls[0].reject(new Error('Network timeout'));
-    else app.calls[0].resolve({ location: tokyo, forecast, favorites: [tokyo, beijing] });
-    await flush();
-    assert.equal(app.calls.length, 2);
-    assert.equal(app.calls[1].input.id, beijing.id);
-    assert.ok(find(app.tree, 'location-popover'));
-    assert.equal(content(find(app.tree, 'place-name')), 'Beijing');
-    assert.doesNotMatch(find(app.tree, 'chooser-status').attributes.class, /error/u);
-    app.calls[1].resolve({ location: beijing, forecast, favorites: [beijing, tokyo] });
-    await flush();
-    assert.equal(app.calls.length, 2);
-    assert.equal(find(app.tree, 'location-popover'), undefined);
-    assert.equal(content(find(app.tree, 'place-name')), 'Beijing');
-  });
-}
-
-test('failed city changes preserve existing weather, surface the error, and allow retry', async () => {
-  const app = await ready();
-  app.action('preview-location', { value: tokyo.id });
-  await flush();
-  app.calls[0].reject(new Error('Network timeout'));
-  await flush();
-  assert.equal(content(find(app.tree, 'place-name')), 'Beijing');
-  assert.ok(find(app.tree, 'location-popover'));
-  assert.match(find(app.tree, 'chooser-status').attributes.class, /error/u);
-  assert.equal(find(app.tree, 'major-open-preset:tokyo').attributes.disabled, false);
-  assert.equal(find(app.tree, 'major-open-preset:tokyo').attributes['aria-busy'], false);
-  app.action('preview-location', { value: tokyo.id });
-  await flush();
-  assert.equal(app.calls.length, 2);
-});
-
-test('first-visit city selection has localized pending feedback', async () => {
-  const app = await ready({ initial: false, locale: 'zh-CN' });
-  app.action('preview-location', { value: tokyo.id });
-  await flush();
-  assert.ok(find(app.calls[0].tree, 'location-onboarding'));
-  assert.match(content(find(app.calls[0].tree, 'chooser-status')), /东京/u);
-  assert.equal(find(app.calls[0].tree, 'major-open-preset:tokyo').attributes['aria-busy'], true);
-});
-
-test('search result selection shows pending feedback without removing the result', async () => {
-  const app = await ready();
-  app.action('search-location', { form_data: { query: 'Tokyo' } });
-  await flush();
-  app.calls.shift().resolve({ locations: [tokyo] });
-  await flush();
-  app.action('preview-location', { value: tokyo.id });
-  await flush();
-  assert.equal(find(app.calls[0].tree, 'result-open-preset:tokyo').attributes['aria-busy'], true);
-  assert.equal(find(app.tree, 'result-open-preset:tokyo').attributes.disabled, false);
-  assert.match(content(find(app.calls[0].tree, 'chooser-status')), /Tokyo/u);
-});
-
-test('closing the chooser during loading leaves visible feedback and a visible error on failure', async () => {
-  const app = await ready();
-  app.action('preview-location', { value: tokyo.id });
-  await flush();
-  app.action('toggle-location-chooser');
-  await flush();
-  assert.match(content(find(app.tree, 'weather-progress')), /Tokyo/u);
-  app.calls[0].reject(new Error('Network timeout'));
-  await flush();
-  assert.equal(find(app.tree, 'weather-progress'), undefined);
-  assert.ok(find(app.tree, 'weather-alert'));
-  assert.equal(content(find(app.tree, 'place-name')), 'Beijing');
-});
-
-
-test('detail actions are bounded to forecast data and Escape closes the detail', async () => {
-  const app = await ready();
-  app.action('open-detail', { value: 'humidity' });
-  await flush();
-  assert.ok(find(app.tree, 'weather-detail'));
-  assert.match(content(find(app.tree, 'weather-detail')), /70%/u);
-  app.action('close-detail');
-  await flush();
-  assert.equal(find(app.tree, 'detail-layer').attributes.hidden, true);
-  app.action('open-day', { value: '999' });
-  await flush();
-  assert.equal(find(app.tree, 'detail-layer').attributes.hidden, true);
-});
-
-const detailedForecast = {
-  ...forecast,
-  days: [
-    { date: '2026-09-05', weather_code: 3, temperature_max: 25, temperature_min: 21, precipitation_probability: 0, sunrise: '2026-09-05T06:11', sunset: '2026-09-05T18:39' },
-    { date: '2026-09-06', weather_code: 2, temperature_max: 28, temperature_min: 20, precipitation_probability: 30, sunrise: '2026-09-06T06:12', sunset: '2026-09-06T18:38' },
-  ],
-  hourly: [
-    { ...forecast.current, time:'2026-09-05T12:00', precipitation_probability:0, wind_direction:345, wind_gusts:24, pressure:1021, visibility:17000, uv_index:3 },
-    { ...forecast.current, time:'2026-09-06T12:00', humidity:60, precipitation_probability:30, wind_direction:345, wind_gusts:24, pressure:1021, visibility:null, uv_index:null },
-  ],
-};
-
-test('day selection and actual/apparent tabs project only the chosen day', async () => {
-  const app = await ready({ dataForecast: detailedForecast });
-  app.action('open-day', { value: '1' }); await flush();
-  assert.equal(content(find(app.tree, 'detail-date')), 'September 6, 2026');
-  assert.equal(find(app.tree, 'actual-tab').attributes['aria-pressed'], true);
-  app.action('detail-temperature', { value: 'apparent' }); await flush();
-  assert.equal(find(app.tree, 'apparent-tab').attributes['aria-pressed'], true);
-  app.action('detail-day', { value: '-1' }); await flush();
-  assert.equal(content(find(app.tree, 'detail-date')), 'September 6, 2026');
-});
-
-test('future humidity details use percentage units and optional missing metrics stay unavailable', async () => {
-  const app = await ready({ dataForecast: detailedForecast });
-  app.action('open-detail', { value: 'humidity' }); await flush();
-  app.action('detail-day', { value: '1' }); await flush();
-  assert.match(content(find(app.tree, 'detail-value')), /60–60%/u);
-  assert.doesNotMatch(content(find(app.tree, 'detail-value')), /°/u);
-  app.action('close-detail'); await flush();
-  app.action('open-detail', { value: 'visibility' }); await flush();
-  app.action('detail-day', { value: '1' }); await flush();
-  assert.ok(find(app.tree, 'detail-no-hours'));
-});
-
-test('language changes relabel saved presets and existing notices without changing city identity', async () => {
-  const app = await ready();
-  app.action('search-location', { form_data: { query: '' } }); await flush();
-  app.context('zh-TW'); await flush();
-  assert.equal(content(find(app.tree, 'place-name')), '北京');
-  assert.match(content(find(app.tree, 'chooser-status')), /搜尋/);
-  app.context('ja-JP'); await flush();
-  assert.match(content(find(app.tree, 'chooser-status')), /検索/);
-  assert.equal(content(find(app.tree, 'major-name-preset:tokyo')), '東京');
-});
-
-test('search forwards the supported provider language from surface context', async () => {
-  const app = await ready({ initial: false, locale: 'de-DE' });
-  app.action('search-location', { form_data: { query: 'Berlin' } }); await flush();
-  assert.equal(app.calls[0].input.language, 'de');
-});
-
-for (const locale of ['en-US', 'zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'de-DE', 'fr-FR', 'es-ES', 'pt-BR', 'ru-RU']) {
-  test(`${locale} renders the complete dashboard and details through the SDK`, async () => {
-    const app = await ready({ locale, dataForecast: detailedForecast });
-    assert.equal(find(app.tree, 'weather-root').attributes.lang, locale);
-    app.action('open-day', { value: '0' }); await flush();
-    const text = content(app.tree);
-    assert.doesNotMatch(text, /undefined|\{(?:city|count|chance|speed|temperature)\}/u);
-    assert.ok(content(find(app.tree, 'detail-title')));
-    assert.ok(content(find(app.tree, 'detail-date')));
-    app.action('close-detail'); await flush();
-  });
-}
-
-test('every metric opens and closes repeatedly without duplicate SDK node keys', async () => {
-  const app = await ready({ dataForecast: detailedForecast });
-  for (const metric of ['wind', 'sunset', 'rain', 'feels-like', 'humidity', 'uv', 'visibility', 'pressure', 'sunset']) {
-    app.action('open-detail', { value: metric }); await flush();
-    assert.ok(find(app.tree, 'weather-detail'));
-    app.action('close-detail'); await flush();
-    assert.equal(find(app.tree, 'detail-layer').attributes.hidden, true);
-  }
-});
-
-for (const dataForecast of [detailedForecast, { ...detailedForecast, hourly: [] }]) {
-  test(`metric cards remain a complete independent group with ${dataForecast.hourly.length ? 'full' : 'cached'} data`, async () => {
-    const app = await ready({ dataForecast });
-    const metrics = find(app.tree, 'metrics-grid');
-    assert.ok(metrics);
-    assert.equal(metrics.children.filter(child => child.type !== 'text').length, dataForecast.hourly.length ? 8 : 5);
-    assert.ok(find(app.tree, 'weekly-forecast'));
-  });
-}
-
-test('a provider fallback clearly labels cached weather after refresh', async () => {
-  const app = await ready({ dataForecast: { ...detailedForecast, source: 'saved', hourly: [] } });
-  assert.match(content(find(app.tree, 'weather-alert')), /Showing saved weather/);
-});
-
-
-test('only exposes the toolbar sidebar control when the city sidebar is collapsed', async () => {
-  const app = await ready();
-  assert.equal(find(app.tree, 'sidebar-toggle'), undefined);
-  assert.ok(find(app.tree, 'sidebar-close'));
-  app.action('toggle-sidebar');
-  await flush();
-  assert.ok(find(app.tree, 'sidebar-toggle'));
-  app.action('toggle-sidebar');
-  await flush();
-  assert.equal(find(app.tree, 'sidebar-toggle'), undefined);
-});
-
-test('city selection keeps progress inside the toolbar without displacing the dashboard', async () => {
-  const app = await ready();
-  app.action('toggle-location-chooser');
-  await flush();
-  app.action('open-location', { value: tokyo.id });
-  await flush();
-  assert.equal(find(app.tree, 'sidebar-preset:tokyo').attributes['aria-pressed'], true);
-  assert.equal(find(app.tree, 'sidebar-preset:beijing').attributes['aria-pressed'], false);
-  assert.ok(find(find(app.tree, 'weather-card-controls'), 'weather-progress'));
-  assert.equal(content(find(app.tree, 'place-name')), 'Beijing');
-  app.calls[0].resolve({ location: tokyo, forecast, favorites: [beijing, tokyo] });
-  await flush();
-  assert.deepEqual(Array.from(find(app.tree, 'city-list').children, child => child.key), ['sidebar-preset:beijing', 'sidebar-preset:tokyo']);
-  assert.equal(find(app.tree, 'weather-progress'), undefined);
-});
-
-
-test('reselecting the active or already pending city does not queue duplicate forecasts', async () => {
-  const app = await ready();
-  app.action('open-location', { value: beijing.id });
-  await flush();
-  assert.equal(app.calls.length, 0);
-  app.action('open-location', { value: tokyo.id });
-  app.action('open-location', { value: tokyo.id });
-  await flush();
-  assert.equal(app.calls.length, 1);
-  app.calls[0].resolve({ location: tokyo, forecast, favorites: [beijing, tokyo] });
-  await flush();
-  assert.equal(app.calls.length, 1);
-  assert.equal(content(find(app.tree, 'place-name')), 'Tokyo');
-});

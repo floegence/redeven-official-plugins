@@ -31,7 +31,7 @@ jobs:
             plugins/*/package-lock.json
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.26.6'
+          go-version: '1.27.3'
           cache: false
       - uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0
         with:
@@ -57,6 +57,9 @@ jobs:
           test "$ci_conclusion" = success
       - run: npm ci
       - run: npm run plugins:ci
+      - name: Install browser for native Weather acceptance
+        working-directory: plugins/weather
+        run: npm exec -- playwright install --with-deps chromium
       - run: npm run verify
       - name: Build, verify, and publish signed release set
         env:

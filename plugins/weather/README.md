@@ -1,123 +1,83 @@
 # Weather
 
-Weather is a Redeven-maintained official plugin with an original interface
-modeled on macOS Weather: an atmospheric background, a centered current-weather
-summary, a collapsible city sidebar, a horizontal hourly forecast, a ten-day
-temperature range list, and weather-tinted detail cards. The dashboard scrolls
-inside its plugin surface and reflows into two-column cards on small screens.
+Weather is a Redeven-maintained application with a responsive Floe dashboard,
+recent-city sidebar, hourly conditions, daily temperature ranges, and metric
+details. Controls and dialogs follow the host language and light/dark appearance.
+The sky, weather pictograms and city cards follow the actual condition and local
+day/night data; switching the shell theme never changes the weather. Its original
+package-local icon and Open-Meteo attribution remain part of the package.
 
-Click an hour or a forecast day to inspect its daily temperature curve and switch
-between actual and apparent temperature. Wind, humidity, precipitation chance,
-sunset, UV index, visibility, and sea-level pressure have detail panels. Charts
-support keyboard-focusable hourly values; Escape or the backdrop closes a panel.
-A single SDK-owned canvas remains mounted across date changes and panel opens.
-If canvas allocation is unavailable, an accessible CSS chart remains visible.
+The application is ordinary Solid.js: Vite builds HTML, ES modules and CSS;
+DOM inputs, focus, composition, selection, dialogs and Canvas stay in the page.
+The public ReDevPlugin SDK is used at the host boundary for context, lifecycle
+and calls to the existing WASM weather worker. No VNode renderer, UI action
+protocol or canvas forwarding remains.
 
-Users can search places and retain up to eight recently selected cities.
-Existing cities keep their sidebar positions when selected; a new city appears
-at the top and replaces the least recently cached city when the list is full. Cached city summaries appear in the sidebar with observation
-times available on hover. The last successful forecast renders immediately while
-a refresh runs. Selecting a city keeps the previous forecast visible and shows
-immediate selection feedback in the sidebar and a compact toolbar status without
-moving the dashboard. Repeated clicks on the selected or pending city do not
-queue duplicate requests; rapid selections are queued, and only the latest selection can
-replace the visible city. A failed request preserves the existing forecast and
-keeps selection and retry available.
+## Behavior
 
-Day/night, clouds, rain, and snow use original CSS effects. Fixed-size cloud
-layers and bounded precipitation overscan avoid large texture rebuilds during
-window resizing. Weather-tinted fills replace live background blur on cards and
-controls. The city sidebar meets the surface edges without an outer rounded frame. Reduced-motion
-preferences disable decorative animation and transitions. No Apple code,
-artwork, screenshots, weather service, or proprietary visual assets are bundled.
-The earlier clock-and-weather layout was inspired by Patrick Kissling's
-MIT-licensed clock-weather-card; its credit remains in the notices.
+The last successful forecast renders before a background refresh. Selecting a
+city keeps that forecast visible while immediate pending feedback identifies the
+new choice. Rapid selections are serialized; only the last choice can replace
+the visible forecast. Repeating an active or pending city does not duplicate a
+request. Failure preserves the prior forecast and makes retry available.
 
-## Data and compatibility
+Search and recent cities share one location picker. Recent cities have full-row
+targets, current-city state and available cached weather; Manage/Done reveals
+separate remove controls. Suggested cities exclude recent entries. Search stays
+visible while the list scrolls, and explicit results or empty states replace
+unrelated choices. Clearing a pending query discards its eventual response. Users can retain eight
+cities; existing cities keep their positions and new cities replace the oldest
+cache when full. Cached city summaries retain their observation times. All ten
+languages follow the host context, including notices and known city presets.
+Arbitrary provider names keep their original spelling. Forecast dates use the
+provider's civil date and weather units remain metric.
 
-Weather and geocoding data come from [Open-Meteo](https://open-meteo.com/).
-Data attribution (CC BY 4.0), observation time, and forecast timezone appear below
-the dashboard. The provider can return up to ten days and 240 hourly observations.
-Unavailable optional UV, visibility, pressure, or wind observations remain absent;
-they are never substituted with zero. Existing stored forecasts remain readable
-and show their original day count until refreshed. Hourly details are not
-fabricated for cached forecasts. Persistent caches retain current conditions and
-daily summaries within a 40 KiB JSON budget, leaving room for the SDK control
-envelope. Full hourly observations remain in live responses; they are fetched
-again when a city opens. Existing locations and daily caches survive an upgrade.
+Hourly and daily forecasts open temperature details; wind, humidity,
+precipitation, sunrise/sunset, UV, visibility and pressure retain metric panels.
+Floe Dialog owns modal focus, Escape and backdrop dismissal. Native Canvas draws
+the curve, while keyboard-focusable hourly values remain available alongside
+it. Optional missing values stay absent rather than becoming zero. The current-hour
+summary uses the current observation, matching the hero; later hours use their
+forecast values. Pressure includes its hPa unit. Reduced motion
+is respected. Mobile layouts work without hover or the desktop sidebar.
 
-Air-quality maps, severe-weather alerts, lunar imagery, historical averages,
-Apple's volumetric sky renderer, and platform-native window chrome are outside
-this implementation. Precipitation displays daily totals when supplied, with hourly probability in
-the detail chart; older forecasts fall back to probability.
-The sunset arc is illustrative; the displayed sunrise/sunset times are data.
+## Data and ownership
 
-## Architecture
+Weather and geocoding use Open-Meteo. The existing Rust WASM worker calls the
+platform broker for the declared HTTPS origins and uses its owner-scoped KV
+store. The UI migration does not change the storage namespace, schema or quota.
+Existing recent cities and daily caches remain readable. Cached data is marked
+when a fresh request is unavailable; missing hourly observations are not invented.
+Data attribution, observation time and forecast timezone stay visible.
 
-- The TypeScript UI uses the released ReDevPlugin opaque surface renderer and
-  bridge. It never performs direct browser networking or persistence.
-- The Rust WASM worker uses the Host network broker for the declared Open-Meteo
-  HTTPS origins and the Host-owned user KV store for recent cities and caches.
-- Plugin-local response schemas in the manifest describe hourly observations
-  and cached sidebar summaries. No platform protocol or host policy is forked.
-- All ten supported languages follow the surface locale. Weather determines
-  the atmospheric palette rather than the host shell's light/dark background.
+Only UI resources and the declared WASM worker enter the installable package.
+Node, Vite, test fixtures and local development commands are author tools, never
+installed backend processes or admission paths.
 
-## Build and test
+## Build and acceptance
 
-Requirements: Node.js 26 and npm. The repository-pinned Rust 1.88 toolchain and
-`wasm32-unknown-unknown` target are selected by `rustup`.
+Run npm ci, npm test, npm run typecheck, and npm run build in this directory.
+The project file redevplugin.project.json gives the released CLI the existing
+build/test commands. From the repository root, npm run package:weather builds
+and validates an unsigned review package through the published generic packager.
+Official publication uses the neutral external-signer flow and exact reference.
 
-```bash
-npm ci
-npm test
-npm run build
-```
+The browser suite uses the real Solid/Floe application and the released production-client test harness with controlled business
+responses. It covers slow/failing/queued city selection, native input composition,
+focus restoration, Canvas, ten locales and light/dark layouts at 390, 430, 768
+and 1280 pixels. That suite is application evidence; the released CLI preview and
+actual Redeven Browser/Desktop acceptance separately prove platform integration.
 
-The source release-train version is `1.0.43`. Official distribution uses its
-signed release reference; a local build does not replace installed plugins.
-Build an unsigned review package from the repository root with:
+For a local UI preview, run node scripts/preview.mjs; the fixture preview binds
+only to loopback at port 4178. It does not install plugins or grant authority.
+Use ?initial=false&locale=zh-CN for onboarding. The default preview URL uses ?fixture=full&auto=1 for synthetic ten-day weather
+and automatic responses. Add &sky=sunny, night, rain, snow, fog or storm to review
+other conditions. Deterministic tests retain the sparse fixture and explicitly
+settle responses. Production output contains neither fixtures nor their helper.
 
-```bash
-npm run package:weather
-```
+## Attribution
 
-## Visual review
-
-From this plugin directory, run:
-
-```bash
-node scripts/preview.mjs
-```
-
-Open `http://127.0.0.1:4178`. This loopback-only fixture host uses the exact
-published ReDevPlugin SDK, opaque iframe, MessageChannel, worker, renderer, and
-canvas path. It supplies synthetic city/weather responses instead of running a
-WASM worker or a live Redeven session. It is not an installation or admission
-path and is excluded from plugin packages.
-
-Use `?width=390&height=700` for a narrow surface, `?locale=en-US` for English,
-`?code=61` for rain, or `?code=0&night=1` for a clear night. Use `?saved=1`
-for an older seven-day cache, `?metrics=6` or `?metrics=7` for incomplete provider
-metrics, and `?forecast_error=1` for a failed refresh. Restart the preview
-script after changing TypeScript; CSS is read on every surface load.
-For repeatable resize comparisons, start the preview with
-`WEATHER_REVIEW_BASELINE_CSS=/path/to/previous/styles.css` and use
-`?resize_review=1&code=61`, adding `&css=baseline` for the previous stylesheet.
-The development-only button runs four width sweeps over 240 animation frames.
-Its output measures parent frame intervals, not GPU presentation timestamps.
-The review notes are in [VISUAL_REVIEW.md](VISUAL_REVIEW.md).
-
-## Languages
-
-The surface follows the host language context and supports English, Simplified
-Chinese, Traditional Chinese, Japanese, Korean, German, French, Spanish,
-Brazilian Portuguese, and Russian. Language changes relabel controls, details,
-existing notices, and known saved city presets without changing location identity.
-Search requests use the selected provider language. Names of arbitrary saved
-search results retain the provider's original spelling; no background translation
-requests are made. Unsupported languages fall back to English.
-
-Forecast dates retain the provider's civil date rather than shifting with the
-browser time zone. Numbers use locale-aware formatting; weather units remain
-metric across languages. Long labels wrap, and the date strip scrolls horizontally.
+Open-Meteo data is CC BY 4.0. The earlier clock-weather-card inspiration retains
+its MIT attribution in THIRD_PARTY_NOTICES.txt. No Apple artwork, code, services
+or screenshots are bundled. Air quality, alerts, historical averages and native
+window chrome remain outside this application.

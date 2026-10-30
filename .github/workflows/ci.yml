@@ -28,6 +28,9 @@ jobs:
             plugins/*/package-lock.json
       - run: npm ci
       - run: npm run plugins:ci
+      - name: Install browser for native Weather acceptance
+        working-directory: plugins/weather
+        run: npm exec -- playwright install --with-deps chromium
       - run: npm run verify
       - run: npm audit --audit-level=moderate
       - run: npm run plugins:audit
