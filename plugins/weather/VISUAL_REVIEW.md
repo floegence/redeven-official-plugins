@@ -25,7 +25,7 @@ Run npm test in this plugin for application behavior and viewport bounds.
 Set WEATHER_BROWSER_EVIDENCE_DIR to an output directory and run
 node scripts/visual-review.mjs for synthetic screenshots and visual-evidence.json.
 The script records cloudy weather at 390, 430, 768 and 1280 pixels in both shell
-themes, plus clear day/night, rain, snow, fog and storm on mobile. The complete
+themes, plus clear day/night, rain, snow, fog and storm on mobile and desktop. The complete
 images expand the viewport height to expose all content; the regular images use
 a 900-pixel viewport. The browser suite separately captures Floe dialogs.
 
@@ -50,6 +50,19 @@ Check all ten locales at mobile width, long place names, light/dark themes,
 390/430/768/1280 widths and a 390-by-520 short viewport. Capture only after the
 Floe dialog has completed its entry animation; intermediate opacity is not a
 valid visual acceptance screenshot. Preserve native composition and focus tests.
+
+## Sidebar color continuity
+
+The sidebar uses a darker tone of the active weather palette. Its search action,
+text and separators must remain part of that palette in both host themes. City
+cards retain their own weather conditions, with restrained borders and a light
+selection marker. Selection and keyboard focus remain distinct; do not reuse the
+host accent ring as a permanent selected-city outline. Check the entire desktop
+composition for sunny, cloudy, rainy, snowy, foggy, stormy and nighttime weather.
+
+The independent Host acceptance page has diagnostic controls outside the plugin.
+Keep full-host evidence, but use separately labelled plugin-only screenshots for
+application visual review so diagnostic chrome is not mistaken for product UI.
 
 ## Product acceptance
 

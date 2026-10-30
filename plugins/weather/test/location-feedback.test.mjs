@@ -157,6 +157,25 @@ for (const [sky, kind] of [['sunny','clear-day'],['night','clear-night'],['cloud
 }
 
 
+test('sidebar belongs to the weather palette and separates selection from keyboard focus',async(t)=>{
+ const page=await ready(t,{width:1280,fixture:'full',sky:'rain'});
+ const readPalette=()=>page.locator('.city-sidebar').evaluate(el=>{
+  const sidebar=getComputedStyle(el),card=getComputedStyle(el.querySelector('[aria-pressed=true]'));
+  return {background:sidebar.backgroundImage,color:sidebar.color,weatherText:getComputedStyle(document.querySelector('main')).color,selectionOutline:card.outlineStyle,selectionBorder:card.borderTopColor};
+ });
+ const light=await readPalette();
+ assert.equal(light.color,light.weatherText,'the sidebar shares the forecast text palette');
+ assert.match(light.background,/gradient/,'the sidebar carries a toned weather background');
+ assert.equal(light.selectionOutline,'none','selection must not borrow the host green focus ring');
+ await page.evaluate(()=>window.__weatherTest.context('en-US','dark'));
+ assert.deepEqual(await readPalette(),light,'shell theme must not introduce an unrelated sidebar palette');
+ await page.keyboard.press('Tab');
+ await page.locator('.city-card[aria-pressed=true]').focus();
+ const focus=await page.locator('.city-card[aria-pressed=true]').evaluate(el=>({visible:el.matches(':focus-visible'),style:getComputedStyle(el).outlineStyle,width:parseFloat(getComputedStyle(el).outlineWidth)}));
+ assert.ok(focus.visible&&focus.style==='solid'&&focus.width>=2,'keyboard focus remains independently visible');
+ const search=await page.locator('.sidebar-search').boundingBox();assert.ok(search.height>=44);
+});
+
 test('picker gives recent cities full-width targets and separates management',async(t)=>{
  const page=await ready(t,{width:390,fixture:'full'});const dialog=await chooser(page);
  assert.equal(await dialog.locator('.recent-locations .location-choice').count(),3);

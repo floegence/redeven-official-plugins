@@ -710,7 +710,7 @@ function CitySidebar() {
     <div class="sidebar-toolbar"><strong>{message("weather")}</strong>
       <Button variant="ghost" aria-label={message("hideSidebar")} onClick={() => { state.sidebarCollapsed = true; }}>◧</Button>
     </div>
-    <Button variant="outline" class="sidebar-search" onClick={() => void toggleLocationChooser()}>{translations().searchPlaceholder}</Button>
+    <Button variant="outline" class="sidebar-search" onClick={() => void toggleLocationChooser()}><Search size={15} aria-hidden="true" /><span>{translations().searchPlaceholder}</span></Button>
     <nav class="city-list"><For each={state.favorites}>{(location) => <button type="button" class={"city-card " + weatherClass(state.cityForecasts[location.id]?.current)}
       data-city-id={location.id} aria-pressed={(state.pendingLocation ?? state.selected)?.id === location.id}
       aria-busy={state.pendingLocation?.id === location.id} onClick={() => void openLocation(location.id)}>

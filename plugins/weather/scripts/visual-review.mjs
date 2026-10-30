@@ -16,7 +16,7 @@ try {
  await server.listen();
  browser=await chromium.launch({headless:true});
  for (const sky of ['cloudy','sunny','night','rain','snow','fog','storm']) {
-  for (const width of (sky==='cloudy' ? [390,430,768,1280] : [390])) {
+  for (const width of (sky==='cloudy' ? [390,430,768,1280] : [390,1280])) {
    for (const theme of (sky==='cloudy' ? ['light','dark'] : ['dark'])) {
     const page=await browser.newPage({viewport:{width,height:900},reducedMotion:'reduce'});
     const errors=[];page.on('pageerror',err=>errors.push(err.message));
@@ -29,7 +29,8 @@ try {
     await page.screenshot({path:resolve(output,name+'.png')});
     const geometry=await page.evaluate(()=>{
      const content=document.querySelector('.weather-content');
-     return {days:document.querySelectorAll('.forecast-list>li').length,hours:document.querySelectorAll('.hourly-list>li').length,metrics:document.querySelectorAll('.metric').length,scrollHeight:content.scrollHeight,width:content.clientWidth,overflow:document.documentElement.scrollWidth>innerWidth,background:getComputedStyle(document.querySelector('main')).backgroundImage};
+     const sidebar=document.querySelector('.city-sidebar');
+     return {days:document.querySelectorAll('.forecast-list>li').length,hours:document.querySelectorAll('.hourly-list>li').length,metrics:document.querySelectorAll('.metric').length,scrollHeight:content.scrollHeight,width:content.clientWidth,overflow:document.documentElement.scrollWidth>innerWidth,background:getComputedStyle(document.querySelector('main')).backgroundImage,sidebarBackground:getComputedStyle(sidebar).backgroundImage};
     });
     // Capture the complete internally scrolled application at its native width.
     await page.setViewportSize({width,height:Math.min(3000,geometry.scrollHeight+1)});
