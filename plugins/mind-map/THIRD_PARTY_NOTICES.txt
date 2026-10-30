@@ -1,16 +1,13 @@
 Redeven Official Mind Map Plugin - Third-Party Notices
 
-The interface, application icon, layout icons, layout algorithm, Canvas renderer, and
-application logic were created for this plugin. No third-party audio or font
-assets are included.
+The application icon, document model, layout algorithm and Canvas renderer were
+created for this plugin. No third-party audio or font assets are included.
 
-Lucide Icons
-Copyright (c) 2026 Lucide Icons and Contributors
-License: ISC License
-Source: https://github.com/lucide-icons/lucide
+The application bundles released Floe Webapp Core, ReDevPlugin UI and Contracts,
+Solid, Noble Hashes, clsx and tailwind-merge code. The complete upstream license
+texts are generated from the exact installed packages in BUNDLED-LICENSES.txt.
+Interface icons are provided by the released Floe icon components.
 
-The released package includes PNG exports of the Lucide icons used by the interface.
-The complete license text is included as licenses/LUCIDE-LICENSE.txt.
-
-JavaScript and Rust build dependencies retain their respective upstream
-licenses. The released package contains compiled output and this notice.
+The WASM worker uses redevplugin-worker-sdk, base64, serde and serde_json.
+BUNDLED-LICENSES.txt also includes the license texts from every exact published
+crate in the locked Worker dependency graph, including build dependencies.

@@ -11,17 +11,21 @@ ReDevPlugin KV store saves the workspace through a small Rust WASM worker.
 Optimistic revisions prevent two open surfaces from silently overwriting one
 another.
 
-One layout button shows the target layout as a central topic with four curved
-branches. Click it to switch between both sides and right only. Its tooltip
-names the target layout in the current language.
+The application is an ordinary Solid Web application with Floe controls, native
+DOM input, pointer capture, Canvas, IME composition and responsive overlays.
+It ships no network access, remote fonts or audio. The host SDK is used only for
+workspace persistence, authorized export, lifecycle and explicit Agent methods.
 
-The interface, application icon, layout icons, layout algorithm, renderer, and
-worker are original. Other toolbar icons are rasterized Lucide assets. The
-plugin includes no third-party audio or fonts and requests no network access.
+Agent discovery exposes mindmap.document.read and mindmap.document.edit on the
+exact live editor. Reads return a document ID and monotonic in-memory revision.
+Edits require both fields and apply a bounded operation batch atomically through
+the same model and undo history as user edits. Stale revisions, a different
+selected document and an unfinished local edit return explicit business results.
 
-The editable layout icons are `assets/icons/switch-bilateral.svg` and
-`assets/icons/switch-right.svg`. Their 64px PNG exports ship as CSS masks;
-regenerate each PNG with Inkscape at 64px width and height after editing its SVG.
+Before close, pending text is committed and the workspace is saved. Failed or
+uncertain saves keep the document dirty. A lost write response is reconciled
+by reading its exact revision and DSL; old reads never authorize blind replay.
+Forced disposal never attempts a write after authority has been revoked.
 
 ## Design references
 

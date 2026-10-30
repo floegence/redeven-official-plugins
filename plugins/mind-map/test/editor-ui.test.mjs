@@ -69,7 +69,7 @@ describe('Mind Map editor UI geometry', () => {
       centerY: 300,
       width: 160,
       height: 54,
-      className: 'node-title-editor is-root node-editor-x-480 node-editor-y-300 node-editor-w-160 node-editor-h-54 node-editor-z-1000',
+      zoom: 1,
     });
 
     const bounded = nodeEditorPlacement(
@@ -82,8 +82,7 @@ describe('Mind Map editor UI geometry', () => {
     assert.equal(bounded.centerY, -3_760);
     assert.equal(bounded.width, 800);
     assert.equal(bounded.height, 72);
-    assert.match(bounded.className, /is-topic/u);
-    assert.match(bounded.className, /node-editor-z-2000/u);
+    assert.equal(bounded.zoom, 2);
   });
 
   it('uses one quantized zoom for the editor box and its typography', () => {
@@ -95,7 +94,7 @@ describe('Mind Map editor UI geometry', () => {
     );
     assert.equal(placement.width, 134);
     assert.equal(placement.height, 92);
-    assert.match(placement.className, /node-editor-z-421/u);
+    assert.equal(placement.zoom, 0.421);
   });
 
   it('keeps an anchored node at the same screen position after relayout', () => {

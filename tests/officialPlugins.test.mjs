@@ -35,7 +35,7 @@ describe('official plugin repository contract', () => {
     assert.equal(weather.release.stable_catalog.min_redevplugin_version, '3.7.2');
     assert.equal(mindMap.manifest.schema_version, 'redevplugin.manifest.v9');
     assert.equal(mindMap.manifest.plugin.plugin_id, 'com.redeven.official.mind-map');
-    assert.equal(mindMap.manifest.plugin.version, '1.0.40');
+    assert.equal(mindMap.manifest.plugin.version, '1.0.47');
     assert.deepEqual(mindMap.manifest.permissions, []);
     assert.deepEqual(mindMap.manifest.api.required_features, []);
     assert.equal(mindMap.manifest.workers[0].scope, 'user');
@@ -43,10 +43,12 @@ describe('official plugin repository contract', () => {
     assert.deepEqual(mindMap.manifest.methods.map(({ method }) => method), [
       'mindmap.workspace.load',
       'mindmap.workspace.save',
+      'mindmap.document.read',
+      'mindmap.document.edit',
     ]);
     assert.equal(mindMap.manifest.storage.stores[0].quota_bytes, 4 * 1024 * 1024);
     assert.equal(mindMap.manifest.surfaces[0].surface_id, 'mind-map.editor');
-    assert.equal(mindMap.release.stable_catalog.min_redevplugin_version, '3.0.25');
+    assert.equal(mindMap.release.stable_catalog.min_redevplugin_version, '3.7.3');
   });
 
   it('ignores build residue that has no plugin source entrypoint', async (t) => {
@@ -72,7 +74,7 @@ describe('official plugin repository contract', () => {
   it('resolves each global release tag to exactly one plugin', async () => {
     const sources = await loadAllPluginSources(repoRoot);
     assert.equal(resolvePluginForReleaseTag(sources, 'v1.0.46').name, 'weather');
-    assert.equal(resolvePluginForReleaseTag(sources, 'v1.0.40').name, 'mind-map');
+    assert.equal(resolvePluginForReleaseTag(sources, 'v1.0.47').name, 'mind-map');
     assert.throws(() => resolvePluginForReleaseTag(sources, 'v9.9.9'), /exactly one plugin/u);
 
     const duplicate = structuredClone(sources[0]);
@@ -100,10 +102,10 @@ describe('official plugin repository contract', () => {
 
     assert.match(buildScript, /<plugin-name>/u);
     assert.match(buildScript, /redevplugin\/v3\/cmd\/redevplugin/u);
-    assert.match(buildScript, /redevpluginVersion = 'v3\.7\.2'/u);
+    assert.match(buildScript, /redevpluginVersion = 'v3\.7\.3'/u);
     assert.match(releaseScript, /<plugin-name>/u);
     assert.match(releaseScript, /apply-signature/u);
-    assert.match(releaseScript, /redevpluginVersion = 'v3\.7\.2'/u);
+    assert.match(releaseScript, /redevpluginVersion = 'v3\.7\.3'/u);
     assert.doesNotMatch(releaseScript, /WEATHER_RELEASE_WASM|pluginName === ['"]weather['"]/u);
     assert.match(canonicalBuildScript, /linux\/amd64/u);
     assert.match(canonicalBuildScript, /rust:1\.88-bookworm@sha256:/u);
@@ -127,6 +129,6 @@ describe('official plugin repository contract', () => {
     const weatherReleaseInputs = [...tracked.matchAll(/^releases\/weather\/([^/]+)\//gmu)].map((match) => match[1]);
     assert.deepEqual([...new Set(weatherReleaseInputs)], ['1.0.46']);
     const mindMapReleaseInputs = [...tracked.matchAll(/^releases\/mind-map\/([^/]+)\//gmu)].map((match) => match[1]);
-    assert.deepEqual([...new Set(mindMapReleaseInputs)], ['1.0.17', '1.0.18', '1.0.19', '1.0.20', '1.0.21', '1.0.22', '1.0.23', '1.0.24', '1.0.25', '1.0.26', '1.0.30', '1.0.33', '1.0.34', '1.0.35', '1.0.36', '1.0.37', '1.0.39', '1.0.40']);
+    assert.deepEqual([...new Set(mindMapReleaseInputs)], ['1.0.17', '1.0.18', '1.0.19', '1.0.20', '1.0.21', '1.0.22', '1.0.23', '1.0.24', '1.0.25', '1.0.26', '1.0.30', '1.0.33', '1.0.34', '1.0.35', '1.0.36', '1.0.37', '1.0.39', '1.0.40', '1.0.47']);
   });
 });

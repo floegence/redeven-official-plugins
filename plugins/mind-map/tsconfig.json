@@ -6,10 +6,17 @@
     "allowImportingTsExtensions": true,
     "strict": true,
     "noEmit": true,
-    "lib": ["ES2022", "DOM", "WebWorker"],
-    "jsx": "react-jsx",
-    "jsxImportSource": "@floegence/redevplugin-ui",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "WebWorker"
+    ],
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
     "skipLibCheck": true
   },
-  "include": ["ui/src/**/*.ts", "ui/src/**/*.tsx"]
+  "include": [
+    "ui/src/**/*.ts",
+    "ui/src/**/*.tsx"
+  ]
 }

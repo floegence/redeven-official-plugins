@@ -1,21 +1,27 @@
 {
   "name": "@redeven/official-mind-map-plugin",
-  "version": "1.0.40",
+  "version": "1.0.47",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "npm run typecheck && node scripts/build.mjs",
     "build:release": "node scripts/build-release.mjs",
-    "build:ui": "esbuild ui/src/app.tsx --bundle --format=iife --platform=browser --target=es2022 --jsx=automatic --jsx-import-source=@floegence/redevplugin-ui --outfile=dist/ui/assets/app.js",
+    "build:ui": "vite build",
     "test": "node --test test/*.test.mjs && cargo test --locked --manifest-path worker/Cargo.toml",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@floegence/redevplugin-ui": "3.0.27"
+    "@floegence/floe-webapp-core": "0.86.65",
+    "@floegence/redevplugin-ui": "3.7.3",
+    "solid-js": "1.9.18"
   },
   "devDependencies": {
-    "esbuild": "0.25.5",
-    "lucide-static": "1.39.0",
-    "typescript": "5.9.3"
+    "playwright": "1.64.1",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vite-plugin-solid": "2.11.14"
+  },
+  "overrides": {
+    "dompurify": "3.4.17"
   }
 }

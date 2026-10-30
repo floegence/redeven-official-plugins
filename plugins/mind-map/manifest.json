@@ -7,7 +7,7 @@
   "plugin": {
     "plugin_id": "com.redeven.official.mind-map",
     "display_name": "Mind Map",
-    "version": "1.0.40"
+    "version": "1.0.47"
   },
   "api": {
     "major": 1,
@@ -16,8 +16,12 @@
   },
   "permissions": [],
   "presentation": {
-    "icon": { "path": "ui/assets/mind-map.png" },
-    "locales": { "default": "en-US" }
+    "icon": {
+      "path": "ui/assets/mind-map.png"
+    },
+    "locales": {
+      "default": "en-US"
+    }
   },
   "surfaces": [
     {
@@ -27,7 +31,14 @@
       "label": "Mind Map",
       "entry": "ui/index.html",
       "icon": "ui/assets/mind-map.png",
-      "default_size": { "width": 1120, "height": 760 }
+      "default_size": {
+        "width": 1120,
+        "height": 760
+      },
+      "web": {
+        "root": "ui",
+        "spa": false
+      }
     }
   ],
   "workers": [
@@ -44,8 +55,21 @@
       "method": "mindmap.workspace.load",
       "effect": "write",
       "execution": "sync",
-      "route": { "kind": "worker", "worker_id": "mind_map_backend" },
-      "broker_access": { "storage": [{ "store_id": "mind-map", "operations": ["get", "put"] }] },
+      "route": {
+        "kind": "worker",
+        "worker_id": "mind_map_backend"
+      },
+      "broker_access": {
+        "storage": [
+          {
+            "store_id": "mind-map",
+            "operations": [
+              "get",
+              "put"
+            ]
+          }
+        ]
+      },
       "request_schema": {
         "type": "object",
         "additionalProperties": false,
@@ -54,11 +78,28 @@
       "response_schema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["revision", "saved_at", "workspace_dsl"],
+        "required": [
+          "revision",
+          "saved_at",
+          "workspace_dsl"
+        ],
         "properties": {
-          "revision": { "type": "integer", "minimum": 0 },
-          "saved_at": { "type": ["string", "null"], "maxLength": 64 },
-          "workspace_dsl": { "type": "string", "minLength": 1, "maxLength": 3000000 }
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "saved_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 64
+          },
+          "workspace_dsl": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3000000
+          }
         }
       }
     },
@@ -66,24 +107,225 @@
       "method": "mindmap.workspace.save",
       "effect": "write",
       "execution": "sync",
-      "route": { "kind": "worker", "worker_id": "mind_map_backend" },
-      "broker_access": { "storage": [{ "store_id": "mind-map", "operations": ["get", "put"] }] },
+      "route": {
+        "kind": "worker",
+        "worker_id": "mind_map_backend"
+      },
+      "broker_access": {
+        "storage": [
+          {
+            "store_id": "mind-map",
+            "operations": [
+              "get",
+              "put"
+            ]
+          }
+        ]
+      },
       "request_schema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["expected_revision", "workspace_dsl"],
+        "required": [
+          "expected_revision",
+          "workspace_dsl"
+        ],
         "properties": {
-          "expected_revision": { "type": "integer", "minimum": 0 },
-          "workspace_dsl": { "type": "string", "minLength": 1, "maxLength": 3000000 }
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "workspace_dsl": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3000000
+          }
         }
       },
       "response_schema": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["revision", "saved_at"],
+        "required": [
+          "revision",
+          "saved_at"
+        ],
         "properties": {
-          "revision": { "type": "integer", "minimum": 1 },
-          "saved_at": { "type": "string", "maxLength": 64 }
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "saved_at": {
+            "type": "string",
+            "maxLength": 64
+          }
+        }
+      }
+    },
+    {
+      "method": "mindmap.document.read",
+      "effect": "read",
+      "execution": "sync",
+      "route": {
+        "kind": "surface",
+        "surface_id": "mind-map.editor"
+      },
+      "request_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      },
+      "response_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "document_id",
+          "revision",
+          "selected_node_id",
+          "document_dsl",
+          "dirty"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "selected_node_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "document_dsl": {
+            "type": "string",
+            "maxLength": 3000000
+          },
+          "dirty": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    {
+      "method": "mindmap.document.edit",
+      "effect": "write",
+      "execution": "sync",
+      "route": {
+        "kind": "surface",
+        "surface_id": "mind-map.editor"
+      },
+      "request_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "document_id",
+          "expected_revision",
+          "operations"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "operations": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "node_id"
+              ],
+              "properties": {
+                "type": {
+                  "enum": [
+                    "rename_node",
+                    "add_child",
+                    "add_sibling",
+                    "delete_node",
+                    "move_node",
+                    "set_color",
+                    "set_alignment",
+                    "toggle_collapsed"
+                  ]
+                },
+                "node_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "title": {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                "parent_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "order": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "side": {
+                  "enum": [
+                    "left",
+                    "right"
+                  ]
+                },
+                "color": {
+                  "enum": [
+                    "accent",
+                    "blue",
+                    "green",
+                    "amber",
+                    "rose",
+                    "violet"
+                  ]
+                },
+                "alignment": {
+                  "enum": [
+                    "left",
+                    "center",
+                    "right"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "response_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "revision"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "applied",
+              "conflict",
+              "wrong_document",
+              "invalid",
+              "busy"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          }
         }
       }
     }
@@ -99,5 +341,109 @@
         "schema_version": 1
       }
     ]
-  }
+  },
+  "intents": [
+    {
+      "intent_id": "mindmap.document.read",
+      "method": "mindmap.document.read",
+      "payload_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {}
+      }
+    },
+    {
+      "intent_id": "mindmap.document.edit",
+      "method": "mindmap.document.edit",
+      "payload_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "document_id",
+          "expected_revision",
+          "operations"
+        ],
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "operations": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "node_id"
+              ],
+              "properties": {
+                "type": {
+                  "enum": [
+                    "rename_node",
+                    "add_child",
+                    "add_sibling",
+                    "delete_node",
+                    "move_node",
+                    "set_color",
+                    "set_alignment",
+                    "toggle_collapsed"
+                  ]
+                },
+                "node_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "title": {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                "parent_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "order": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "side": {
+                  "enum": [
+                    "left",
+                    "right"
+                  ]
+                },
+                "color": {
+                  "enum": [
+                    "accent",
+                    "blue",
+                    "green",
+                    "amber",
+                    "rose",
+                    "violet"
+                  ]
+                },
+                "alignment": {
+                  "enum": [
+                    "left",
+                    "center",
+                    "right"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

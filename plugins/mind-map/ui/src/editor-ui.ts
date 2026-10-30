@@ -21,17 +21,13 @@ export type NodeEditorPlacement = {
   centerY: number;
   width: number;
   height: number;
-  className: string;
+  zoom: number;
 };
 
 export function normalizeSidebarWidth(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_SIDEBAR_WIDTH;
   const clamped = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, value));
   return MIN_SIDEBAR_WIDTH + Math.round((clamped - MIN_SIDEBAR_WIDTH) / SIDEBAR_WIDTH_STEP) * SIDEBAR_WIDTH_STEP;
-}
-
-export function sidebarWidthClass(value: number): string {
-  return `sidebar-width-${normalizeSidebarWidth(value)}`;
 }
 
 export function placeContextMenu(x: number, y: number, viewportWidth: number, viewportHeight: number): { x: number; y: number } {
@@ -94,13 +90,12 @@ export function nodeEditorPlacement(
   const rawY = canvasHeight / 2 + viewport.y + node.y * zoom;
   const centerX = quantize(rawX, EDITOR_POSITION_STEP);
   const centerY = quantize(rawY, EDITOR_POSITION_STEP);
-  const kind = node.depth === 0 ? 'is-root' : node.depth === 1 ? 'is-branch' : 'is-topic';
   return {
     centerX,
     centerY,
     width,
     height,
-    className: `node-title-editor ${kind} node-editor-x-${centerX} node-editor-y-${centerY} node-editor-w-${width} node-editor-h-${height} node-editor-z-${zoomKey}`,
+    zoom,
   };
 }
 

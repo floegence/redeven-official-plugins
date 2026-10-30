@@ -57,7 +57,7 @@ jobs:
           test "$ci_conclusion" = success
       - run: npm ci
       - run: npm run plugins:ci
-      - name: Install browser for native Weather acceptance
+      - name: Install shared browser for native plugin acceptance
         working-directory: plugins/weather
         run: npm exec -- playwright install --with-deps chromium
       - run: npm run verify
