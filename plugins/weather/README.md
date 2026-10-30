@@ -21,6 +21,11 @@ new choice. Rapid selections are serialized; only the last choice can replace
 the visible forecast. Repeating an active or pending city does not duplicate a
 request. Failure preserves the prior forecast and makes retry available.
 
+First use opens the same compact location picker with one title and no repeated
+instructions. Search stays fixed while the city list scrolls, including in short
+windows. Input method composition retains focus and does not submit a search
+before completion.
+
 Search and recent cities share one location picker. Recent cities have full-row
 targets, current-city state and available cached weather; Manage/Done reveals
 separate remove controls. Suggested cities exclude recent entries. Search stays

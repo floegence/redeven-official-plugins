@@ -53,7 +53,6 @@ export const supportedLocales = [
 ] as const;
 const translations = {
   "en-US": {
-    pickerHint: "Find a city, keep its weather close.",
     manageLocations: "Manage",
     done: "Done",
     clearSearch: "Clear search",
@@ -89,9 +88,6 @@ const translations = {
     noResults: "No matching places found.",
     loading: "Loading your weather…",
     loadingLocation: "Loading weather for {city}…",
-    onboardingTitle: "Choose a city to begin",
-    onboardingBody:
-      "Search a place or choose a major city below for local time, current conditions, and the ten-day forecast.",
     refreshFailed: "Showing saved weather; the latest update is unavailable.",
     permission:
       "Network access is required to load live weather. Grant the plugin’s network permission, then try again.",
@@ -151,7 +147,6 @@ const translations = {
     windUnit: "km/h",
   },
   "zh-CN": {
-    pickerHint: "找到一座城市，随时查看它的天气。",
     manageLocations: "管理",
     done: "完成",
     clearSearch: "清空搜索",
@@ -187,9 +182,6 @@ const translations = {
     noResults: "没有找到匹配地点。",
     loading: "正在加载天气…",
     loadingLocation: "正在加载{city}天气…",
-    onboardingTitle: "先选择一个城市",
-    onboardingBody:
-      "搜索地点或从下方常用城市中选择，立即查看当地时间、实时天气和未来十天趋势。",
     refreshFailed: "正在显示缓存天气，暂时无法获取最新数据。",
     permission: "加载实时天气需要网络权限。授权后请重试。",
     unavailable: "暂时无法获取实时天气，你仍可查看最近地点。",
@@ -246,7 +238,6 @@ const translations = {
     windUnit: "公里/时",
   },
   "zh-TW": {
-    pickerHint: "找到一座城市，隨時查看它的天氣。",
     manageLocations: "管理",
     done: "完成",
     clearSearch: "清除搜尋",
@@ -282,9 +273,6 @@ const translations = {
     noResults: "找不到符合的地點。",
     loading: "正在載入天氣…",
     loadingLocation: "正在載入{city}天氣…",
-    onboardingTitle: "先選擇一個城市",
-    onboardingBody:
-      "搜尋地點或選擇下方城市，查看當地時間、即時天氣和未來十天預報。",
     refreshFailed: "正在顯示快取天氣，暫時無法取得最新資料。",
     permission: "載入即時天氣需要網路權限。授權後請重試。",
     unavailable: "暫時無法取得即時天氣，仍可查看最近地點。",
@@ -341,7 +329,6 @@ const translations = {
     windUnit: "公里/時",
   },
   "ja-JP": {
-    pickerHint: "街を見つけて、天気を身近に。",
     manageLocations: "管理",
     done: "完了",
     clearSearch: "検索をクリア",
@@ -377,9 +364,6 @@ const translations = {
     noResults: "一致する場所が見つかりません。",
     loading: "天気を読み込み中…",
     loadingLocation: "{city}の天気を読み込み中…",
-    onboardingTitle: "都市を選んで始めましょう",
-    onboardingBody:
-      "場所を検索するか、下の都市を選択すると、現地時刻、現在の天気、10日間の予報を確認できます。",
     refreshFailed: "保存済みの天気を表示しています。最新情報を取得できません。",
     permission:
       "最新の天気にはネットワーク権限が必要です。許可してから再試行してください。",
@@ -439,7 +423,6 @@ const translations = {
     windUnit: "km/h",
   },
   "ko-KR": {
-    pickerHint: "도시를 찾아 날씨를 확인하세요.",
     manageLocations: "관리",
     done: "완료",
     clearSearch: "검색 지우기",
@@ -475,9 +458,6 @@ const translations = {
     noResults: "일치하는 위치가 없습니다.",
     loading: "날씨를 불러오는 중…",
     loadingLocation: "{city} 날씨를 불러오는 중…",
-    onboardingTitle: "도시를 선택하여 시작하세요",
-    onboardingBody:
-      "위치를 검색하거나 아래 도시를 선택하여 현지 시간, 현재 날씨, 10일 예보를 확인하세요.",
     refreshFailed: "저장된 날씨를 표시합니다. 최신 정보를 가져올 수 없습니다.",
     permission:
       "실시간 날씨를 불러오려면 네트워크 권한이 필요합니다. 허용한 후 다시 시도하세요.",
@@ -537,7 +517,6 @@ const translations = {
     windUnit: "km/h",
   },
   "de-DE": {
-    pickerHint: "Finde eine Stadt und behalte ihr Wetter im Blick.",
     manageLocations: "Verwalten",
     done: "Fertig",
     clearSearch: "Suche löschen",
@@ -574,9 +553,6 @@ const translations = {
     noResults: "Keine passenden Orte gefunden.",
     loading: "Wetter wird geladen…",
     loadingLocation: "Wetter für {city} wird geladen…",
-    onboardingTitle: "Wählen Sie einen Ort",
-    onboardingBody:
-      "Suchen Sie einen Ort oder wählen Sie eine Stadt, um Ortszeit, aktuelles Wetter und die Zehntagesvorhersage zu sehen.",
     refreshFailed:
       "Gespeichertes Wetter wird angezeigt. Die neuesten Daten sind nicht verfügbar.",
     permission:
@@ -637,7 +613,6 @@ const translations = {
     windUnit: "km/h",
   },
   "fr-FR": {
-    pickerHint: "Trouvez une ville et gardez sa météo à portée de main.",
     manageLocations: "Gérer",
     done: "Terminé",
     clearSearch: "Effacer la recherche",
@@ -674,9 +649,6 @@ const translations = {
     noResults: "Aucun lieu correspondant.",
     loading: "Chargement de la météo…",
     loadingLocation: "Chargement de la météo pour {city}…",
-    onboardingTitle: "Choisissez une ville",
-    onboardingBody:
-      "Recherchez un lieu ou choisissez une ville pour consulter l’heure locale, la météo actuelle et les prévisions sur dix jours.",
     refreshFailed:
       "Les données enregistrées sont affichées. La dernière mise à jour est indisponible.",
     permission:
@@ -737,7 +709,6 @@ const translations = {
     windUnit: "km/h",
   },
   "es-ES": {
-    pickerHint: "Encuentra una ciudad y consulta su tiempo.",
     manageLocations: "Gestionar",
     done: "Listo",
     clearSearch: "Borrar búsqueda",
@@ -774,9 +745,6 @@ const translations = {
     noResults: "No se encontraron coincidencias.",
     loading: "Cargando el tiempo…",
     loadingLocation: "Cargando el tiempo de {city}…",
-    onboardingTitle: "Elige una ciudad",
-    onboardingBody:
-      "Busca un lugar o elige una ciudad para ver la hora local, el tiempo actual y la previsión de diez días.",
     refreshFailed:
       "Se muestra el tiempo guardado. La última actualización no está disponible.",
     permission:
@@ -837,7 +805,6 @@ const translations = {
     windUnit: "km/h",
   },
   "pt-BR": {
-    pickerHint: "Encontre uma cidade e acompanhe o tempo.",
     manageLocations: "Gerenciar",
     done: "Concluir",
     clearSearch: "Limpar busca",
@@ -874,9 +841,6 @@ const translations = {
     noResults: "Nenhum local encontrado.",
     loading: "Carregando o tempo…",
     loadingLocation: "Carregando o tempo de {city}…",
-    onboardingTitle: "Escolha uma cidade",
-    onboardingBody:
-      "Busque um local ou escolha uma cidade para ver a hora local, o tempo atual e a previsão de dez dias.",
     refreshFailed:
       "Exibindo o tempo salvo. A última atualização não está disponível.",
     permission:
@@ -937,7 +901,6 @@ const translations = {
     windUnit: "km/h",
   },
   "ru-RU": {
-    pickerHint: "Найдите город и следите за погодой.",
     manageLocations: "Управлять",
     done: "Готово",
     clearSearch: "Очистить поиск",
@@ -974,9 +937,6 @@ const translations = {
     noResults: "Подходящие места не найдены.",
     loading: "Загрузка погоды…",
     loadingLocation: "Загрузка погоды: {city}…",
-    onboardingTitle: "Выберите город",
-    onboardingBody:
-      "Найдите место или выберите город, чтобы увидеть местное время, текущую погоду и прогноз на десять дней.",
     refreshFailed:
       "Показана сохранённая погода. Последнее обновление недоступно.",
     permission:

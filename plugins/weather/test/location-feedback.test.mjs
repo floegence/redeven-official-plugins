@@ -34,6 +34,48 @@ async function chooser(page) { await page.getByRole('button',{name:'Choose locat
 async function city(scope, id) { await scope.locator('[data-location-id="preset:' + id + '"]').first().click(); }
 async function place(page,name) { await page.waitForFunction((name) => document.querySelector('[data-testid="place-name"]')?.textContent === name,name); }
 
+for (const width of [390,430,768,1280]) for (const theme of ['light','dark']) {
+ test(width+'px '+theme+' first city entry stays concise and keeps search reachable',async(t)=>{
+  const page=await ready(t,{initial:false,width,height:520});
+  await page.evaluate(theme=>window.__weatherTest.context('en-US',theme),theme);
+  const card=page.locator('.onboarding');
+  assert.equal(await card.locator('h1').textContent(),'Choose location');
+  assert.equal(await card.locator(':scope > p, .picker-intro').count(),0);
+  const bounds=await card.boundingBox();
+  assert.ok(bounds.width<=520 && bounds.x>=0 && bounds.x+bounds.width<=width);
+  assert.ok(bounds.y>=0 && bounds.y+bounds.height<=520);
+  const input=card.locator('#weather-query');const before=await input.boundingBox();
+  assert.ok(before.width>=180 && before.height>=44);
+  const list=card.locator('.picker-scroll');
+  assert.equal(await list.evaluate(el=>el.scrollHeight>el.clientHeight),true);
+  await list.evaluate(el=>el.scrollTop=el.scrollHeight);
+  assert.deepEqual(await input.boundingBox(),before);
+  assert.equal(await page.locator('.weather-content').evaluate(el=>el.scrollHeight<=el.clientHeight),true);
+  await list.evaluate(el=>el.scrollTop=0);
+  const evidence=process.env.WEATHER_BROWSER_EVIDENCE_DIR;
+  if(evidence) await capture(page,{path:evidence+'/weather-first-city-'+width+'-'+theme+'.png'});
+  await city(card,'tokyo');await settle(page);await place(page,'Tokyo');
+  assert.equal(await card.count(),0);
+ });
+}
+
+for (const initial of [false,true]) test((initial?'dialog':'first city')+' search waits for input method composition to finish',async(t)=>{
+ const page=await ready(t,{initial,locale:'zh-CN',width:390});
+ if(initial) await page.locator('.weather-toolbar button').first().click();
+ const input=page.locator('#weather-query');await input.fill('北京');
+ await input.dispatchEvent('compositionstart',{data:'北京'});
+ await input.press('Enter');
+ assert.equal(await page.locator('.search-submit').getAttribute('aria-busy'),'false');
+ await input.evaluate(el=>el.form.requestSubmit());
+ assert.equal(await page.locator('.search-submit').getAttribute('aria-busy'),'false');
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ assert.equal((await pending(page)).length,0);
+ await input.dispatchEvent('compositionend',{data:'北京'});
+ await input.press('Enter');await page.waitForFunction(()=>window.__weatherTest.pending().length===1);
+ assert.deepEqual((await pending(page))[0].input,{query:'北京',language:'zh'});
+ await settle(page);await page.getByRole('button',{name:/东京/}).first().waitFor();
+});
+
 async function settledDialogBounds(dialog) {
  return dialog.evaluate(async element => {
   await new Promise(resolve => requestAnimationFrame(resolve));

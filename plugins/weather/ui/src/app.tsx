@@ -649,6 +649,7 @@ function LocationButton(props: { location: Location; source: "major" | "result" 
 }
 function LocationPicker() {
   let queryInput!: HTMLInputElement;
+  let composing = false;
   const status = () => {
     if (state.pendingLocation) return pendingLocationLabel(translations());
     // Empty search states own their feedback; populated results still need errors.
@@ -659,11 +660,13 @@ function LocationPicker() {
   const clear = () => { void clearSearch(); queryInput.focus(); };
   return <section class="location-picker" aria-label={translations().chooseLocation}>
     <div class="picker-search-area">
-      <p class="picker-intro">{message("pickerHint")}</p>
-      <form class="search-form" onSubmit={(event) => { event.preventDefault(); void searchLocations(); }}>
+      <form class="search-form" onSubmit={(event) => { event.preventDefault(); if (!composing) void searchLocations(); }}>
         <div class="search-input-wrap"><Search size={18} class="search-icon" aria-hidden="true" />
           <label class="sr-only" for="weather-query">{translations().searchPlaceholder}</label>
           <Input ref={queryInput} id="weather-query" name="query" type="search" value={state.query}
+            onCompositionStart={() => { composing = true; }}
+            onCompositionEnd={() => { composing = false; }}
+            onKeyDown={(event) => { if (event.key === "Enter" && (composing || event.isComposing)) event.preventDefault(); }}
             onInput={(event) => { state.query = event.currentTarget.value; if (state.searched) { searchRevision++; state.searched = false; state.results = []; state.notice = undefined; } }}
             placeholder={translations().searchPlaceholder} maxLength={120} autocomplete="off" enterkeyhint="search" spellcheck={false}
             disabled={Boolean(state.busy && state.busy !== "search")} />
@@ -829,9 +832,9 @@ function WeatherApp() {
   return <main lang={state.locale} class={"weather-app " + weatherClass(state.forecast?.current)} classList={{ "sidebar-collapsed": state.sidebarCollapsed }}>
     <div class="weather-sky" aria-hidden="true"><span class="cloud cloud-one" /><span class="cloud cloud-two" /><span class="sky-precipitation" /></div>
     <Show when={state.forecast}><CitySidebar /></Show>
-    <div class="weather-content"><Show when={state.forecast && state.selected} fallback={
+    <div class="weather-content" classList={{ "choosing-location": !state.forecast || !state.selected }}><Show when={state.forecast && state.selected} fallback={
       <Show when={state.busy !== "initial"} fallback={<section class="loading-state" role="status"><span class="loading-mark" />{translations().loading}</section>}>
-        <div class="onboarding"><h1>{translations().onboardingTitle}</h1><p>{translations().onboardingBody}</p><LocationPicker /></div>
+        <div class="onboarding"><h1>{translations().chooseLocation}</h1><LocationPicker /></div>
       </Show>
     }><Dashboard /></Show>
       <footer class="footer"><span>{translations().poweredBy}</span><Show when={state.forecast}><span>{state.forecast?.source === "saved" ? message("savedWeather") + " · " : ""}{state.forecast?.current.time.replace("T", " ")} · {state.forecast?.timezone}</span></Show></footer>
