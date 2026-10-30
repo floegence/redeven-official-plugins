@@ -34,6 +34,27 @@ async function chooser(page) { await page.getByRole('button',{name:'Choose locat
 async function city(scope, id) { await scope.locator('[data-location-id="preset:' + id + '"]').first().click(); }
 async function place(page,name) { await page.waitForFunction((name) => document.querySelector('[data-testid="place-name"]')?.textContent === name,name); }
 
+async function settledDialogBounds(dialog) {
+ return dialog.evaluate(async element => {
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  // Floe may start another resize animation after the current one finishes.
+  // Await the current animation batch, then verify actual geometry across frames.
+  await Promise.allSettled(element.getAnimations().map(animation => animation.finished));
+  let previous, stableFrames=0;
+  const deadline=performance.now()+10000;
+  while(performance.now()<deadline){
+   await new Promise(resolve => requestAnimationFrame(resolve));
+   const rect=element.getBoundingClientRect();
+   const bounds={x:rect.x,y:rect.y,width:rect.width,height:rect.height};
+   const visible=element.getAttribute('data-floating-presence')==='open'&&Number(getComputedStyle(element).opacity)===1;
+   stableFrames=visible&&previous&&Object.keys(bounds).every(key=>Math.abs(bounds[key]-previous[key])<0.1)?stableFrames+1:0;
+   if(stableFrames>=3)return bounds;
+   previous=bounds;
+  }
+  throw new Error('Dialog layout did not settle within 10 seconds');
+ });
+}
+
 test('city selection keeps the visible forecast and only commits the latest queued city', async (t) => {
   const page=await ready(t); const dialog=await chooser(page);
   await city(dialog,'tokyo'); await page.waitForFunction(() => window.__weatherTest.pending().length === 1);
@@ -213,15 +234,26 @@ test('picker search results and empty state replace unrelated choices',async(t)=
  await city(dialog,'tokyo');await settle(page);await place(page,'Tokyo');await dialog.waitFor({state:'hidden'});
 });
 
-test('failed forecast from a search result stays visible and supports retry',async(t)=>{
+for (const slowMotion of [false, true]) test('failed forecast from a search result stays visible and supports retry'+(slowMotion?' during slow layout motion':''),async(t)=>{
  const page=await ready(t,{width:390,fixture:'full'});const dialog=await chooser(page);
+ const animationControl=slowMotion?await page.context().newCDPSession(page):undefined;
+ if(animationControl){
+  await animationControl.send('Animation.enable');
+  await animationControl.send('Animation.setPlaybackRate',{playbackRate:0.1});
+ }
  const input=dialog.locator('#weather-query');await input.fill('Tokyo');await input.press('Enter');await settle(page);
  await dialog.locator('.search-results').waitFor();await city(dialog,'tokyo');await settle(page,{fail:true});
  const error=dialog.locator('.chooser-status.error');await error.waitFor();
  assert.match(await error.textContent(),/Live weather is unavailable/);
  assert.equal(await page.getByTestId('place-name').textContent(),'Beijing');
  assert.equal(await dialog.locator('.search-results .location-choice').count(),1);
- assert.ok((await dialog.boundingBox()).height<=480,'a single result does not leave a full-height empty dialog');
+ if(animationControl){
+  await page.waitForFunction(()=>document.querySelector('[role=dialog]').getAnimations().some(animation=>animation.effect.getKeyframes().some(frame=>'height' in frame)));
+  assert.ok((await dialog.boundingBox()).height>480,'the regression must observe an unfinished height animation');
+  await animationControl.send('Animation.setPlaybackRate',{playbackRate:1});
+ }
+ assert.ok((await settledDialogBounds(dialog)).height<=480,'a single result does not leave a full-height empty dialog');
+ if(animationControl)await animationControl.detach();
  const evidence=process.env.WEATHER_BROWSER_EVIDENCE_DIR;if(evidence) await capture(page,{path:evidence+'/weather-picker-forecast-error.png'});
  await city(dialog,'tokyo');await settle(page);await place(page,'Tokyo');await dialog.waitFor({state:'hidden'});
 });
