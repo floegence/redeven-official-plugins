@@ -1,6 +1,6 @@
 {
   "name": "@redeven/official-weather-plugin",
-  "version": "1.0.45",
+  "version": "1.0.46",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@floegence/floe-webapp-core": "0.86.65",
-    "@floegence/redevplugin-ui": "3.7.0",
+    "@floegence/redevplugin-ui": "3.7.2",
     "solid-js": "1.9.18"
   },
   "devDependencies": {

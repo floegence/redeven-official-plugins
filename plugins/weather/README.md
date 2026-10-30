@@ -61,6 +61,10 @@ The project file redevplugin.project.json gives the released CLI the existing
 build/test commands. From the repository root, npm run package:weather builds
 and validates an unsigned review package through the published generic packager.
 Official publication uses the neutral external-signer flow and exact reference.
+Version 1.0.46 republishes the weather-aligned sidebar through the unified
+package-signature contract. The release verifier checks the embedded package
+signature as well as the release metadata; host admission verifies the same
+portable envelope independently of the download source.
 
 The browser suite uses the real Solid/Floe application and the released production-client test harness with controlled business
 responses. It covers slow/failing/queued city selection, native input composition,
