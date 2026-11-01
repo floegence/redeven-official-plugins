@@ -27,13 +27,17 @@ function context(language = locale, color_scheme = 'light') {
   return value;
 }
 const harness = createPluginTestHarness({
-  context: context(),
+  context: context(locale, query.get('theme') ?? 'light'),
   call(method, input) {
-    if (method === 'weather.state.load') return Promise.resolve(structuredClone({ data: {
+    if (method === 'weather.state.load') {
+      const result = structuredClone({ data: {
       location_summaries: cities.slice(0,2).map((city, index) => ({ location_id:city.id, current: { ...forecast.current, weather_code: index ? 61 : forecast.current.weather_code }, today:forecast.days[0] })),
       favorites: initial ? cities.slice(0,2) : [], selected: initial ? cities[0] : null,
       forecast: initial ? forecast : null,
-    } }));
+      } });
+      if (query.has('hold-state')) return new Promise((resolve, reject) => pending.push({ method, input, resolve, reject, result }));
+      return Promise.resolve(result);
+    }
     return new Promise((resolve, reject) => {
       pending.push({ method, input, resolve: (value: unknown) => resolve(structuredClone(value)), reject });
       if (query.get('auto') === '1') setTimeout(() => (window as any).__weatherTest.settle(), 160);
@@ -48,6 +52,7 @@ Object.assign(window, { __weatherTest: {
     const call = pending.shift();
     if (!call) throw new Error('No pending Weather request');
     if (options.fail) { call.reject(new Error('Network timeout')); return; }
+    if (call.method === 'weather.state.load') { call.resolve(call.result); return; }
     if (call.method === 'weather.locations.search') { call.resolve({ data: { locations: options.empty ? [] : [cities[1]] } }); return; }
     if (call.method === 'weather.locations.remove') { call.resolve({ data: { favorites: cities.slice(0,2).filter((city) => city.id !== call.input.id) } }); return; }
     const location = cities.find((city) => city.id === call.input.id) ?? call.input;

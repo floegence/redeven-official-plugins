@@ -85,7 +85,8 @@ type Notice = {
 
 const bridge = new PluginBridgeClient({ timeoutMs: 20_000 });
 const state = createMutable<{
-  colorScheme: "light" | "dark";
+  colorScheme?: "light" | "dark";
+  visible: boolean;
   locale: SupportedLocale;
   favorites: Location[];
   results: Location[];
@@ -106,7 +107,7 @@ const state = createMutable<{
   apparent: boolean;
   cityForecasts: Record<string, Pick<Forecast, "current" | "days">>;
 }>({
-  colorScheme: "light",
+  visible: true,
   locale: "en-US",
   favorites: [],
   results: [],
@@ -128,17 +129,8 @@ let clockTimer: ReturnType<typeof setInterval> | undefined;
 
 async function initialize(): Promise<void> {
   await bridge.ready();
-  bridge.onContext((context) => {
-    state.colorScheme = context.appearance.color_scheme;
-    document.documentElement.dir = context.locale.direction;
-    const locale = localeForLanguageTag(context.locale.language_tag);
-    if (locale === state.locale) return;
-    state.locale = locale;
-    state.results = [];
-    state.searched = false;
-    searchRevision++;
-  });
   clockTimer = setInterval(() => {
+    if (!state.visible) return;
     const next = new Date();
     if (
       next.getMinutes() === state.now.getMinutes() &&
@@ -148,7 +140,6 @@ async function initialize(): Promise<void> {
     state.now = next;
 
   }, 15_000);
-  await afterPaint();
   try {
     const response = await bridge.call<PluginMethodResult<StateLoad>>(
       "weather.state.load",
@@ -618,7 +609,7 @@ function upcomingHours(forecast: Forecast) {
   return (forecast.hourly ?? []).filter((hour) => hour.time >= forecast.current.time.slice(0, 13) + ":00").slice(0, 24);
 }
 function weatherClass(current?: CurrentWeather) {
-  return current ? "sky-" + conditionForCode(current.weather_code, current.is_day).kind + (current.is_day ? "" : " weather-night") : "sky-neutral";
+  return current ? "sky-" + conditionForCode(current.weather_code, current.is_day).kind + (current.is_day ? "" : " weather-night") : "weather-empty";
 }
 function sunProgress() {
   const forecast = state.forecast, day = forecast?.days[0];
@@ -826,18 +817,18 @@ function WeatherDetail() {
 }
 function WeatherApp() {
   const theme = useTheme();
-  createEffect(() => theme.setTheme(state.colorScheme));
+  createEffect(() => { if (state.colorScheme) theme.setTheme(state.colorScheme); });
   onMount(() => { void initialize().catch((error) => { if (!disposed) { state.busy = undefined; state.notice = { scope: "chooser", text: friendlyError(error, "load"), error: true }; } }); });
   onCleanup(() => { disposed = true; if (clockTimer !== undefined) clearInterval(clockTimer); });
-  return <main lang={state.locale} class={"weather-app " + weatherClass(state.forecast?.current)} classList={{ "sidebar-collapsed": state.sidebarCollapsed }}>
-    <div class="weather-sky" aria-hidden="true"><span class="cloud cloud-one" /><span class="cloud cloud-two" /><span class="sky-precipitation" /></div>
+  return <main lang={state.locale} class={"weather-app " + weatherClass(state.forecast?.current)} classList={{ "sidebar-collapsed": state.sidebarCollapsed, "weather-hidden": !state.visible, "weather-starting": state.busy === "initial" }}>
+    <Show when={state.forecast}><div class="weather-sky" aria-hidden="true"><span class="cloud cloud-one" /><span class="cloud cloud-two" /><span class="sky-precipitation" /></div></Show>
     <Show when={state.forecast}><CitySidebar /></Show>
     <div class="weather-content" classList={{ "choosing-location": !state.forecast || !state.selected }}><Show when={state.forecast && state.selected} fallback={
-      <Show when={state.busy !== "initial"} fallback={<section class="loading-state" role="status"><span class="loading-mark" />{translations().loading}</section>}>
+      <Show when={state.busy !== "initial"} fallback={<section class="loading-state" role="status"><span class="loading-mark" aria-hidden="true" /><span class="sr-only">{translations().loading}</span></section>}>
         <div class="onboarding"><h1>{translations().chooseLocation}</h1><LocationPicker /></div>
       </Show>
     }><Dashboard /></Show>
-      <footer class="footer"><span>{translations().poweredBy}</span><Show when={state.forecast}><span>{state.forecast?.source === "saved" ? message("savedWeather") + " · " : ""}{state.forecast?.current.time.replace("T", " ")} · {state.forecast?.timezone}</span></Show></footer>
+      <Show when={state.busy !== "initial"}><footer class="footer"><span>{translations().poweredBy}</span><Show when={state.forecast}><span>{state.forecast?.source === "saved" ? message("savedWeather") + " · " : ""}{state.forecast?.current.time.replace("T", " ")} · {state.forecast?.timezone}</span></Show></footer></Show>
     </div>
     <Dialog open={Boolean(state.chooserOpen && state.forecast)} onOpenChange={(open) => { if (open !== state.chooserOpen) void toggleLocationChooser(); }} title={translations().chooseLocation} closeLabel={translations().closeLocationPicker} escapeKeyPhase="bubble" class="weather-chooser" contentClass="weather-chooser-body"
       header={<div class="picker-dialog-header"><h2>{translations().chooseLocation}</h2><Button variant="ghost" class="picker-close" aria-label={translations().closeLocationPicker} onClick={() => void toggleLocationChooser()}><X size={20} aria-hidden="true" /></Button></div>}><LocationPicker /></Dialog>
@@ -846,8 +837,25 @@ function WeatherApp() {
 }
 const root = document.getElementById("app");
 if (!root) throw new Error("Weather application root is missing");
-const unmount = mount(() => <FloeProvider config={{ theme: { defaultTheme: "light", defaultSurfaceStyle: "soft-neumorphic" }, storage: { namespace: "weather", enabled: false } }}><WeatherApp /></FloeProvider>, root);
-bridge.onLifecycle((event) => { if (event.type === "dispose") unmount(); });
+let unmount: (() => void) | undefined;
+bridge.onContext((context) => {
+  if (disposed) return;
+  state.colorScheme = context.appearance.color_scheme;
+  document.documentElement.dir = context.locale.direction;
+  const locale = localeForLanguageTag(context.locale.language_tag);
+  if (locale !== state.locale) {
+    state.locale = locale;
+    state.results = [];
+    state.searched = false;
+    searchRevision++;
+  }
+  unmount ??= mount(() => <FloeProvider config={{ theme: { defaultTheme: context.appearance.color_scheme, defaultSurfaceStyle: "soft-neumorphic" }, storage: { namespace: "weather", enabled: false } }}><WeatherApp /></FloeProvider>, root);
+});
+bridge.onLifecycle((event) => {
+  if (event.type === "visible") { state.visible = true; state.now = new Date(); }
+  if (event.type === "hidden") state.visible = false;
+  if (event.type === "dispose") { disposed = true; unmount?.(); }
+});
 
 function afterPaint(): Promise<void> {
   return new Promise((resolve) => deferAfterPaint(resolve));

@@ -65,6 +65,21 @@ async function edit(page, operations) {
     { current, operations },
   );
 }
+test("the first mounted editor uses the host theme", async (t) => {
+  const page = await browser.newPage();
+  t.after(() => page.close());
+  await page.addInitScript(() => {
+    window.__editorThemes = [];
+    new MutationObserver(() => {
+      if (document.querySelector('.mind-map-app')) window.__editorThemes.push(document.documentElement.classList.contains('dark'));
+    }).observe(document, { childList: true, subtree: true });
+  });
+  await page.goto(base + '/?theme=dark');
+  await page.waitForFunction(() => window.__mindMapTest?.methods().length === 2);
+  const themes = await page.evaluate(() => window.__editorThemes);
+  assert.ok(themes.length > 0);
+  assert.ok(themes.every(Boolean), 'no light editor is mounted before the host context');
+});
 test("native keyboard editing and Agent edits share one undo history", async (t) => {
   const page = await ready(t),
     initial = await read(page);

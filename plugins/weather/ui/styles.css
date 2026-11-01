@@ -9,7 +9,11 @@ button:focus-visible, [tabindex]:focus-visible { outline:2px solid var(--ring); 
 .weather-app { position:relative; isolation:isolate; display:flex; height:100svh; min-height:0; overflow:hidden; color:var(--weather-text); background:linear-gradient(180deg,var(--sky-top),var(--sky-bottom));
  --weather-text:#f8fbff; --weather-muted:#e0eaf4; --weather-line:#ffffff29; --weather-panel:#29455bd9; --weather-hover:#ffffff16; --weather-accent:#aae3ff;
 }
-.sky-neutral { --sky-top:#365773; --sky-bottom:#7897ad; }
+.weather-empty { background:var(--background); color:var(--foreground); }
+.weather-hidden .cloud { animation-play-state:paused; }
+.weather-app.weather-starting .weather-content { padding:0; }
+.weather-starting .loading-state { min-height:100%; }
+.weather-starting .loading-mark { width:20px; height:20px; }
 .sky-clear-day { --sky-top:#1b628f; --sky-bottom:#7fb3d0; }
 .sky-clear-night { --sky-top:#101c3d; --sky-bottom:#324c73; --weather-panel:#172c4ae8; }
 .sky-partly-cloudy { --sky-top:#447b9c; --sky-bottom:#98b9ce; }

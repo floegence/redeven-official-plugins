@@ -16,6 +16,10 @@ DOM input, pointer capture, Canvas, IME composition and responsive overlays.
 It ships no network access, remote fonts or audio. The host SDK is used only for
 workspace persistence, authorized export, lifecycle and explicit Agent methods.
 
+The editor mounts with the authenticated host theme and canvas palette, avoiding
+a light editor before a dark workspace. Hidden surfaces retain editing state and
+pause drawing; activation resizes and redraws the same canvas.
+
 Agent discovery exposes mindmap.document.read and mindmap.document.edit on the
 exact live editor. Reads return a document ID and monotonic in-memory revision.
 Edits require both fields and apply a bounded operation batch atomically through

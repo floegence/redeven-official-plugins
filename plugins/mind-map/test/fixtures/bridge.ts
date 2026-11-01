@@ -127,7 +127,7 @@ export class PluginBridgeClient extends Actual {
       port: channel.port1,
       surfaceHandle: "surface_mindmap_fixture",
     });
-    context();
+    context(new URLSearchParams(location.search).get("theme") ?? "light");
     send({ type: "redevplugin.bridge.lifecycle", event: { type: "ready" } });
   }
 }

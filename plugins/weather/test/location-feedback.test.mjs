@@ -16,6 +16,32 @@ before(async () => {
 });
 after(async () => { await browser?.close(); await server?.close(); });
 const pending = (page) => page.evaluate(() => window.__weatherTest.pending());
+test('cold weather restoration starts in the host theme without a guessed sky', async (t) => {
+  const page = await browser.newPage();
+  t.after(() => page.close());
+  await page.addInitScript(() => {
+    window.__startupFrames = [];
+    const record = () => {
+      const app = document.querySelector('.weather-app');
+      if (app) window.__startupFrames.push({ dark: document.documentElement.classList.contains('dark'), sky: app.classList.contains('sky-neutral'), background: getComputedStyle(app).backgroundImage });
+      if (window.__startupFrames.length < 120) requestAnimationFrame(record);
+    };
+    requestAnimationFrame(record);
+  });
+  await page.goto(base + '/?theme=dark&hold-state=1&fixture=full&sky=night');
+  await page.locator('.loading-state').waitFor();
+  await page.waitForFunction(() => window.__startupFrames.length >= 3);
+  const frames = await page.evaluate(() => window.__startupFrames);
+  assert.ok(frames.every(frame => frame.dark), 'every rendered app frame uses the supplied host theme');
+  assert.ok(frames.every(frame => !frame.sky && frame.background === 'none'), 'startup does not invent a weather gradient');
+  assert.equal(await page.locator('.weather-sky').count(), 0);
+  await settle(page);
+  await page.locator('.forecast-dashboard').waitFor();
+  assert.equal(await page.locator('.weather-app.sky-clear-night').count(), 1);
+  const dashboard = await page.locator('.forecast-dashboard').elementHandle();
+  await settle(page, { fail: true });
+  assert.equal(await dashboard.evaluate(el => el.isConnected), true, 'refresh failure retains restored content');
+});
 async function settle(page, options = {}) { await page.waitForFunction(() => window.__weatherTest.pending().length > 0); await page.evaluate((options) => window.__weatherTest.settle(options), options); }
 async function ready(t, { initial=true, locale='en-US', width=1280, height=900, fixture='sparse', sky='cloudy' } = {}) {
   const page = await browser.newPage({ viewport:{width,height} });

@@ -15,6 +15,11 @@ protocol or canvas forwarding remains.
 
 ## Behavior
 
+The first application frame uses the authenticated host appearance and locale.
+Startup keeps a neutral themed surface until saved weather is available; it never
+guesses a daytime sky. Restored forecasts remain visible through refresh failure.
+Hidden surfaces pause cloud animation and clock updates.
+
 The last successful forecast renders before a background refresh. Selecting a
 city keeps that forecast visible while immediate pending feedback identifies the
 new choice. Rapid selections are serialized; only the last choice can replace

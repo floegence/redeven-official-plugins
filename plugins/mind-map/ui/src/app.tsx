@@ -427,7 +427,7 @@ bridge.onLifecycle((event) => {
     clearLoadRetryWait();
     clearViewportRenderTimer();
     resizeObserver?.disconnect();
-    unmount();
+    unmount?.();
     canvas = undefined;
     context = undefined;
   }
@@ -435,20 +435,6 @@ bridge.onLifecycle((event) => {
 
 async function initialize(): Promise<void> {
   await bridge.ready();
-  bridge.onContext((next) => {
-    colors = next.appearance.colors;
-    locale = next.locale.language_tag.toLowerCase().startsWith("zh")
-      ? "zh"
-      : "en";
-    setAppTheme?.(next.appearance.color_scheme);
-    for (const [key, value] of Object.entries(colors))
-      document.documentElement.style.setProperty(
-        "--redevplugin-color-" + key.replaceAll("_", "-"),
-        value,
-      );
-    void render();
-    draw();
-  });
   canvas = canvasElement;
   const drawingContext = canvas.getContext("2d", { alpha: false });
   if (!drawingContext) throw new Error("2D canvas is unavailable");
@@ -2972,19 +2958,22 @@ function clone<T>(value: T): T {
 
 const root = document.getElementById("app");
 if (!root) throw new Error("Mind Map application root is missing");
-const unmount = mount(
-  () => (
-    <FloeProvider
-      config={{
-        theme: {
-          defaultTheme: "light",
-          defaultSurfaceStyle: "soft-neumorphic",
-        },
-        storage: { namespace: "mind-map", enabled: false },
-      }}
-    >
-      <MindMapApp />
-    </FloeProvider>
-  ),
-  root,
-);
+let unmount: (() => void) | undefined;
+bridge.onContext((next) => {
+  if (disposed) return;
+  colors = next.appearance.colors;
+  locale = next.locale.language_tag.toLowerCase().startsWith("zh") ? "zh" : "en";
+  document.documentElement.dir = next.locale.direction;
+  for (const [key, value] of Object.entries(colors))
+    document.documentElement.style.setProperty("--redevplugin-color-" + key.replaceAll("_", "-"), value);
+  if (!unmount) {
+    unmount = mount(() => <FloeProvider config={{
+      theme: { defaultTheme: next.appearance.color_scheme, defaultSurfaceStyle: "soft-neumorphic" },
+      storage: { namespace: "mind-map", enabled: false },
+    }}><MindMapApp /></FloeProvider>, root);
+    return;
+  }
+  setAppTheme?.(next.appearance.color_scheme);
+  void render();
+  draw();
+});
