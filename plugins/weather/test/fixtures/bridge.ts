@@ -20,6 +20,7 @@ const sparseForecast = {
 };
 const forecast = query.get('fixture') === 'full' ? fullForecast(query.get('sky') ?? 'cloudy') : sparseForecast;
 const pending: any[] = [];
+let favorites = initial ? cities.slice(0,3) : [];
 let contextRevision = 0;
 function context(language = locale, color_scheme = 'light') {
   const value = createPluginTestContext(language, ++contextRevision);
@@ -31,7 +32,7 @@ const harness = createPluginTestHarness({
   call(method, input) {
     if (method === 'weather.state.load') {
       const result = structuredClone({ data: {
-      location_summaries: cities.slice(0,2).map((city, index) => ({ location_id:city.id, current: { ...forecast.current, weather_code: index ? 61 : forecast.current.weather_code }, today:forecast.days[0] })),
+      location_forecasts: cities.slice(0,2).map((city,index)=>({ location_id: city.id, forecast: { ...forecast, source: "saved", timezone: city.timezone, current: { ...forecast.current, weather_code:index ? 61 : forecast.current.weather_code } } })),
       favorites: initial ? cities.slice(0,2) : [], selected: initial ? cities[0] : null,
       forecast: initial ? forecast : null,
       } });
@@ -53,9 +54,10 @@ Object.assign(window, { __weatherTest: {
     if (!call) throw new Error('No pending Weather request');
     if (options.fail) { call.reject(new Error('Network timeout')); return; }
     if (call.method === 'weather.state.load') { call.resolve(call.result); return; }
-    if (call.method === 'weather.locations.search') { call.resolve({ data: { locations: options.empty ? [] : [cities[1]] } }); return; }
-    if (call.method === 'weather.locations.remove') { call.resolve({ data: { favorites: cities.slice(0,2).filter((city) => city.id !== call.input.id) } }); return; }
+    if (call.method === 'weather.locations.search') { call.resolve({ data: { locations: options.empty ? [] : [call.input.query === 'Singapore' ? cities[2] : cities[1]] } }); return; }
+    if (call.method === 'weather.locations.remove') { favorites = favorites.filter(city=>city.id!==call.input.id); call.resolve({ data: { favorites } }); return; }
     const location = cities.find((city) => city.id === call.input.id) ?? call.input;
-    call.resolve({ data: { location, forecast: { ...forecast, timezone: location.timezone, source: options.source ?? 'network', hourly: options.hourly === false ? [] : forecast.hourly }, favorites: cities.slice(0,3) } });
+    if (!favorites.some(city=>city.id===location.id)) favorites = [...favorites,location];
+    call.resolve({ data: { location, forecast: { ...forecast, timezone: location.timezone, source: options.source ?? 'network', hourly: options.hourly === false ? [] : forecast.hourly }, favorites } });
   },
 } });

@@ -339,3 +339,11 @@ ul,ol { list-style:none; margin:0; padding:0; }
 .location-marker svg path[fill]:not([fill="none"]) { fill:color-mix(in srgb,currentColor 8%,transparent); }
 .picker-scroll { mask-image:linear-gradient(#000 calc(100% - 16px),transparent); padding-bottom:30px; }
 .location-picker { font-family:var(--font-sans),"PingFang SC","Microsoft YaHei",sans-serif; }
+
+/* Separate selection and removal targets keep city cards usable by touch and keyboard. */
+.city-entry { position:relative; }
+.city-card small { padding-inline-end:32px; }
+.city-remove { position:absolute!important; inset-inline-end:4px; bottom:2px; width:40px!important; height:40px!important; min-width:40px!important; padding:0!important; border-radius:9px!important; color:#edf5ff!important; background:transparent!important; box-shadow:none!important; opacity:.7; }
+.city-remove:hover,.city-remove:focus-visible { opacity:1; background:#ffffff1c!important; }
+.city-remove:disabled { opacity:.3; }
+.recent-list:has(.remove-location) .location-weather { display:flex; }

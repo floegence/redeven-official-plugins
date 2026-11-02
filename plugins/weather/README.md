@@ -20,11 +20,14 @@ Startup keeps a neutral themed surface until saved weather is available; it neve
 guesses a daytime sky. Restored forecasts remain visible through refresh failure.
 Hidden surfaces pause cloud animation and clock updates.
 
-The last successful forecast renders before a background refresh. Selecting a
-city keeps that forecast visible while immediate pending feedback identifies the
-new choice. Rapid selections are serialized; only the last choice can replace
-the visible forecast. Repeating an active or pending city does not duplicate a
-request. Failure preserves the prior forecast and makes retry available.
+All saved cities restore their bounded current and daily forecasts at startup.
+Selecting a cached city immediately updates its name, weather palette and data,
+then refreshes in the background. Full hourly responses remain available in the
+live page cache. Rapid selections serialize network writes; only the latest
+choice may update the visible forecast. Superseded results can refresh their
+own cache but cannot replace the chosen city. Failure retains that city's cache
+and explicitly reports that current data could not be refreshed. An uncached
+city keeps the existing view until a forecast arrives rather than inventing data.
 
 First use opens the same compact location picker with one title and no repeated
 instructions. Search stays fixed while the city list scrolls, including in short
@@ -32,8 +35,11 @@ windows. Input method composition retains focus and does not submit a search
 before completion.
 
 Search and recent cities share one location picker. Recent cities have full-row
-targets, current-city state and available cached weather; Manage/Done reveals
-separate remove controls. Suggested cities exclude recent entries. Search stays
+targets, current-city state and available cached weather, with separate visible
+remove controls in the sidebar and picker. Removing a city also removes its
+saved forecast; removing the selected city selects the next saved city, and
+removing the last city returns to the picker. A removed city is not restored by
+the next startup refresh. Suggested cities exclude recent entries. Search stays
 visible while the list scrolls, and explicit results or empty states replace
 unrelated choices. Clearing a pending query discards its eventual response. Users can retain eight
 cities; existing cities keep their positions and new cities replace the oldest
@@ -71,8 +77,7 @@ The project file redevplugin.project.json gives the released CLI the existing
 build/test commands. From the repository root, npm run package:weather builds
 and validates an unsigned review package through the published generic packager.
 Official publication uses the neutral external-signer flow and exact reference.
-Version 1.0.46 republishes the weather-aligned sidebar through the unified
-package-signature contract. The release verifier checks the embedded package
+Publication uses the unified package-signature contract. The release verifier checks the embedded package
 signature as well as the release metadata; host admission verifies the same
 portable envelope independently of the download source.
 

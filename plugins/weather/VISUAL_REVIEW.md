@@ -39,7 +39,7 @@ as night. Existing business, error recovery and localization tests remain.
 ## Location picker
 
 Use a full-width recent-city list with current-city state and existing cached
-weather. Manage/Done exposes separate 44-pixel remove buttons; removal must
+weather. The sidebar and picker expose separate accessible remove buttons; removal must
 never share the primary selection target. Suggested cities exclude recent ones.
 Search, clear, and close controls remain reachable while only the results area
 scrolls. Search has explicit loading, empty, failure, and result states. Clearing
@@ -70,3 +70,17 @@ Application fixtures do not exercise package admission, host authorization or
 WASM execution. Final integration also requires the released ReDevPlugin host
 and actual Redeven installation, opening, interaction, closing and reopening.
 Those results must be recorded separately from these application screenshots.
+
+## Cached city switching and removal
+
+Hold the network request open and verify that a cached city immediately owns the
+hero, condition background and daily forecast. Repeated A/B/A selections must
+never paint another city's response. Network errors retain the selected cache;
+uncached cities remain explicit pending choices. Confirm full in-memory hourly
+forecasts survive switching away and back. Test persisted daily caches separately
+from live hourly responses; no historical cache may invent missing observations.
+
+Removal is available without hover or a management mode, separate from selecting
+the city. Check keyboard and touch targets, failure feedback, deleting an inactive
+city, deleting the active city and deleting the last city. Reopening the app must
+not re-add a removed city. Preserve all remaining city order and cached data.

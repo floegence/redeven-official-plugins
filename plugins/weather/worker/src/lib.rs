@@ -208,17 +208,22 @@ fn handle(request: WorkerRequest) -> WorkerResult {
 
 fn load_public_state() -> WorkerResult {
     let state = load_state()?;
-    let forecast = cached_forecast_for_selected(&state);
-    Ok(json!({
+    Ok(public_state(&state))
+}
+
+fn public_state(state: &StoredState) -> Value {
+    json!({
         "favorites": state.favorites,
         "selected": state.selected,
-        "forecast": forecast,
-        "location_summaries": state.caches.iter().filter(|cache| state.favorites.iter().any(|location| location.id == cache.location_id)).map(|cache| json!({
-            "location_id": cache.location_id,
-            "current": cache.forecast.current,
-            "today": cache.forecast.days.first(),
-        })).collect::<Vec<_>>(),
-    }))
+        "forecast": cached_forecast_for_selected(state),
+        "location_forecasts": state.caches.iter()
+            .filter(|cache| state.favorites.iter().any(|location| location.id == cache.location_id))
+            .map(|cache| {
+                let mut forecast = cache.forecast.clone();
+                forecast.source = "saved".to_owned();
+                json!({ "location_id": cache.location_id, "forecast": forecast })
+            }).collect::<Vec<_>>(),
+    })
 }
 
 fn cached_forecast_for_selected(state: &StoredState) -> Option<Forecast> {
@@ -264,9 +269,17 @@ fn search_locations(request: SearchRequest) -> WorkerResult {
 fn remove_location(request: RemoveRequest) -> WorkerResult {
     validate_id(&request.id)?;
     let mut state = load_state()?;
-    state.favorites.retain(|item| item.id != request.id);
+    forget_location(&mut state, &request.id);
     save_state(&state)?;
     Ok(json!({ "favorites": state.favorites }))
+}
+
+fn forget_location(state: &mut StoredState, id: &str) {
+    state.favorites.retain(|item| item.id != id);
+    state.caches.retain(|item| item.location_id != id);
+    if state.selected.as_ref().is_some_and(|location| location.id == id) {
+        state.selected = state.favorites.first().cloned();
+    }
 }
 
 fn forecast_for_location(location: Location) -> WorkerResult {
@@ -1009,4 +1022,43 @@ mod tests {
             forecast.current.temperature
         );
     }
+    #[test]
+    fn public_state_restores_every_favorite_forecast_without_network() {
+        let mut state = StoredState::default();
+        for index in 0..MAX_FAVORITES {
+            let mut city = location();
+            city.id = format!("city:{index}");
+            state.favorites.push(city.clone());
+            state.caches.push(ForecastCache { location_id: city.id, forecast: project_forecast(raw_forecast()).unwrap() });
+        }
+        state.selected = state.favorites.first().cloned();
+        let restored: StoredState = serde_json::from_slice(&encode_cached_state(&state).unwrap()).unwrap();
+        let public = public_state(&restored);
+        assert_eq!(public["location_forecasts"].as_array().unwrap().len(), MAX_FAVORITES);
+        for cache in public["location_forecasts"].as_array().unwrap() {
+            assert_eq!(cache["forecast"]["source"], "saved");
+            assert_eq!(cache["forecast"]["days"].as_array().unwrap().len(), 2);
+        }
+        assert!(serde_json::to_vec(&public).unwrap().len() < MAX_IO_CHUNK_BYTES);
+    }
+
+    #[test]
+    fn removing_selected_city_preserves_order_and_cannot_restore_it() {
+        let mut state = StoredState::default();
+        for index in 0..3 {
+            let mut city = location(); city.id = format!("city:{index}");
+            state.favorites.push(city.clone());
+            state.caches.push(ForecastCache { location_id: city.id, forecast: project_forecast(raw_forecast()).unwrap() });
+        }
+        state.selected = state.favorites.first().cloned();
+        forget_location(&mut state, "city:1");
+        assert_eq!(state.selected.as_ref().unwrap().id, "city:0");
+        forget_location(&mut state, "city:0");
+        let restored: StoredState = serde_json::from_slice(&encode_cached_state(&state).unwrap()).unwrap();
+        assert_eq!(restored.selected.as_ref().unwrap().id, "city:2");
+        assert_eq!(restored.caches.len(), 1);
+        forget_location(&mut state, "city:2");
+        assert!(state.selected.is_none()); assert!(state.favorites.is_empty()); assert!(state.caches.is_empty());
+    }
+
 }

@@ -58,13 +58,9 @@ type Forecast = {
   hourly?: ForecastHour[];
 };
 
-type LocationSummary = {
-  location_id: string;
-  current: CurrentWeather;
-  today: ForecastDay | null;
-};
+type LocationForecast = { location_id: string; forecast: Forecast };
 type StateLoad = {
-  location_summaries?: LocationSummary[];
+  location_forecasts: LocationForecast[];
   favorites: Location[];
   selected: Location | null;
   forecast: Forecast | null;
@@ -91,7 +87,6 @@ const state = createMutable<{
   favorites: Location[];
   results: Location[];
   searched: boolean;
-  managingLocations: boolean;
   selected?: Location;
   pendingLocation?: Location;
   queuedLocation?: Location;
@@ -105,14 +100,13 @@ const state = createMutable<{
   detail?: string;
   detailDay: number;
   apparent: boolean;
-  cityForecasts: Record<string, Pick<Forecast, "current" | "days">>;
+  cityForecasts: Record<string, Forecast>;
 }>({
   visible: true,
   locale: "en-US",
   favorites: [],
   results: [],
   searched: false,
-  managingLocations: false,
   query: "",
   busy: "initial",
   now: new Date(),
@@ -148,18 +142,16 @@ async function initialize(): Promise<void> {
     state.favorites = response.data.favorites;
     state.selected = response.data.selected ?? undefined;
     state.forecast = response.data.forecast ?? undefined;
-    for (const summary of response.data.location_summaries ?? []) {
-      state.cityForecasts[summary.location_id] = {
-        current: summary.current,
-        days: summary.today ? [summary.today] : [],
-      };
+    for (const cached of response.data.location_forecasts) {
+      state.cityForecasts[cached.location_id] = cached.forecast;
     }
     if (state.selected && state.forecast)
       state.cityForecasts[state.selected.id] = state.forecast;
     state.busy = undefined;
     if (response.data.selected) {
       await afterPaint();
-      void loadForecast(response.data.selected, { preserveVisible: true });
+      if (!state.busy && state.selected?.id === response.data.selected.id)
+        void loadForecast(response.data.selected, { preserveVisible: true });
     } else {
       await afterPaint();
     }
@@ -241,28 +233,33 @@ async function refreshWeather(): Promise<void> {
   await loadForecast(state.selected, { preserveVisible: true });
 }
 
-async function removeLocation(event: string): Promise<void> {
-  if (disposed || state.busy) return;
-  const id = event;
-  if (!isFavorite(id)) return;
+async function removeLocation(id: string): Promise<void> {
+  if (disposed || state.busy || !isFavorite(id)) return;
   state.busy = "remove";
   state.notice = undefined;
-  await afterPaint();
+  let nextLocation: Location | undefined;
   try {
     const response = await bridge.call<PluginMethodResult<FavoritesResult>>(
-      "weather.locations.remove",
-      { id },
+      "weather.locations.remove", { id },
     );
+    if (disposed) return;
     state.favorites = response.data.favorites;
+    delete state.cityForecasts[id];
+    if (state.selected?.id === id) {
+      nextLocation = state.favorites[0];
+      state.selected = nextLocation;
+      state.forecast = nextLocation ? state.cityForecasts[nextLocation.id] : undefined;
+      state.detail = undefined;
+      state.chooserOpen = false;
+    }
   } catch (error) {
     state.notice = {
-      scope: "chooser",
-      text: friendlyError(error, "remove"),
-      error: true,
+      scope: state.chooserOpen || !state.forecast ? "chooser" : "weather",
+      text: friendlyError(error, "remove"), error: true,
     };
   } finally {
     state.busy = undefined;
-    await afterPaint();
+    if (nextLocation && !disposed) void loadForecast(nextLocation, { preserveVisible: true });
   }
 }
 
@@ -280,7 +277,6 @@ async function toggleLocationChooser(): Promise<void> {
   if (!state.chooserOpen) {
     searchRevision++;
     state.searched = false;
-    state.managingLocations = false;
     state.query = "";
     state.results = [];
     state.notice = undefined;
@@ -292,20 +288,26 @@ async function loadForecast(
   location: Location,
   options: { preserveVisible?: boolean } = {},
 ): Promise<void> {
-  if (disposed) return;
+  if (disposed || (state.busy && state.busy !== "forecast")) return;
+  // The view follows the user's choice immediately. Network writes remain
+  // serialized, and only the newest requested city may replace the view.
+  const cached = state.cityForecasts[location.id];
+  if (cached && state.selected?.id !== location.id) {
+    state.selected = location;
+    state.forecast = { ...cached, source: "saved" };
+    state.detail = undefined;
+    state.chooserOpen = false;
+    state.query = "";
+    state.results = [];
+    state.searched = false;
+  }
   if (state.busy === "forecast") {
     state.queuedLocation = location;
     state.pendingLocation = location;
     state.notice = undefined;
-    await afterPaint();
     return;
   }
-  if (disposed || state.busy) return;
-  const preserveVisible = Boolean(
-    options.preserveVisible &&
-      state.forecast &&
-      state.selected?.id === location.id,
-  );
+  const preserveVisible = Boolean(state.forecast && state.selected?.id === location.id);
   state.busy = "forecast";
   state.notice = undefined;
   state.pendingLocation = options.preserveVisible ? undefined : location;
@@ -323,19 +325,19 @@ async function loadForecast(
         timezone: location.timezone,
       },
     );
-    if (disposed || state.queuedLocation) return;
+    if (disposed) return;
+    state.cityForecasts[response.data.location.id] = response.data.forecast;
+    if (state.queuedLocation) return;
     state.selected = response.data.location;
     state.forecast = response.data.forecast;
     state.notice =
       response.data.forecast.source === "saved"
         ? { scope: "weather", text: "refreshFailed" }
         : undefined;
-    state.cityForecasts[response.data.location.id] = response.data.forecast;
     state.detail = undefined;
     state.favorites = response.data.favorites;
     state.results = [];
     state.searched = false;
-    state.managingLocations = false;
     state.query = "";
     if (state.pendingLocation) state.chooserOpen = false;
   } catch (error) {
@@ -674,13 +676,12 @@ function LocationPicker() {
         <Show when={state.favorites.length}>
           <section class="picker-section recent-locations" aria-label={translations().favorites}>
             <div class="picker-section-heading"><h3>{translations().favorites}<span class="location-count">{state.favorites.length}</span></h3>
-              <Button variant="ghost" class="manage-locations" onClick={() => { state.managingLocations = !state.managingLocations; }}>{message(state.managingLocations ? "done" : "manageLocations")}</Button>
             </div>
             <ul class="location-list recent-list"><For each={state.favorites}>{(location) => <li>
               <LocationButton location={location} source="favorite" />
-              <Show when={state.managingLocations}><Button variant="ghost" class="remove-location" disabled={Boolean(state.busy)}
+              <Button variant="ghost" class="remove-location" disabled={Boolean(state.busy)}
                 aria-label={translations().remove + " " + localizedLocation(location, state.locale).name} title={message("removeRecent")}
-                onClick={() => void removeLocation(location.id)}><Trash size={17} aria-hidden="true" /></Button></Show>
+                onClick={() => void removeLocation(location.id)}><Trash size={17} aria-hidden="true" /></Button>
             </li>}</For></ul>
           </section>
         </Show>
@@ -705,14 +706,17 @@ function CitySidebar() {
       <Button variant="ghost" aria-label={message("hideSidebar")} onClick={() => { state.sidebarCollapsed = true; }}>◧</Button>
     </div>
     <Button variant="outline" class="sidebar-search" onClick={() => void toggleLocationChooser()}><Search size={15} aria-hidden="true" /><span>{translations().searchPlaceholder}</span></Button>
-    <nav class="city-list"><For each={state.favorites}>{(location) => <button type="button" class={"city-card " + weatherClass(state.cityForecasts[location.id]?.current)}
+    <nav class="city-list"><For each={state.favorites}>{(location) => <div class="city-entry"><button type="button" class={"city-card " + weatherClass(state.cityForecasts[location.id]?.current)}
       data-city-id={location.id} aria-pressed={(state.pendingLocation ?? state.selected)?.id === location.id}
       aria-busy={state.pendingLocation?.id === location.id} onClick={() => void openLocation(location.id)}>
       <strong>{localizedLocation(location, state.locale).name}</strong><time>{formatTime(state.now, location.timezone)}</time>
       <span class="city-temperature">{state.cityForecasts[location.id] ? degrees(state.cityForecasts[location.id].current.temperature) : "—"}</span>
       <span class="city-condition">{state.cityForecasts[location.id] ? translatedCondition(conditionForCode(state.cityForecasts[location.id].current.weather_code, state.cityForecasts[location.id].current.is_day).kind) : location.country}</span>
       <Show when={state.cityForecasts[location.id]?.days[0]}>{(day) => <small>{translations().high} {degrees(day().temperature_max)} · {translations().low} {degrees(day().temperature_min)}</small>}</Show>
-    </button>}</For></nav>
+    </button><Button variant="ghost" class="city-remove" data-remove-city={location.id}
+      aria-label={translations().remove + " " + localizedLocation(location, state.locale).name}
+      title={message("removeRecent")} disabled={Boolean(state.busy)}
+      onClick={() => void removeLocation(location.id)}><Trash size={15} aria-hidden="true" /></Button></div>}</For></nav>
   </aside>;
 }
 function WeatherToolbar() {

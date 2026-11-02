@@ -123,21 +123,26 @@ async function settledDialogBounds(dialog) {
  });
 }
 
-test('city selection keeps the visible forecast and only commits the latest queued city', async (t) => {
-  const page=await ready(t); const dialog=await chooser(page);
-  await city(dialog,'tokyo'); await page.waitForFunction(() => window.__weatherTest.pending().length === 1);
+test('cached switches paint immediately while only the latest queued city commits', async (t) => {
+  const page=await ready(t,{fixture:'full'});
+  await page.locator('[data-city-id="preset:tokyo"]').click();
+  await page.waitForFunction(()=>window.__weatherTest.pending().length===1);
+  assert.equal(await page.getByTestId('place-name').textContent(),'Tokyo');
+  await page.locator('[data-city-id="preset:beijing"]').click();
   assert.equal(await page.getByTestId('place-name').textContent(),'Beijing');
-  assert.match(await dialog.locator('[role=status]').textContent(),/Tokyo/);
-  await city(dialog,'singapore'); assert.equal((await pending(page)).length,1);
-  await settle(page); await page.waitForFunction(() => window.__weatherTest.pending()[0]?.input.id === 'preset:singapore');
+  assert.equal((await pending(page)).length,1);
+  await settle(page);
+  await page.waitForFunction(()=>window.__weatherTest.pending()[0]?.input.id==='preset:beijing');
   assert.equal(await page.getByTestId('place-name').textContent(),'Beijing');
-  await settle(page); await place(page,'Singapore'); await dialog.waitFor({state:'hidden'});
+  await settle(page);
+  assert.equal(await page.getByTestId('place-name').textContent(),'Beijing');
+  assert.equal((await pending(page)).length,0);
 });
 
 test('failed city requests keep prior content, permit retry, and restore focus on Escape',async(t)=>{
-  const page=await ready(t);const dialog=await chooser(page);await city(dialog,'tokyo');await settle(page,{fail:true});
+  const page=await ready(t);const dialog=await chooser(page);await city(dialog,'singapore');await settle(page,{fail:true});
   await dialog.locator('.chooser-status.error').waitFor();assert.equal(await page.getByTestId('place-name').textContent(),'Beijing');
-  await city(dialog,'tokyo');await settle(page);await place(page,'Tokyo');
+  await city(dialog,'singapore');await settle(page);await place(page,'Singapore');
   await chooser(page);await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
   assert.equal(await page.getByRole('button',{name:'Choose location',exact:true}).evaluate(el=>document.activeElement===el),true);
 });
@@ -189,8 +194,8 @@ for(const width of [390,430,768,1280]) for(const theme of ['light','dark']) {
 }
 
 test('closing the picker during a slow request keeps feedback and exposes failure on the dashboard',async(t)=>{
- const page=await ready(t);const dialog=await chooser(page);await city(dialog,'tokyo');await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
- assert.match(await page.locator('.weather-progress').textContent(),/Tokyo/);await settle(page,{fail:true});
+ const page=await ready(t);const dialog=await chooser(page);await city(dialog,'singapore');await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+ assert.match(await page.locator('.weather-progress').textContent(),/Singapore/);await settle(page,{fail:true});
  await page.locator('.weather-alert').waitFor();assert.equal(await page.getByTestId('place-name').textContent(),'Beijing');
 });
 test('day and temperature controls change the chosen data without remounting the canvas',async(t)=>{
@@ -265,20 +270,18 @@ test('sidebar belongs to the weather palette and separates selection from keyboa
  const search=await page.locator('.sidebar-search').boundingBox();assert.ok(search.height>=44);
 });
 
-test('picker gives recent cities full-width targets and separates management',async(t)=>{
+test('picker gives recent cities separate selection and removal targets',async(t)=>{
  const page=await ready(t,{width:390,fixture:'full'});const dialog=await chooser(page);
  assert.equal(await dialog.locator('.recent-locations .location-choice').count(),3);
- assert.equal(await dialog.locator('.remove-location:visible').count(),0);
+ assert.equal(await dialog.locator('.remove-location:visible').count(),3);
  const rows=await dialog.locator('.recent-locations .location-choice').evaluateAll(items=>items.map(el=>({x:el.getBoundingClientRect().x,width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height})));
- assert.ok(rows.every(row=>row.width>280&&row.height>=60));assert.equal(new Set(rows.map(row=>row.x)).size,1);
+ assert.ok(rows.every(row=>row.width>210&&row.height>=60));assert.equal(new Set(rows.map(row=>row.x)).size,1);
  assert.equal(await dialog.locator('[data-location-id="preset:beijing"]').count(),1);
  assert.equal(await dialog.locator('[data-location-id="preset:beijing"]').getAttribute('aria-current'),'true');
- await dialog.getByRole('button',{name:'Manage',exact:true}).click();
  const remove=dialog.getByRole('button',{name:'Remove Tokyo',exact:true});const rect=await remove.boundingBox();assert.ok(rect.width>=44&&rect.height>=44);
  const evidence=process.env.WEATHER_BROWSER_EVIDENCE_DIR;if(evidence) await capture(page,{path:evidence+'/weather-picker-manage.png'});
  await remove.click();await settle(page);await remove.waitFor({state:'hidden'});
- await dialog.getByRole('button',{name:'Done',exact:true}).click();
- assert.equal(await dialog.locator('.remove-location:visible').count(),0);
+ assert.equal(await dialog.locator('.remove-location:visible').count(),2);
 });
 
 test('selecting the current city dismisses the picker without another request',async(t)=>{
@@ -309,8 +312,8 @@ for (const slowMotion of [false, true]) test('failed forecast from a search resu
   await animationControl.send('Animation.enable');
   await animationControl.send('Animation.setPlaybackRate',{playbackRate:0.1});
  }
- const input=dialog.locator('#weather-query');await input.fill('Tokyo');await input.press('Enter');await settle(page);
- await dialog.locator('.search-results').waitFor();await city(dialog,'tokyo');await settle(page,{fail:true});
+ const input=dialog.locator('#weather-query');await input.fill('Singapore');await input.press('Enter');await settle(page);
+ await dialog.locator('.search-results').waitFor();await city(dialog,'singapore');await settle(page,{fail:true});
  const error=dialog.locator('.chooser-status.error');await error.waitFor();
  assert.match(await error.textContent(),/Live weather is unavailable/);
  assert.equal(await page.getByTestId('place-name').textContent(),'Beijing');
@@ -323,7 +326,7 @@ for (const slowMotion of [false, true]) test('failed forecast from a search resu
  assert.ok((await settledDialogBounds(dialog)).height<=480,'a single result does not leave a full-height empty dialog');
  if(animationControl)await animationControl.detach();
  const evidence=process.env.WEATHER_BROWSER_EVIDENCE_DIR;if(evidence) await capture(page,{path:evidence+'/weather-picker-forecast-error.png'});
- await city(dialog,'tokyo');await settle(page);await place(page,'Tokyo');await dialog.waitFor({state:'hidden'});
+ await city(dialog,'singapore');await settle(page);await place(page,'Singapore');await dialog.waitFor({state:'hidden'});
 });
 
 test('picker keeps search reachable in a short viewport and avoids background scrolling',async(t)=>{
@@ -354,11 +357,87 @@ for(const locale of ['en-US','zh-CN','zh-TW','ja-JP','ko-KR','de-DE','fr-FR','es
   const input=dialog.locator('#weather-query');assert.ok((await input.boundingBox()).width>=180);
   const checks=await dialog.locator('.location-choice').evaluateAll(items=>items.map(el=>({width:el.clientWidth,overflow:el.scrollWidth>el.clientWidth,height:el.clientHeight})));
   assert.ok(checks.every(item=>!item.overflow&&item.height>=60));
-  await dialog.locator('.manage-locations').click();await dialog.locator('.remove-location').first().waitFor();
+  await dialog.locator('.remove-location').first().waitFor();
   const evidence=process.env.WEATHER_BROWSER_EVIDENCE_DIR;
   if(evidence&&locale==='zh-CN'){
-   await dialog.locator('.manage-locations').click();await page.waitForTimeout(100);await capture(page,{path:evidence+'/weather-picker-zh-CN-light.png'});
+   await page.waitForTimeout(100);await capture(page,{path:evidence+'/weather-picker-zh-CN-light.png'});
    await page.evaluate(()=>window.__weatherTest.context('zh-CN','dark'));await page.waitForTimeout(100);await capture(page,{path:evidence+'/weather-picker-zh-CN-dark.png'});
   }
  });
 }
+
+
+test('saved city selection paints its cache before the network responds', async (t) => {
+ const page=await ready(t,{fixture:'full'});
+ await page.locator('[data-city-id="preset:tokyo"]').click();
+ await page.waitForFunction(()=>window.__weatherTest.pending().length===1);
+ assert.equal(await page.getByTestId('place-name').textContent(),'Tokyo');
+ assert.equal(await page.locator('.forecast-list > li').count(),10);
+ assert.equal(await page.locator('.weather-app.sky-rain').count(),1);
+ await settle(page,{fail:true});
+ assert.equal(await page.getByTestId('place-name').textContent(),'Tokyo');
+ assert.equal(await page.locator('.forecast-list > li').count(),10);
+ await page.locator('.weather-alert').waitFor();
+});
+
+test('sidebar removal is discoverable and does not select the removed city', async (t) => {
+ const page=await ready(t,{fixture:'full'});
+ const remove=page.locator('[data-remove-city="preset:tokyo"]');
+ assert.equal(await remove.count(),1);
+ await remove.click();
+ await page.waitForFunction(()=>window.__weatherTest.pending()[0]?.method==='weather.locations.remove');
+ assert.equal(await page.getByTestId('place-name').textContent(),'Beijing');
+ await settle(page);
+ assert.equal(await page.locator('[data-city-id="preset:tokyo"]').count(),0);
+ assert.equal(await page.getByTestId('place-name').textContent(),'Beijing');
+});
+
+
+test('removing the selected city shows the next cached city and removing the last returns to the picker', async (t) => {
+ const page=await ready(t,{fixture:'full'});
+ await page.locator('[data-remove-city="preset:beijing"]').click(); await settle(page);
+ await place(page,'Tokyo');
+ await settle(page);
+ assert.equal(await page.locator('[data-city-id="preset:beijing"]').count(),0);
+ await page.locator('[data-remove-city="preset:singapore"]').click(); await settle(page);
+ await page.locator('[data-remove-city="preset:tokyo"]').click(); await settle(page);
+ await page.locator('.onboarding').waitFor();
+ assert.equal(await page.locator('.forecast-dashboard').count(),0);
+ assert.equal((await pending(page)).length,0);
+});
+
+test('failed removal retains the city and reports the failure where the user acted', async (t) => {
+ const page=await ready(t);
+ await page.locator('[data-remove-city="preset:tokyo"]').click(); await settle(page,{fail:true});
+ assert.equal(await page.locator('[data-city-id="preset:tokyo"]').count(),1);
+ assert.equal(await page.getByTestId('place-name').textContent(),'Beijing');
+ await page.locator('.weather-alert').waitFor();
+});
+
+
+test('switching back reuses full live hourly data before a queued refresh completes', async (t) => {
+ const page=await ready(t,{fixture:'full'});
+ await page.locator('[data-city-id="preset:tokyo"]').click(); await settle(page);
+ await page.getByRole('button',{name:'Refresh',exact:true}).waitFor();
+ await page.locator('[data-city-id="preset:beijing"]').click();
+ await page.waitForFunction(()=>window.__weatherTest.pending().length===1);
+ await page.locator('[data-city-id="preset:tokyo"]').click();
+ assert.equal(await page.getByTestId('place-name').textContent(),'Tokyo');
+ assert.equal(await page.locator('.hourly-list > li').count(),24);
+ assert.equal(await page.locator('.metric').count(),8);
+ await settle(page); await settle(page);
+ assert.equal(await page.getByTestId('place-name').textContent(),'Tokyo');
+});
+
+test('a saved city can take over while the startup refresh is still pending', async (t) => {
+ const page=await browser.newPage({viewport:{width:1280,height:900}}); t.after(()=>page.close());
+ await page.goto(base+'/?fixture=full');
+ await page.waitForFunction(()=>window.__weatherTest.pending().length===1);
+ await page.locator('[data-city-id="preset:tokyo"]').click();
+ assert.equal(await page.getByTestId('place-name').textContent(),'Tokyo');
+ await settle(page);
+ await page.waitForFunction(()=>window.__weatherTest.pending()[0]?.input.id==='preset:tokyo');
+ assert.equal(await page.getByTestId('place-name').textContent(),'Tokyo');
+ await settle(page);
+ assert.equal((await pending(page)).length,0);
+});
