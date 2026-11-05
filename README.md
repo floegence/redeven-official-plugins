@@ -1,6 +1,6 @@
 # Redeven Official Plugins
 
-This repository is the reusable source, validation, catalog, packaging, and
+This repository is the reusable source, validation, packaging, and
 release framework for Redeven-maintained official plugins. It is not the
 ReDevPlugin platform implementation and it does not store user-local plugin
 state.
@@ -20,9 +20,6 @@ plugins/
   <plugin-name>/
     manifest.json
     release.json
-catalog/
-  official-catalog.schema.json
-  official-catalog.seed.json
 scripts/
   build_official_plugin.mjs
   check_official_plugins.mjs
@@ -57,28 +54,27 @@ npm run package:weather
 ```
 
 Mind Map uses the same commands through `package:mind-map`. Root tests,
-dependency installation, CI, and catalog generation discover every
+dependency installation, CI, and repository validation discover every
 `plugins/*/manifest.json` plus `release.json` pair instead of maintaining a
 plugin-name list.
 
-The repository discovery entry lists each plugin and its release asset
-templates. Keep it in sync when adding or moving a plugin. Source CI validates
-it with the released ReDevPlugin CLI; `npm run check` also compares the entries
-with the source and release declarations. Release and recovery tooling also
-supports independent `redeven-<plugin>-v<version>` tags. The current index keeps
-`v{version}` until the Redeven client that accepts prefixed tags is publicly
-released and the market policy change is reviewed.
+The repository index lists each plugin, its source manifest, and its ordinary
+package asset template. Each plugin uses `<plugin-name>-v{version}` tags. Both
+plugins may release the same version independently. No legacy tag fallback or
+client capability negotiation exists.
 
-The package script writes untracked output under `dist/`. The release commands
-use ReDevPlugin's neutral external-signer exchange: `release:prepare` writes
-public signing requests, `release:apply` accepts public responses, and
-`release:finalize` plus `release:verify` produce and verify the complete GitHub
-Release asset set. This repository never reads or stores private signing
-material, and plugin package bytes are kept in GitHub Releases rather than git.
-Repository tags are globally unique. A tag must match exactly one plugin's
-`release_train_tag`, and that tag publishes only the matching plugin's exact
-asset names. Markets must use that release reference so independent plugin
-release trains cannot select one another's assets. Weather's package-local
-`build:release` builds its WASM worker in a pinned Linux AMD64 container. Mind
-Map builds its permissionless storage Worker behind its package-local release
-interface, so the shared release framework remains plugin-neutral.
+`npm run catalog:verify` validates the index through the exact released CLI. The
+market derives all presentation from `release inspect`; this repository does not
+maintain a second catalog or replace author descriptions with display names.
+
+`npm run release:build -- <plugin-name>` runs the plugin's `build:release`, builds
+an ordinary package, and records distinct archive and canonical package digests.
+`npm run release:verify -- <plugin-name>` re-inspects the package and checks those
+values. Publication uploads only the package and checksum metadata, then reads
+back and compares the exact bytes. No signing keys, trust documents, publisher
+registration, or review exchange is required. Existing published artifacts are
+never replaced.
+
+Weather's package-local release build compiles its WASM worker in a pinned Linux
+AMD64 container. Mind Map builds its permissionless storage Worker through the
+same package interface. Local output stays under ignored `dist/` directories.

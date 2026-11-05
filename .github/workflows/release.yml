@@ -3,15 +3,14 @@ name: Release Official Plugins
 on:
   push:
     tags:
-      - 'v*'
-      - 'redeven-*-v*'
+      - '*-v*'
 
 permissions:
   actions: read
   contents: write
 
 concurrency:
-  group: official-plugins-release-${{ github.ref }}
+  group: official-plugins-release-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -36,7 +35,7 @@ jobs:
           cache: false
       - uses: dtolnay/rust-toolchain@56f84321dbccf38fb67ce29ab63e4754056677e0
         with:
-          toolchain: 1.88.0
+          toolchain: 1.98.0
           targets: wasm32-unknown-unknown
       - name: Verify exact released main
         env:
@@ -62,7 +61,7 @@ jobs:
         working-directory: plugins/weather
         run: npm exec -- playwright install --with-deps chromium
       - run: npm run verify
-      - name: Build, verify, and publish signed release set
+      - name: Build, verify, and publish ordinary plugin package
         env:
           GH_TOKEN: ${{ github.token }}
         run: scripts/publish_official_plugin_release.sh "$GITHUB_REF_NAME"

@@ -30,7 +30,7 @@ jobs:
         with:
           go-version: '1.27.3'
       - name: Validate repository index with the released platform
-        run: GOWORK=off go run github.com/floegence/redevplugin/v3/cmd/redevplugin@v3.16.0 repository validate .
+        run: npm run catalog:verify
       - run: npm ci
       - run: npm run plugins:ci
       - name: Install shared browser for native plugin acceptance

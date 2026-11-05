@@ -25,5 +25,5 @@ it('builds ordinary modules without generated editor-position CSS or PNG UI icon
   const ts = JSON.parse(await read('tsconfig.json'));
   assert.equal(ts.compilerOptions.jsxImportSource, 'solid-js');
   const wasm = await read('scripts/build-release-wasm.sh');
-  assert.ok(wasm.includes('rust:1.88-bookworm@sha256:'));
+  assert.ok(wasm.includes('rust:1.98.0-bookworm@sha256:'));
 });

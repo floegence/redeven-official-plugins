@@ -75,7 +75,7 @@ installed backend processes or admission paths.
 Run npm ci, npm test, npm run typecheck, and npm run build in this directory.
 The project file redevplugin.project.json gives the released CLI the existing
 build/test commands. From the repository root, npm run package:weather builds
-and validates an unsigned review package through the published generic packager.
+and validates an ordinary plugin package through the published generic packager.
 Official publication uses the neutral external-signer flow and exact reference.
 Publication uses the unified package-signature contract. The release verifier checks the embedded package
 signature as well as the release metadata; host admission verifies the same

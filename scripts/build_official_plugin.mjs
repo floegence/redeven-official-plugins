@@ -1,76 +1,25 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
 import path from 'node:path';
-import {
-  loadPluginSource,
-  repoRootFrom,
-  sha256Hex,
-  stableJSONString,
-  validatePluginSource,
-} from './lib/officialPlugins.mjs';
+import { loadPluginSource, repoRootFrom, sha256Hex, stableJSONString, validatePluginSource } from './lib/officialPlugins.mjs';
+import { platformCLI } from './lib/platform.mjs';
 
-const redevpluginVersion = 'v3.7.3';
-const repoRoot = repoRootFrom(import.meta.url);
-const pluginName = String(process.argv[2] ?? '').trim();
-
-if (!pluginName) {
-  console.error('usage: node scripts/build_official_plugin.mjs <plugin-name>');
-  process.exit(2);
-}
-
-const source = await loadPluginSource(repoRoot, pluginName);
+const root = repoRootFrom(import.meta.url);
+const name = process.argv[2];
+if (!name) throw new Error('usage: node scripts/build_official_plugin.mjs <plugin-name>');
+const source = await loadPluginSource(root, name);
 const errors = await validatePluginSource(source);
-if (errors.length > 0) {
-  for (const error of errors) console.error(error);
-  process.exit(1);
-}
-
+if (errors.length) throw new Error(errors.join('\n'));
 const version = source.manifest.plugin.version;
-const outDir = path.join(repoRoot, 'dist', pluginName, version);
-const unsignedPackage = path.join(outDir, `${pluginName}-${version}.unsigned.redevplugin`);
-await mkdir(outDir, { recursive: true });
-
-await runReDevPlugin(['package', path.join(source.pluginRoot, 'dist'), unsignedPackage]);
-await runReDevPlugin(['validate', unsignedPackage]);
-
-const data = await readFile(unsignedPackage);
-const metadata = {
-  schema_version: 'redeven.official_plugin_artifact.v1',
-  plugin_id: source.manifest.plugin.plugin_id,
-  version,
-  package_file: path.relative(repoRoot, unsignedPackage),
-  package_sha256: `sha256:${sha256Hex(data)}`,
-  signed: false,
-};
-await writeFile(path.join(outDir, `${pluginName}-${version}.metadata.json`), stableJSONString(metadata));
+const output = path.join(root, 'dist', name, version);
+const filename = `${name}-${version}.redevplugin`;
+const packagePath = path.join(output, filename);
+await mkdir(output, { recursive: true });
+await platformCLI(['package', path.join(source.pluginRoot, 'dist'), packagePath]);
+const inspection = await platformCLI(['release', 'inspect', packagePath]);
+if (inspection.plugin_id !== source.manifest.plugin.plugin_id || inspection.version !== version) throw new Error('packaged identity differs from source');
+const bytes = await readFile(packagePath);
+const metadata = { schema_version: 'redeven.official_plugin_artifact.v1', plugin_id: inspection.plugin_id, version,
+  package_file: filename, archive_sha256: `sha256:${sha256Hex(bytes)}`, size: bytes.length,
+  package_sha256: inspection.package_sha256, manifest_sha256: inspection.manifest_sha256, entries_sha256: inspection.entries_sha256 };
+await writeFile(path.join(output, `${name}-${version}.metadata.json`), stableJSONString(metadata));
 console.log(stableJSONString(metadata).trimEnd());
-
-function runReDevPlugin(args) {
-  const explicit = String(process.env.REDEVPLUGIN_CLI ?? '').trim();
-  const command = explicit || 'go';
-  const finalArgs = explicit
-    ? args
-    : ['run', `github.com/floegence/redevplugin/v3/cmd/redevplugin@${redevpluginVersion}`, ...args];
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, finalArgs, {
-      cwd: repoRoot,
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        GOWORK: 'off',
-        GOTOOLCHAIN: 'go1.27.3+auto',
-        GOPROXY: 'https://proxy.golang.org,direct',
-        GOPRIVATE: '',
-        GONOSUMDB: '',
-      },
-    });
-    child.on('error', reject);
-    child.on('exit', (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(`${command} ${finalArgs.join(' ')} exited with ${code}`));
-    });
-  });
-}

@@ -3,7 +3,6 @@ import { existsSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-export const catalogSchemaVersion = 'redeven.official_plugin_catalog.seed.v1';
 export const officialPublisherID = 'com.redeven.official';
 
 export function repoRootFrom(importMetaURL) {
@@ -93,65 +92,6 @@ function collectDuplicateErrors(sources, valueFor, label, errors) {
   }
 }
 
-export function catalogItemForPlugin(source) {
-  const plugin = source.manifest.plugin ?? {};
-  const stable = source.release.stable_catalog;
-  return {
-    plugin_id: plugin.plugin_id,
-    publisher_id: source.manifest.publisher?.publisher_id,
-    presentation: presentationCatalogForManifest(source.manifest),
-    categories: [source.name],
-    channels: [source.release.channel],
-    latest: {
-      version: stable.version,
-      min_redeven_version: stable.min_redeven_version,
-      min_redevplugin_version: stable.min_redevplugin_version,
-      rollout_state: 'stable',
-      default_surface_id: stable.default_surface_id,
-      distribution: {
-        provider: 'github_release',
-        repository: stable.repository,
-        tag: source.release.release_train_tag,
-        artifact_name: stable.artifact_name,
-        release_ref_asset_name: stable.release_ref_asset_name,
-        trust_root_asset_name: stable.trust_root_asset_name,
-      },
-    },
-  };
-}
-
-function presentationCatalogForManifest(manifest) {
-  const presentation = manifest.presentation;
-  const defaultLocaleTag = presentation.locales.default;
-  const defaultLocale = {
-    locale: defaultLocaleTag,
-    name: manifest.plugin.display_name,
-    ...(manifest.publisher.display_name ? { publisher_name: manifest.publisher.display_name } : {}),
-    summary: manifest.plugin.display_name,
-    description: [manifest.plugin.display_name],
-    highlights: [],
-    keywords: [manifest.plugin.display_name],
-    surfaces: manifest.surfaces.map(({ surface_id, label }) => ({ surface_id, label })),
-    settings: (manifest.settings?.fields ?? []).map(({ key, label, options = [] }) => ({ key, label, options })),
-  };
-  return {
-    default_locale: defaultLocaleTag,
-    locales: [defaultLocale],
-  };
-}
-
-export function buildCatalogSeed(sources) {
-  return {
-    schema_version: catalogSchemaVersion,
-    publisher_id: officialPublisherID,
-    generated_from: {
-      repository: 'redeven-official-plugins',
-      source: 'plugin_manifests',
-    },
-    plugins: sources.map(catalogItemForPlugin).sort((a, b) => a.plugin_id.localeCompare(b.plugin_id)),
-  };
-}
-
 export function stableJSONString(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
@@ -195,17 +135,8 @@ export async function validatePluginSource(source) {
   }
   if (source.release?.schema_version !== 'redeven.official_plugin_source_release.v1' ||
       source.release?.channel !== 'stable' || source.release?.source_version !== manifest.plugin?.version ||
-      ![`v${manifest.plugin?.version}`, `redeven-${name}-v${manifest.plugin?.version}`].includes(source.release?.release_train_tag)) {
+      source.release?.release_train_tag !== `${name}-v${manifest.plugin?.version}`) {
     errors.push(`${name}: stable release train metadata is invalid`);
-  }
-  const stable = source.release?.stable_catalog;
-  if (!stable || stable.version !== manifest.plugin?.version ||
-      stable.repository !== 'floegence/redeven-official-plugins' ||
-      !String(stable.artifact_name ?? '').endsWith('.redevplugin') ||
-      stable.artifact_name !== `${name}-${stable.version}.redevplugin` ||
-      stable.release_ref_asset_name !== `${name}-${stable.version}.release-ref.json` ||
-      stable.trust_root_asset_name !== 'root.public.json') {
-    errors.push(`${name}: GitHub release catalog metadata is invalid`);
   }
   const surfaces = Array.isArray(manifest.surfaces) ? manifest.surfaces : [];
   if (surfaces.length === 0) {

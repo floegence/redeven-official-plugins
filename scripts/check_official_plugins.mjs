@@ -1,11 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
-  buildCatalogSeed,
   loadAllPluginSources,
   readJSON,
   repoRootFrom,
-  stableJSONString,
   validatePluginCollection,
   validatePluginSource,
 } from './lib/officialPlugins.mjs';
@@ -26,8 +24,7 @@ if (!target || target.plugins.length !== sources.length) {
     const entry = entries[0];
     if (entries.length !== 1 || entry.path !== `plugins/${source.name}` || entry.manifest !== 'manifest.json' ||
       entry.release.tag_template.replace('{version}', source.manifest.plugin.version) !== source.release.release_train_tag ||
-      entry.release.package_asset_template.replace('{version}', source.manifest.plugin.version) !== source.release.stable_catalog.artifact_name ||
-      entry.release.release_ref_asset_template.replace('{version}', source.manifest.plugin.version) !== source.release.stable_catalog.release_ref_asset_name) {
+      entry.release.package_asset_template.replace('{version}', source.manifest.plugin.version) !== `${source.name}-${source.manifest.plugin.version}.redevplugin`) {
       errors.push(`${source.name}: repository index does not match the plugin source and release`);
     }
   }
@@ -47,13 +44,6 @@ for (const phrase of [
   if (!agents.includes(phrase)) {
     errors.push(`AGENTS.md must contain: ${phrase}`);
   }
-}
-
-const seedPath = path.join(repoRoot, 'catalog', 'official-catalog.seed.json');
-const seed = await readJSON(seedPath);
-const expected = buildCatalogSeed(sources);
-if (stableJSONString(seed) !== stableJSONString(expected)) {
-  errors.push('catalog/official-catalog.seed.json is not synchronized; run npm run catalog:write');
 }
 
 if (errors.length > 0) {

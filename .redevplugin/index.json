@@ -10,9 +10,8 @@
           "path": "plugins/mind-map",
           "manifest": "manifest.json",
           "release": {
-            "tag_template": "v{version}",
-            "package_asset_template": "mind-map-{version}.redevplugin",
-            "release_ref_asset_template": "mind-map-{version}.release-ref.json"
+            "tag_template": "mind-map-v{version}",
+            "package_asset_template": "mind-map-{version}.redevplugin"
           }
         },
         {
@@ -20,9 +19,8 @@
           "path": "plugins/weather",
           "manifest": "manifest.json",
           "release": {
-            "tag_template": "v{version}",
-            "package_asset_template": "weather-{version}.redevplugin",
-            "release_ref_asset_template": "weather-{version}.release-ref.json"
+            "tag_template": "weather-v{version}",
+            "package_asset_template": "weather-{version}.redevplugin"
           }
         }
       ]

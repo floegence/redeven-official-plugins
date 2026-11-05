@@ -23,7 +23,7 @@ docker run --rm --platform linux/amd64 \
   --volume "$output_dir:/out" \
   --workdir /src/plugins/mind-map/worker \
   --env CARGO_TARGET_DIR=/tmp/redevplugin-mind-map-target \
-  'rust:1.88-bookworm@sha256:af306cfa71d987911a781c37b59d7d67d934f49684058f96cf72079c3626bfe0' \
+  'docker.io/library/rust:1.98.0-bookworm@sha256:4e4a7e7939c17991ab35f2b8c2e67593980f771d28f6b1254b1850f860fd0c7f' \
   bash -c 'rustup target add wasm32-unknown-unknown >/dev/null && cargo build --locked --release --target wasm32-unknown-unknown && cp /tmp/redevplugin-mind-map-target/wasm32-unknown-unknown/release/redeven_official_mind_map_worker.wasm "/out/$1"' \
   -- "$output_name"
 
