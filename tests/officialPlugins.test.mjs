@@ -11,11 +11,30 @@ import {
   resolvePluginForReleaseTag,
   stableJSONString,
   validatePluginCollection,
+  validatePluginSource,
 } from '../scripts/lib/officialPlugins.mjs';
 
 const repoRoot = repoRootFrom(import.meta.url);
 
 describe('official plugin repository contract', () => {
+  it('lists each plugin in the repository discovery entry', async () => {
+    const index = await readJSON(path.join(repoRoot, '.redevplugin', 'index.json'));
+    const sources = await loadAllPluginSources(repoRoot);
+    assert.equal(index.schema_version, 'redevplugin.repository-index.v1');
+    const target = index.targets.find((item) => item.ecosystem === 'redevplugin' && item.host === 'redeven');
+    assert.ok(target);
+    assert.deepEqual(target.plugins.map((item) => item.plugin_id).sort(), sources.map((source) => source.manifest.plugin.plugin_id).sort());
+    for (const source of sources) {
+      const entry = target.plugins.find((item) => item.plugin_id === source.manifest.plugin.plugin_id);
+      assert.equal(entry.path, `plugins/${source.name}`);
+      assert.equal(entry.manifest, 'manifest.json');
+      for (const [template, actual] of [
+        [entry.release.tag_template, source.release.release_train_tag],
+        [entry.release.package_asset_template, source.release.stable_catalog.artifact_name],
+        [entry.release.release_ref_asset_template, source.release.stable_catalog.release_ref_asset_name],
+      ]) assert.equal(template.replace('{version}', source.manifest.plugin.version), actual);
+    }
+  });
   it('publishes Weather and Mind Map as current official plugin sources', async () => {
     const sources = await loadAllPluginSources(repoRoot);
     assert.deepEqual(sources.map(({ name }) => name), ['mind-map', 'weather']);
@@ -84,6 +103,42 @@ describe('official plugin repository contract', () => {
       /exactly one plugin/u,
     );
     assert.match(validatePluginCollection([...sources, duplicate]).join('\n'), /duplicate release tag/u);
+  });
+
+  it('resolves independent plugin tags at the same version without mixing assets', async () => {
+    const sources = structuredClone(await loadAllPluginSources(repoRoot));
+    for (const source of sources) {
+      source.manifest.plugin.version = '2.0.0';
+      source.packageJSON.version = '2.0.0';
+      source.release.source_version = '2.0.0';
+      source.release.stable_catalog.version = '2.0.0';
+      source.release.stable_catalog.artifact_name = `${source.name}-2.0.0.redevplugin`;
+      source.release.stable_catalog.release_ref_asset_name = `${source.name}-2.0.0.release-ref.json`;
+      source.release.release_train_tag = `redeven-${source.name}-v2.0.0`;
+    }
+    assert.deepEqual(validatePluginCollection(sources), []);
+    for (const source of sources) assert.deepEqual(await validatePluginSource(source), []);
+    assert.equal(resolvePluginForReleaseTag(sources, 'redeven-weather-v2.0.0').name, 'weather');
+    assert.equal(resolvePluginForReleaseTag(sources, 'redeven-mind-map-v2.0.0').name, 'mind-map');
+    assert.throws(() => resolvePluginForReleaseTag(sources, 'v2.0.0'), /exactly one plugin/u);
+    const catalog = buildCatalogSeed(sources);
+    for (const plugin of catalog.plugins) {
+      const name = plugin.plugin_id.split('.').at(-1);
+      assert.equal(plugin.latest.distribution.tag, `redeven-${name}-v2.0.0`);
+      assert.equal(plugin.latest.version, '2.0.0');
+      assert.equal(plugin.latest.distribution.artifact_name, `${name}-2.0.0.redevplugin`);
+      assert.equal(plugin.latest.distribution.release_ref_asset_name, `${name}-2.0.0.release-ref.json`);
+    }
+  });
+
+  it('derives release versions from the selected manifest for publish and recovery', async () => {
+    for (const filename of ['scripts/publish_official_plugin_release.sh', '.github/workflows/release.yml', '.github/workflows/recover-release.yml']) {
+      const content = await readFile(path.join(repoRoot, filename), 'utf8');
+      assert.doesNotMatch(content, /\$\{(?:tag|GITHUB_REF_NAME|RELEASE_TAG)#v\}/u);
+      assert.match(content, /version=.*plugin\.version/u);
+    }
+    const workflow = await readFile(path.join(repoRoot, '.github/workflows/release.yml'), 'utf8');
+    assert.ok(workflow.includes("'redeven-*-v*'"));
   });
 
   it('keeps the reusable plugin packaging and release framework', async () => {

@@ -2,9 +2,9 @@
 set -euo pipefail
 
 tag="${1:?release tag is required}"
-[[ "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
-version="${tag#v}"
 plugin=$(node scripts/resolve_release_plugin.mjs "$tag")
+version=$(jq -r '.plugin.version' "plugins/$plugin/manifest.json")
+[[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
 display_name=$(jq -r '.plugin.display_name' "plugins/$plugin/manifest.json")
 
 if gh release view "$tag" >/dev/null 2>&1; then

@@ -48,9 +48,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
-          version="${RELEASE_TAG#v}"
           plugin=$(node scripts/resolve_release_plugin.mjs "$RELEASE_TAG")
+          version=$(jq -r '.plugin.version' "plugins/$plugin/manifest.json")
+          [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
           tag_commit=$(git rev-parse "${RELEASE_TAG}^{commit}")
           remote_main=$(git ls-remote origin refs/heads/main | awk '{print $1}')
           test "$GITHUB_SHA" = "$remote_main"

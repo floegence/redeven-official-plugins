@@ -1,0 +1,31 @@
+{
+  "schema_version": "redevplugin.repository-index.v1",
+  "targets": [
+    {
+      "ecosystem": "redevplugin",
+      "host": "redeven",
+      "plugins": [
+        {
+          "plugin_id": "com.redeven.official.mind-map",
+          "path": "plugins/mind-map",
+          "manifest": "manifest.json",
+          "release": {
+            "tag_template": "v{version}",
+            "package_asset_template": "mind-map-{version}.redevplugin",
+            "release_ref_asset_template": "mind-map-{version}.release-ref.json"
+          }
+        },
+        {
+          "plugin_id": "com.redeven.official.weather",
+          "path": "plugins/weather",
+          "manifest": "manifest.json",
+          "release": {
+            "tag_template": "v{version}",
+            "package_asset_template": "weather-{version}.redevplugin",
+            "release_ref_asset_template": "weather-{version}.release-ref.json"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -15,6 +15,7 @@ immutable releases remain the audit record.
 ## Repository Layout
 
 ```text
+.redevplugin/index.json
 plugins/
   <plugin-name>/
     manifest.json
@@ -59,6 +60,14 @@ Mind Map uses the same commands through `package:mind-map`. Root tests,
 dependency installation, CI, and catalog generation discover every
 `plugins/*/manifest.json` plus `release.json` pair instead of maintaining a
 plugin-name list.
+
+The repository discovery entry lists each plugin and its release asset
+templates. Keep it in sync when adding or moving a plugin. Source CI validates
+it with the released ReDevPlugin CLI; `npm run check` also compares the entries
+with the source and release declarations. Release and recovery tooling also
+supports independent `redeven-<plugin>-v<version>` tags. The current index keeps
+`v{version}` until the Redeven client that accepts prefixed tags is publicly
+released and the market policy change is reviewed.
 
 The package script writes untracked output under `dist/`. The release commands
 use ReDevPlugin's neutral external-signer exchange: `release:prepare` writes

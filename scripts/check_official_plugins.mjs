@@ -16,6 +16,23 @@ const errors = [];
 
 errors.push(...validatePluginCollection(sources));
 
+const index = await readJSON(path.join(repoRoot, '.redevplugin', 'index.json'));
+const target = index.targets.find((item) => item.ecosystem === 'redevplugin' && item.host === 'redeven');
+if (!target || target.plugins.length !== sources.length) {
+  errors.push('repository index must list every official plugin exactly once');
+} else {
+  for (const source of sources) {
+    const entries = target.plugins.filter((entry) => entry.plugin_id === source.manifest.plugin.plugin_id);
+    const entry = entries[0];
+    if (entries.length !== 1 || entry.path !== `plugins/${source.name}` || entry.manifest !== 'manifest.json' ||
+      entry.release.tag_template.replace('{version}', source.manifest.plugin.version) !== source.release.release_train_tag ||
+      entry.release.package_asset_template.replace('{version}', source.manifest.plugin.version) !== source.release.stable_catalog.artifact_name ||
+      entry.release.release_ref_asset_template.replace('{version}', source.manifest.plugin.version) !== source.release.stable_catalog.release_ref_asset_name) {
+      errors.push(`${source.name}: repository index does not match the plugin source and release`);
+    }
+  }
+}
+
 for (const source of sources) {
   errors.push(...await validatePluginSource(source));
 }

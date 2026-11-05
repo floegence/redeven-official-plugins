@@ -195,7 +195,7 @@ export async function validatePluginSource(source) {
   }
   if (source.release?.schema_version !== 'redeven.official_plugin_source_release.v1' ||
       source.release?.channel !== 'stable' || source.release?.source_version !== manifest.plugin?.version ||
-      source.release?.release_train_tag !== `v${manifest.plugin?.version}`) {
+      ![`v${manifest.plugin?.version}`, `redeven-${name}-v${manifest.plugin?.version}`].includes(source.release?.release_train_tag)) {
     errors.push(`${name}: stable release train metadata is invalid`);
   }
   const stable = source.release?.stable_catalog;
