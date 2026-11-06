@@ -109,6 +109,11 @@ stay behind that package interface. Shared repository tags are globally unique,
 must match exactly one discovered plugin, and may publish only that plugin's
 exact release assets. Markets select the ordinary package in each independent plugin tag namespace.
 
+Normal and release builds resolve the source repository through the released
+`repository identity` command before packaging or hashing, then refresh the index.
+Authors select a slug only. Publisher and plugin IDs use the same repository-based
+rule as community packages; no official namespace exemption exists.
+
 The generic packager builds deterministic ordinary `.redevplugin` packages using
 released ReDevPlugin CLI artifacts. Publication builds through each plugin's
 `build:release` script, inspects the exact package, publishes package and checksum

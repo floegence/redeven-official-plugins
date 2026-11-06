@@ -5,6 +5,9 @@ on:
     tags:
       - '*-v*'
 
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+
 permissions:
   actions: read
   contents: write
@@ -37,6 +40,7 @@ jobs:
         with:
           toolchain: 1.98.0
           targets: wasm32-unknown-unknown
+      - run: npm ci
       - name: Verify exact released main
         env:
           GH_TOKEN: ${{ github.token }}
@@ -55,7 +59,6 @@ jobs:
           ci_conclusion=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&status=completed&per_page=100" \
             --jq ".workflow_runs[] | select(.head_sha == \"$GITHUB_SHA\") | .conclusion" | head -n 1)
           test "$ci_conclusion" = success
-      - run: npm ci
       - run: npm run plugins:ci
       - name: Install shared browser for native plugin acceptance
         working-directory: plugins/weather

@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+
 permissions:
   contents: read
 
@@ -29,9 +32,9 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.27.3'
+      - run: npm ci
       - name: Validate repository index with the released platform
         run: npm run catalog:verify
-      - run: npm ci
       - run: npm run plugins:ci
       - name: Install shared browser for native plugin acceptance
         working-directory: plugins/weather

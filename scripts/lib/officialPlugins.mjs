@@ -1,9 +1,11 @@
+import { githubPluginIdentity } from '@floegence/redevplugin-contracts';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-export const officialPublisherID = 'com.redeven.official';
+const officialRepositoryID = 1289352675;
+export const officialPublisherID = githubPluginIdentity(officialRepositoryID, 'plugin').publisher_id;
 
 export function repoRootFrom(importMetaURL) {
   let current = path.dirname(new URL(importMetaURL).pathname);
@@ -114,12 +116,13 @@ export async function validatePluginSource(source) {
   if (manifest.schema_version !== 'redevplugin.manifest.v9') {
     errors.push(`${name}: manifest schema_version must be redevplugin.manifest.v9`);
   }
-  if (manifest.publisher?.publisher_id !== officialPublisherID) {
+  const identity = githubPluginIdentity(officialRepositoryID, name);
+  if (manifest.publisher?.publisher_id !== identity.publisher_id) {
     errors.push(`${name}: publisher_id must be ${officialPublisherID}`);
   }
   const pluginID = String(manifest.plugin?.plugin_id ?? '');
-  if (!pluginID.startsWith(`${officialPublisherID}.`)) {
-    errors.push(`${name}: plugin_id must use the ${officialPublisherID} namespace`);
+  if (pluginID !== identity.plugin_id) {
+    errors.push(`${name}: plugin_id must equal the generated repository identity ${officialPublisherID}.${name}`);
   }
   const presentation = manifest.presentation;
   if (!presentation || typeof presentation.locales?.default !== 'string') {

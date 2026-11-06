@@ -1,3 +1,4 @@
+import { prepareRepositoryIdentity } from '../../../scripts/lib/repositoryIdentity.mjs';
 import { access, copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
@@ -7,6 +8,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const cargo = process.platform === 'win32' ? 'cargo.exe' : 'cargo';
 const releaseWorker = String(process.env.MIND_MAP_RELEASE_WASM ?? '').trim();
+await prepareRepositoryIdentity(root, 'mind-map');
 await rm(resolve(root, 'dist'), { recursive: true, force: true });
 run(npm, ['run', 'build:ui']);
 let workerSource;

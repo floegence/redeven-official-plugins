@@ -49,15 +49,15 @@ describe('official plugin repository contract', () => {
     assert.ok(mindMap);
     assert.equal(weather.name, 'weather');
     assert.equal(weather.manifest.schema_version, 'redevplugin.manifest.v9');
-    assert.equal(weather.manifest.plugin.plugin_id, 'com.redeven.official.weather');
-    assert.equal(weather.manifest.plugin.version, '1.1.0');
+    assert.equal(weather.manifest.plugin.plugin_id, 'github.repo.1289352675.weather');
+    assert.equal(weather.manifest.plugin.version, '1.2.0');
     assert.deepEqual(weather.manifest.permissions, ['network.client']);
     assert.deepEqual(weather.manifest.api.required_features, ['net.http.v1']);
     assert.equal(weather.manifest.presentation.icon.path, 'ui/assets/weather-plugin.png');
     assert.equal(weather.manifest.surfaces[0].surface_id, 'weather.dashboard');
     assert.equal(mindMap.manifest.schema_version, 'redevplugin.manifest.v9');
-    assert.equal(mindMap.manifest.plugin.plugin_id, 'com.redeven.official.mind-map');
-    assert.equal(mindMap.manifest.plugin.version, '1.1.0');
+    assert.equal(mindMap.manifest.plugin.plugin_id, 'github.repo.1289352675.mind-map');
+    assert.equal(mindMap.manifest.plugin.version, '1.2.0');
     assert.deepEqual(mindMap.manifest.permissions, []);
     assert.deepEqual(mindMap.manifest.api.required_features, []);
     assert.equal(mindMap.manifest.workers[0].scope, 'user');
@@ -83,8 +83,8 @@ describe('official plugin repository contract', () => {
 
   it('resolves each global release tag to exactly one plugin', async () => {
     const sources = await loadAllPluginSources(repoRoot);
-    assert.equal(resolvePluginForReleaseTag(sources, 'weather-v1.1.0').name, 'weather');
-    assert.equal(resolvePluginForReleaseTag(sources, 'mind-map-v1.1.0').name, 'mind-map');
+    assert.equal(resolvePluginForReleaseTag(sources, 'weather-v1.2.0').name, 'weather');
+    assert.equal(resolvePluginForReleaseTag(sources, 'mind-map-v1.2.0').name, 'mind-map');
     assert.throws(() => resolvePluginForReleaseTag(sources, 'v9.9.9'), /exactly one plugin/u);
 
     const duplicate = structuredClone(sources[0]);

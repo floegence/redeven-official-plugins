@@ -76,10 +76,13 @@ Run npm ci, npm test, npm run typecheck, and npm run build in this directory.
 The project file redevplugin.project.json gives the released CLI the existing
 build/test commands. From the repository root, npm run package:weather builds
 and validates an ordinary plugin package through the published generic packager.
-Official publication uses the neutral external-signer flow and exact reference.
-Publication uses the unified package-signature contract. The release verifier checks the embedded package
-signature as well as the release metadata; host admission verifies the same
-portable envelope independently of the download source.
+Normal and release builds resolve the actual GitHub repository ID through the
+released platform CLI before building assets or packaging. The tool generates
+the publisher and plugin IDs from that repository and the `weather` slug, then
+updates the repository index. Publication inspects the ordinary package and
+verifies the exact downloaded bytes. Plugin signatures, publisher registration
+and trust documents are not required. Market ingestion and Host admission
+independently validate the package identity against the observed repository.
 
 The browser suite uses the real Solid/Floe application and the released production-client test harness with controlled business
 responses. It covers slow/failing/queued city selection, native input composition,

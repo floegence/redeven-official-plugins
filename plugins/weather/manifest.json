@@ -1,14 +1,4 @@
 {
-  "schema_version": "redevplugin.manifest.v9",
-  "publisher": {
-    "publisher_id": "com.redeven.official",
-    "display_name": "Redeven Official"
-  },
-  "plugin": {
-    "plugin_id": "com.redeven.official.weather",
-    "display_name": "Weather",
-    "version": "1.1.0"
-  },
   "api": {
     "major": 1,
     "required_features": [
@@ -16,44 +6,6 @@
     ],
     "optional_features": []
   },
-  "permissions": [
-    "network.client"
-  ],
-  "presentation": {
-    "icon": {
-      "path": "ui/assets/weather-plugin.png"
-    },
-    "locales": {
-      "default": "en-US"
-    }
-  },
-  "surfaces": [
-    {
-      "surface_id": "weather.dashboard",
-      "kind": "view",
-      "intent": "primary",
-      "label": "Weather",
-      "entry": "ui/index.html",
-      "icon": "ui/assets/weather-plugin.png",
-      "default_size": {
-        "width": 1040,
-        "height": 760
-      },
-      "web": {
-        "root": "ui",
-        "spa": false
-      }
-    }
-  ],
-  "workers": [
-    {
-      "worker_id": "weather_backend",
-      "artifact": "workers/weather.wasm",
-      "mode": "job",
-      "scope": "user",
-      "memory_limit_bytes": 33554432
-    }
-  ],
   "methods": [
     {
       "method": "weather.state.load",
@@ -973,18 +925,6 @@
       }
     }
   ],
-  "storage": {
-    "stores": [
-      {
-        "store_id": "weather",
-        "kind": "kv",
-        "scope": "user",
-        "quota_bytes": 1048576,
-        "quota_files": 16,
-        "schema_version": 1
-      }
-    ]
-  },
   "network_access": {
     "connectors": [
       {
@@ -1004,5 +944,65 @@
         ]
       }
     ]
-  }
+  },
+  "permissions": [
+    "network.client"
+  ],
+  "plugin": {
+    "display_name": "Weather",
+    "plugin_id": "github.repo.1289352675.weather",
+    "version": "1.2.0"
+  },
+  "presentation": {
+    "icon": {
+      "path": "ui/assets/weather-plugin.png"
+    },
+    "locales": {
+      "default": "en-US"
+    }
+  },
+  "publisher": {
+    "display_name": "Redeven Official",
+    "publisher_id": "github.repo.1289352675"
+  },
+  "schema_version": "redevplugin.manifest.v9",
+  "storage": {
+    "stores": [
+      {
+        "store_id": "weather",
+        "kind": "kv",
+        "scope": "user",
+        "quota_bytes": 1048576,
+        "quota_files": 16,
+        "schema_version": 1
+      }
+    ]
+  },
+  "surfaces": [
+    {
+      "surface_id": "weather.dashboard",
+      "kind": "view",
+      "intent": "primary",
+      "label": "Weather",
+      "entry": "ui/index.html",
+      "icon": "ui/assets/weather-plugin.png",
+      "default_size": {
+        "width": 1040,
+        "height": 760
+      },
+      "web": {
+        "root": "ui",
+        "spa": false
+      }
+    }
+  ],
+  "workers": [
+    {
+      "worker_id": "weather_backend",
+      "artifact": "workers/weather.wasm",
+      "mode": "job",
+      "scope": "user",
+      "memory_limit_bytes": 33554432
+    }
+  ]
 }

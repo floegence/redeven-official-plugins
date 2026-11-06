@@ -2,9 +2,11 @@ import { readFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { prepareRepositoryIdentity } from '../../../scripts/lib/repositoryIdentity.mjs';
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(pluginRoot, '../..');
+await prepareRepositoryIdentity(pluginRoot, 'mind-map');
 const manifest = JSON.parse(await readFile(path.join(pluginRoot, 'manifest.json'), 'utf8'));
 const releaseWorker = path.join(
   repoRoot,

@@ -33,6 +33,8 @@ tests/
 Use a feature worktree. Do not develop on `main`.
 
 ```bash
+npm ci
+npm run plugins:ci
 npm test
 npm run check
 npm run catalog:verify
@@ -78,3 +80,17 @@ never replaced.
 Weather's package-local release build compiles its WASM worker in a pinned Linux
 AMD64 container. Mind Map builds its permissionless storage Worker through the
 same package interface. Local output stays under ignored `dist/` directories.
+
+### Source-derived identity
+
+Each normal and release build runs the released `repository identity` command
+before building assets, then refreshes that project's discovery entry. The command
+resolves the enclosing Git origin through GitHub and writes the publisher and
+plugin IDs. The stable source ID for this repository is `1289352675`; its plugins
+use `github.repo.1289352675.<plugin-name>`. Authors select only the plugin name;
+there is no publisher registration, signing key or special official namespace.
+
+Builds require access to GitHub; `GITHUB_TOKEN` is optional for public access and
+recommended in CI to avoid anonymous rate limits. A failed lookup aborts before
+packaging. The packager compares the built package's identity to the generated
+source and refuses stale build output. Existing release assets stay immutable.

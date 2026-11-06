@@ -17,6 +17,8 @@
     "verify": "npm test && npm run check && npm run catalog:verify",
     "release:build": "node scripts/release_official_plugin.mjs build"
   },
-  "devDependencies": {},
-  "redevplugin_version": "3.19.0"
+  "devDependencies": {
+    "@floegence/redevplugin-contracts": "3.23.0"
+  },
+  "redevplugin_version": "3.23.0"
 }

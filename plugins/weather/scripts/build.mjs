@@ -1,3 +1,4 @@
+import { prepareRepositoryIdentity } from '../../../scripts/lib/repositoryIdentity.mjs';
 import { access, copyFile, mkdir, readFile, rm } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
@@ -8,6 +9,7 @@ const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const cargo = process.platform === "win32" ? "cargo.exe" : "cargo";
 const releaseWorker = String(process.env.WEATHER_RELEASE_WASM ?? "").trim();
 
+await prepareRepositoryIdentity(root, 'weather');
 await rm(resolve(root, "dist"), { recursive: true, force: true });
 run(npm, ["run", "build:ui"]);
 let workerSource;
