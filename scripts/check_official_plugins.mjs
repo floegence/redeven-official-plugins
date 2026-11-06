@@ -20,7 +20,7 @@ if (!target || target.plugins.length !== sources.length) {
   errors.push('repository index must list every official plugin exactly once');
 } else {
   for (const source of sources) {
-    const entries = target.plugins.filter((entry) => entry.plugin_id === source.manifest.plugin.plugin_id);
+    const entries = target.plugins.filter((entry) => entry.slug === source.manifest.plugin.slug);
     const entry = entries[0];
     if (entries.length !== 1 || entry.path !== `plugins/${source.name}` || entry.manifest !== 'manifest.json' ||
       entry.release.tag_template.replace('{version}', source.manifest.plugin.version) !== source.release.release_train_tag ||

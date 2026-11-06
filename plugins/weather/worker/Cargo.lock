@@ -40,7 +40,7 @@ dependencies = [
 
 [[package]]
 name = "redeven-official-weather-worker"
-version = "1.2.0"
+version = "1.3.0"
 dependencies = [
  "base64",
  "redevplugin-worker-sdk",
@@ -50,9 +50,9 @@ dependencies = [
 
 [[package]]
 name = "redevplugin-worker-sdk"
-version = "3.23.0"
+version = "3.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "975b85036cb2a688ed37bdc4c65b63d0b2fd868f767706b4b27ec4e0e6ed15db"
+checksum = "ebc1784e70377892527426089ae8661be6e649952922a11e007189c6e4119d47"
 dependencies = [
  "base64",
  "serde",

@@ -18,7 +18,7 @@
     "release:build": "node scripts/release_official_plugin.mjs build"
   },
   "devDependencies": {
-    "@floegence/redevplugin-contracts": "3.23.0"
+    "@floegence/redevplugin-contracts": "3.24.0"
   },
-  "redevplugin_version": "3.23.0"
+  "redevplugin_version": "3.24.0"
 }

@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 const execute = promisify(execFile);
 
-test('release readback binds generated plugin and publisher identities after build', async () => {
+test('release readback binds compiled identity without mutating authored source', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'official-release-identity-'));
   try {
     for (const directory of ['scripts/lib', 'plugins/example', 'dist/example/1.2.0', 'bin']) await mkdir(path.join(root, directory), { recursive: true });
@@ -22,8 +22,9 @@ export const sha256Hex = (data) => createHash('sha256').update(data).digest('hex
 export const loadPluginSource = async (root) => ({ pluginRoot: root + '/plugins/example', manifest: JSON.parse(await readFile(root + '/plugins/example/manifest.json')) });
 `);
     const manifest = { publisher: { publisher_id: 'github.repo.42' }, plugin: { plugin_id: 'github.repo.42.example', version: '1.2.0' } };
-    await writeFile(path.join(root, 'plugins/example/manifest.json'), JSON.stringify({ ...manifest, plugin: { ...manifest.plugin, plugin_id: 'old.example' } }));
-    await writeFile(path.join(root, 'scripts/build_official_plugin.mjs'), `import { writeFile } from 'node:fs/promises'; await writeFile('plugins/example/manifest.json', ${JSON.stringify(JSON.stringify(manifest))});`);
+    await writeFile(path.join(root, 'plugins/example/manifest.json'), JSON.stringify({ schema_version: 'redevplugin.source.v1', plugin: { slug: 'example', version: '1.2.0' } }));
+    await writeFile(path.join(root, 'scripts/build_official_plugin.mjs'), '');
+    await writeFile(path.join(root, 'scripts/lib/authorProject.mjs'), `export const expectedManifest = async () => (${JSON.stringify({ plugin_id: manifest.plugin.plugin_id, publisher_id: manifest.publisher.publisher_id, version: '1.2.0', manifest_sha256: 'b' })});`);
     await writeFile(path.join(root, 'bin/npm'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     const bytes = Buffer.from('exact-package');
     const metadata = { package_file: 'example-1.2.0.redevplugin', plugin_id: manifest.plugin.plugin_id, version: '1.2.0', size: bytes.length,
@@ -34,7 +35,10 @@ export const loadPluginSource = async (root) => ({ pluginRoot: root + '/plugins/
     const options = { cwd: root, env: { ...process.env, PATH: `${root}/bin:${process.env.PATH}` } };
     const result = await execute(process.execPath, ['scripts/release.mjs', 'build', 'example'], options);
     assert.equal(JSON.parse(result.stdout).plugin_id, manifest.plugin.plugin_id);
+    assert.deepEqual(JSON.parse(await readFile(path.join(root, 'plugins/example/manifest.json'))), { schema_version: 'redevplugin.source.v1', plugin: { slug: 'example', version: '1.2.0' } });
     await writeFile(path.join(root, 'scripts/lib/platform.mjs'), `export const platformCLI = async () => (${JSON.stringify({ ...metadata, publisher_id: 'github.repo.99' })});`);
+    await assert.rejects(execute(process.execPath, ['scripts/release.mjs', 'verify', 'example'], options), /release artifact readback differs/);
+    await writeFile(path.join(root, 'scripts/lib/platform.mjs'), `export const platformCLI = async () => (${JSON.stringify({ ...metadata, publisher_id: 'github.repo.42', manifest_sha256: 'changed' })});`);
     await assert.rejects(execute(process.execPath, ['scripts/release.mjs', 'verify', 'example'], options), /release artifact readback differs/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

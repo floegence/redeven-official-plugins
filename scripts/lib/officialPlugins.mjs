@@ -1,11 +1,7 @@
-import { githubPluginIdentity } from '@floegence/redevplugin-contracts';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-
-const officialRepositoryID = 1289352675;
-export const officialPublisherID = githubPluginIdentity(officialRepositoryID, 'plugin').publisher_id;
 
 export function repoRootFrom(importMetaURL) {
   let current = path.dirname(new URL(importMetaURL).pathname);
@@ -75,7 +71,7 @@ export function resolvePluginForReleaseTag(sources, tag) {
 
 export function validatePluginCollection(sources) {
   const errors = [];
-  collectDuplicateErrors(sources, (source) => source.manifest.plugin?.plugin_id, 'plugin ID', errors);
+  collectDuplicateErrors(sources, (source) => source.manifest.plugin?.slug, 'plugin slug', errors);
   collectDuplicateErrors(sources, (source) => source.release?.release_train_tag, 'release tag', errors);
   return errors;
 }
@@ -113,16 +109,11 @@ export async function validatePluginSource(source) {
       errors.push(`${name}: package script ${script} is required`);
     }
   }
-  if (manifest.schema_version !== 'redevplugin.manifest.v9') {
-    errors.push(`${name}: manifest schema_version must be redevplugin.manifest.v9`);
+  if (manifest.schema_version !== 'redevplugin.source.v1') {
+    errors.push(`${name}: manifest schema_version must be redevplugin.source.v1`);
   }
-  const identity = githubPluginIdentity(officialRepositoryID, name);
-  if (manifest.publisher?.publisher_id !== identity.publisher_id) {
-    errors.push(`${name}: publisher_id must be ${officialPublisherID}`);
-  }
-  const pluginID = String(manifest.plugin?.plugin_id ?? '');
-  if (pluginID !== identity.plugin_id) {
-    errors.push(`${name}: plugin_id must equal the generated repository identity ${officialPublisherID}.${name}`);
+  if (manifest.plugin?.slug !== name || 'plugin_id' in (manifest.plugin ?? {}) || 'publisher_id' in (manifest.publisher ?? {})) {
+    errors.push(`${name}: author identity must contain only the plugin slug`);
   }
   const presentation = manifest.presentation;
   if (!presentation || typeof presentation.locales?.default !== 'string') {

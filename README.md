@@ -83,14 +83,21 @@ same package interface. Local output stays under ignored `dist/` directories.
 
 ### Source-derived identity
 
-Each normal and release build runs the released `repository identity` command
-before building assets, then refreshes that project's discovery entry. The command
-resolves the enclosing Git origin through GitHub and writes the publisher and
-plugin IDs. The stable source ID for this repository is `1289352675`; its plugins
-use `github.repo.1289352675.<plugin-name>`. Authors select only the plugin name;
-there is no publisher registration, signing key or special official namespace.
+Authors maintain `plugin.slug` in `redevplugin.source.v1` and the same short slug
+in `.redevplugin/index.json`. They never look up or write a numeric repository ID,
+publisher ID, or full plugin ID. Source and index remain unchanged by builds.
 
-Builds require access to GitHub; `GITHUB_TOKEN` is optional for public access and
-recommended in CI to avoid anonymous rate limits. A failed lookup aborts before
-packaging. The packager compares the built package's identity to the generated
-source and refuses stale build output. Existing release assets stay immutable.
+`npm run build:<plugin-name>` uses the released project pipeline with offline
+local identity. Once dependencies are installed, it requires neither Git nor
+GitHub access. `npm run release:build -- <plugin-name>` uses `build --release`:
+the platform resolves Git origin through GitHub, generates
+`github.repo.<repository-id>.<slug>` and bindings under ignored `generated/`,
+then runs the canonical Worker and UI build. Forks resolve their own repository
+identity automatically. `GITHUB_TOKEN` is optional for public repositories and
+recommended in CI to avoid anonymous rate limits.
+
+Packaging and release readback independently compile the current source through
+the released CLI, then compare identity, version, and canonical manifest hash.
+A failed resolution or stale output prevents publication. Local packages cannot
+pass release verification. No publisher registration, plugin signature, or
+official namespace exemption exists. Published release assets remain immutable.

@@ -6,22 +6,22 @@
       "host": "redeven",
       "plugins": [
         {
-          "plugin_id": "github.repo.1289352675.mind-map",
           "path": "plugins/mind-map",
           "manifest": "manifest.json",
           "release": {
             "tag_template": "mind-map-v{version}",
             "package_asset_template": "mind-map-{version}.redevplugin"
-          }
+          },
+          "slug": "mind-map"
         },
         {
-          "plugin_id": "github.repo.1289352675.weather",
           "path": "plugins/weather",
           "manifest": "manifest.json",
           "release": {
             "tag_template": "weather-v{version}",
             "package_asset_template": "weather-{version}.redevplugin"
-          }
+          },
+          "slug": "weather"
         }
       ]
     }

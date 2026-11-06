@@ -1,0 +1,31 @@
+{
+  "schema_version": "redevplugin.project.v1",
+  "output": "dist",
+  "bindings": "generated",
+  "build": [
+    "node",
+    "scripts/build.mjs"
+  ],
+  "typecheck": [
+    "npm",
+    "run",
+    "typecheck"
+  ],
+  "test": [
+    "npm",
+    "test"
+  ],
+  "watch": [
+    "ui",
+    "worker/src",
+    "worker/Cargo.toml",
+    "worker/Cargo.lock",
+    "manifest.json",
+    "package.json",
+    "package-lock.json",
+    "vite.config.ts",
+    "scripts",
+    "assets",
+    "THIRD_PARTY_NOTICES.txt"
+  ]
+}

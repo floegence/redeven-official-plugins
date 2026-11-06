@@ -77,7 +77,7 @@ git worktree add -b "$BR" "$WT" origin/main
 - Do not import or copy source from `../redeven` or `../redevplugin`.
 - Packaging and validation must use released ReDevPlugin CLI/SDK/contract
   artifacts. The default CLI command should be a released module invocation such
-  as `go run github.com/floegence/redevplugin/cmd/redevplugin@v0.1.1`.
+  as `go run github.com/floegence/redevplugin/v3/cmd/redevplugin@v3.24.0`.
 - If a plugin needs a platform capability that is not available in a released
   ReDevPlugin artifact, add and release it upstream before relying on it here.
 
@@ -109,10 +109,12 @@ stay behind that package interface. Shared repository tags are globally unique,
 must match exactly one discovered plugin, and may publish only that plugin's
 exact release assets. Markets select the ordinary package in each independent plugin tag namespace.
 
-Normal and release builds resolve the source repository through the released
-`repository identity` command before packaging or hashing, then refresh the index.
-Authors select a slug only. Publisher and plugin IDs use the same repository-based
-rule as community packages; no official namespace exemption exists.
+Editable manifests use `redevplugin.source.v1` and `plugin.slug`; discovery entries
+use the same slug. Neither declares a repository ID, publisher ID or full plugin ID.
+Local builds run the released `build` pipeline offline. Release builds use
+`build --release`, which resolves GitHub and compiles identity and bindings before
+any Worker/UI build or hash. Generated files remain ignored; builds never rewrite
+source or the index. Official and community plugins follow the same rule.
 
 The generic packager builds deterministic ordinary `.redevplugin` packages using
 released ReDevPlugin CLI artifacts. Publication builds through each plugin's
@@ -142,7 +144,8 @@ invent fallback descriptions from plugin names.
 ## Presentation Authority
 
 - Official plugin package identity and presentation evidence live only in the
-  verified current manifest. The repository accepts `redevplugin.manifest.v9`;
+  verified current package manifest. Source uses `redevplugin.source.v1` and the
+  released compiler produces `redevplugin.manifest.v9`;
   do not maintain a second plugin name, Surface label, Setting label, or option
   label in catalog declarations, migration SQL, host code, or release
   automation.
