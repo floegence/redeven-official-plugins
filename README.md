@@ -69,6 +69,13 @@ client capability negotiation exists.
 market derives all presentation from `release inspect`; this repository does not
 maintain a second catalog or replace author descriptions with display names.
 
+Authors set one `presentation.category` in each source manifest using the
+released ReDevPlugin vocabulary: `development`, `infrastructure`, `utilities`,
+`data`, `collaboration`, `productivity`, or `other`. Omission means `other`;
+invalid explicit values fail validation. Weather declares `utilities` and Mind
+Map declares `productivity`. Discovery reads the verified release package, so
+changing a category requires a new plugin release and never an index override.
+
 `npm run release:build -- <plugin-name>` runs the plugin's `build:release`, builds
 an ordinary package, and records distinct archive and canonical package digests.
 `npm run release:verify -- <plugin-name>` re-inspects the package and checks those

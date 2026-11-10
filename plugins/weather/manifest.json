@@ -950,7 +950,7 @@
   ],
   "plugin": {
     "display_name": "Weather",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "slug": "weather"
   },
   "presentation": {
@@ -959,7 +959,8 @@
     },
     "locales": {
       "default": "en-US"
-    }
+    },
+    "category": "utilities"
   },
   "publisher": {
     "display_name": "Redeven Official"
