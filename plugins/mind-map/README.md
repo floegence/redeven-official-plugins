@@ -20,6 +20,10 @@ The editor mounts with the authenticated host theme and canvas palette, avoiding
 a light editor before a dark workspace. Hidden surfaces retain editing state and
 pause drawing; activation resizes and redraws the same canvas.
 
+An initial workspace read failure immediately offers Retry. It never starts a
+long automatic retry loop or treats an unreadable store as an empty workspace.
+Editing and Agent methods become available only after confirmed restoration.
+
 Agent discovery exposes mindmap.document.read and mindmap.document.edit on the
 exact live editor. Reads return a document ID and monotonic in-memory revision.
 Edits require both fields and apply a bounded operation batch atomically through
@@ -46,3 +50,7 @@ npm ci
 npm test
 npm run build
 ```
+
+The application uses ReDevPlugin 3.29.0 explicit first presentation. It restores
+its saved state or prepares a stable error before revealing, without waiting for
+an animation frame. The package requires `surface.presentation.v1`.

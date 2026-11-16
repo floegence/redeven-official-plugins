@@ -103,3 +103,7 @@ Open-Meteo data is CC BY 4.0. The earlier clock-weather-card inspiration retains
 its MIT attribution in THIRD_PARTY_NOTICES.txt. No Apple artwork, code, services
 or screenshots are bundled. Air quality, alerts, historical averages and native
 window chrome remain outside this application.
+
+The application uses ReDevPlugin 3.29.0 explicit first presentation. It restores
+its saved state or prepares a stable error before revealing, without waiting for
+an animation frame. The package requires `surface.presentation.v1`.

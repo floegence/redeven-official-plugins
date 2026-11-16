@@ -79,7 +79,7 @@ type Notice = {
   error?: boolean;
 };
 
-const bridge = new PluginBridgeClient({ timeoutMs: 20_000 });
+const bridge = new PluginBridgeClient({ timeoutMs: 20_000, presentation: "explicit" });
 const state = createMutable<{
   colorScheme?: "light" | "dark";
   visible: boolean;
@@ -123,6 +123,7 @@ let clockTimer: ReturnType<typeof setInterval> | undefined;
 
 async function initialize(): Promise<void> {
   await bridge.ready();
+  if (disposed) return;
   clockTimer = setInterval(() => {
     if (!state.visible) return;
     const next = new Date();
@@ -139,6 +140,7 @@ async function initialize(): Promise<void> {
       "weather.state.load",
       {},
     );
+    if (disposed) return;
     state.favorites = response.data.favorites;
     state.selected = response.data.selected ?? undefined;
     state.forecast = response.data.forecast ?? undefined;
@@ -148,21 +150,18 @@ async function initialize(): Promise<void> {
     if (state.selected && state.forecast)
       state.cityForecasts[state.selected.id] = state.forecast;
     state.busy = undefined;
-    if (response.data.selected) {
-      await afterPaint();
-      if (!state.busy && state.selected?.id === response.data.selected.id)
-        void loadForecast(response.data.selected, { preserveVisible: true });
-    } else {
-      await afterPaint();
-    }
+    bridge.present();
+    if (response.data.selected && !state.busy && state.selected?.id === response.data.selected.id)
+      void loadForecast(response.data.selected, { preserveVisible: true });
   } catch (error) {
+    if (disposed) return;
     state.busy = undefined;
     state.notice = {
       scope: "chooser",
       text: friendlyError(error, "load"),
       error: true,
     };
-    await afterPaint();
+    bridge.present();
   }
 }
 

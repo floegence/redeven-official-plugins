@@ -80,6 +80,41 @@ test("the first mounted editor uses the host theme", async (t) => {
   assert.ok(themes.length > 0);
   assert.ok(themes.every(Boolean), 'no light editor is mounted before the host context');
 });
+test("first presentation restores the workspace and latest theme without animation frames", async (t) => {
+  const page = await browser.newPage();
+  t.after(() => page.close());
+  await page.addInitScript(() => { window.requestAnimationFrame = () => 1; });
+  await page.goto(base + "/?hold-load&theme=light");
+  await page.waitForFunction(() => window.__mindMapTest?.loadPending(), null, { polling: 20 });
+  assert.deepEqual(await page.evaluate(() => window.__mindMapTest.presentations()), []);
+  await page.evaluate(() => { window.__mindMapTest.context("dark"); window.__mindMapTest.releaseLoad(); });
+  await page.waitForFunction(() => window.__mindMapTest.presentations().length === 1, null, { polling: 20, timeout: 2000 });
+  const [presentation] = await page.evaluate(() => window.__mindMapTest.presentations());
+  assert.equal(presentation.dark, true);
+  assert.equal(presentation.starting, false);
+  assert.equal(presentation.error, false);
+  assert.match(presentation.title, /Restored plan/);
+  assert.match((await read(page)).document_dsl, /Saved idea/);
+});
+test("disposal during restoration cannot commit a first presentation", async (t) => {
+  const page = await browser.newPage();
+  t.after(() => page.close());
+  await page.goto(base + "/?hold-load");
+  await page.waitForFunction(() => window.__mindMapTest?.loadPending());
+  await page.evaluate(() => window.__mindMapTest.dispose());
+  await page.locator(".mind-map-app").waitFor({ state: "detached" });
+  await page.evaluate(() => window.__mindMapTest.releaseLoad());
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 20)));
+  assert.deepEqual(await page.evaluate(() => window.__mindMapTest.presentations()), []);
+});
+test("failed initialization presents the retryable error within the opening budget", async (t) => {
+  const page = await browser.newPage();
+  t.after(() => page.close());
+  await page.goto(base + "?load-fails");
+  await page.waitForFunction(() => window.__mindMapTest.presentations().length === 1, null, { timeout: 2000 });
+  assert.equal((await page.evaluate(() => window.__mindMapTest.presentations()))[0].error, true);
+  assert.equal(await page.getByRole("button", { name: "Retry", exact: true }).count(), 1);
+});
 test("native keyboard editing and Agent edits share one undo history", async (t) => {
   const page = await ready(t),
     initial = await read(page);
@@ -311,7 +346,7 @@ test("initial load retry registers Agent methods after recovery", async (t) => {
   await page.goto(base + "?load-fails");
   await page
     .getByRole("button", { name: "Retry", exact: true })
-    .waitFor({ timeout: 22000 });
+    .waitFor({ timeout: 2000 });
   await page.evaluate(() => window.__mindMapTest.reads(true));
   await page.getByRole("button", { name: "Retry", exact: true }).click();
   await page.waitForFunction(

@@ -11,8 +11,16 @@ import {
 } from "../../ui/src/workspace-model";
 export { PluginBridgeError };
 const channel = new MessageChannel();
+const query = new URLSearchParams(location.search);
+const savedWorkspace = createWorkspace(1);
+if (query.has("hold-load")) {
+  savedWorkspace.documents[0].title = "Restored plan";
+  savedWorkspace.documents[0].nodes[0].title = "Saved idea";
+}
+let heldLoad: (() => void) | undefined;
+const presentations: unknown[] = [];
 let revision = 0,
-  dsl = serializeWorkspaceDSL(createWorkspace(1)),
+  dsl = serializeWorkspaceDSL(savedWorkspace),
   contextRevision = 0;
 let mode = "ok",
   readsAvailable = !new URLSearchParams(location.search).has("load-fails"),
@@ -41,6 +49,15 @@ function context(theme = "light", locale = "en-US") {
   send({ type: "redevplugin.bridge.context", context: value });
 }
 channel.port2.onmessage = ({ data: m }) => {
+  if (m.type === "redevplugin.bridge.present") {
+    presentations.push({
+      dark: document.documentElement.classList.contains("dark"),
+      starting: document.querySelector(".mind-map-app")?.classList.contains("is-starting"),
+      error: Boolean(document.querySelector('[role="alert"]')),
+      title: document.querySelector(".document-list")?.textContent,
+    });
+    return;
+  }
   if (m.type === "redevplugin.bridge.methods") {
     methods.splice(0, methods.length, ...m.methods);
     send({ type: "redevplugin.bridge.response", id: m.id, ok: true, data: {} });
@@ -79,12 +96,12 @@ channel.port2.onmessage = ({ data: m }) => {
       mutation_outcome: outcome,
     });
   if (method === "mindmap.workspace.load") {
-    if (!readsAvailable) return fail("PLUGIN_RUNTIME_UNAVAILABLE");
-    ok({
-      revision,
-      saved_at: revision ? "2026-10-30T00:00:00Z" : null,
-      workspace_dsl: dsl,
-    });
+    const complete = () => {
+      if (!readsAvailable) return fail("PLUGIN_RUNTIME_UNAVAILABLE");
+      ok({ revision, saved_at: revision ? "2026-10-30T00:00:00Z" : null, workspace_dsl: dsl });
+    };
+    if (query.has("hold-load")) heldLoad = complete;
+    else complete();
     return;
   }
   if (method === "mindmap.workspace.save") {
@@ -133,6 +150,9 @@ export class PluginBridgeClient extends Actual {
 }
 Object.assign(window, {
   __mindMapTest: {
+    presentations: () => presentations,
+    loadPending: () => Boolean(heldLoad),
+    releaseLoad: () => { const complete = heldLoad; heldLoad = undefined; complete?.(); },
     methods: () => [...methods],
     stored: () => ({ revision, dsl, writes }),
     exports: () => exports,

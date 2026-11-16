@@ -2,7 +2,8 @@
   "api": {
     "major": 1,
     "required_features": [
-      "net.http.v1"
+      "net.http.v1",
+      "surface.presentation.v1"
     ],
     "optional_features": []
   },
@@ -950,7 +951,7 @@
   ],
   "plugin": {
     "display_name": "Weather",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "slug": "weather"
   },
   "presentation": {

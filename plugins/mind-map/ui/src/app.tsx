@@ -59,7 +59,6 @@ import {
   wheelZoomTarget,
   zoomViewportAtPoint,
 } from "./editor-ui.js";
-import { loadWithRetry } from "./startup-load.js";
 import {
   EXPORT_FORMATS,
   bitmapExportSize,
@@ -144,7 +143,7 @@ type LoadResponse = {
 };
 type SaveResponse = { revision: number; saved_at: string };
 
-const bridge = new PluginBridgeClient({ timeoutMs: 20_000 });
+const bridge = new PluginBridgeClient({ timeoutMs: 20_000, presentation: "explicit" });
 const CANVAS_ID = "map";
 const NODE_COLORS: readonly NodeColor[] = [
   "accent",
@@ -206,9 +205,7 @@ let visible = true;
 let disposed = false;
 let surfaceDisposing = false;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
-let loadRetryTimer: ReturnType<typeof setTimeout> | undefined;
 let viewportRenderTimer: ReturnType<typeof setTimeout> | undefined;
-let loadRetryResolve: ((shouldContinue: boolean) => void) | undefined;
 let saveInFlight: Promise<boolean> | undefined;
 let pendingSave:
   | { revision: number; workspace_dsl: string; editVersion: number }
@@ -424,7 +421,6 @@ bridge.onLifecycle((event) => {
     surfaceDisposing = true;
     visible = false;
     clearSaveTimer();
-    clearLoadRetryWait();
     clearViewportRenderTimer();
     resizeObserver?.disconnect();
     unmount?.();
@@ -435,6 +431,7 @@ bridge.onLifecycle((event) => {
 
 async function initialize(): Promise<void> {
   await bridge.ready();
+  if (disposed) return;
   canvas = canvasElement;
   const drawingContext = canvas.getContext("2d", { alpha: false });
   if (!drawingContext) throw new Error("2D canvas is unavailable");
@@ -442,8 +439,10 @@ async function initialize(): Promise<void> {
   resizeObserver = new ResizeObserver(resizeCanvas);
   resizeObserver.observe(canvas);
   resizeCanvas();
-  if (!(await loadWorkspaceAtStartup())) return;
-  await activateLoadedWorkspace();
+  const loaded = await loadWorkspaceAtStartup();
+  if (disposed) return;
+  if (loaded) await activateLoadedWorkspace();
+  if (!disposed) bridge.present();
 }
 function resizeCanvas(): void {
   if (!canvas || disposed) return;
@@ -460,11 +459,12 @@ let applicationMethodsRegistered = false;
 async function activateLoadedWorkspace(): Promise<void> {
   if (!applicationMethodsRegistered) {
     await registerApplicationMethods();
+    if (disposed) return;
     applicationMethodsRegistered = true;
   }
   await updateCanvasAccessibility();
   await render();
-  draw();
+  if (!disposed) draw();
 }
 
 function updateCanvasAccessibility(): Promise<void> {
@@ -473,11 +473,16 @@ function updateCanvasAccessibility(): Promise<void> {
 }
 
 async function showFatal(error: unknown): Promise<void> {
+  if (disposed) return;
   loadState = "error";
   loadMessage = error instanceof Error ? error.message : text().loadFailed;
   try {
     await bridge.ready();
+    if (disposed) return;
     await render();
+    if (disposed) return;
+    if (context) draw();
+    bridge.present();
   } catch {
     // The host owns the unavailable state when bridge startup itself fails.
   }
@@ -1821,20 +1826,15 @@ async function registerApplicationMethods(): Promise<void> {
 }
 
 async function loadWorkspaceAtStartup(): Promise<boolean> {
-  clearLoadRetryWait();
   loadState = "loading";
   loadMessage = "";
   saveState = "idle";
   await render();
   let response: PluginMethodResult<LoadResponse>;
   try {
-    response = await loadWithRetry(
-      () =>
-        bridge.call<PluginMethodResult<LoadResponse>>(
-          "mindmap.workspace.load",
-          {},
-        ),
-      waitForLoadRetry,
+    response = await bridge.call<PluginMethodResult<LoadResponse>>(
+      "mindmap.workspace.load",
+      {},
     );
   } catch {
     if (surfaceDisposing || disposed) return false;
@@ -2841,26 +2841,6 @@ function scheduleViewportRender(): void {
 function clearViewportRenderTimer(): void {
   if (viewportRenderTimer !== undefined) clearTimeout(viewportRenderTimer);
   viewportRenderTimer = undefined;
-}
-
-function waitForLoadRetry(delayMs: number): Promise<boolean> {
-  if (surfaceDisposing || disposed) return Promise.resolve(false);
-  return new Promise((resolve) => {
-    loadRetryResolve = resolve;
-    loadRetryTimer = setTimeout(() => {
-      loadRetryTimer = undefined;
-      loadRetryResolve = undefined;
-      resolve(true);
-    }, delayMs);
-  });
-}
-
-function clearLoadRetryWait(): void {
-  if (loadRetryTimer !== undefined) clearTimeout(loadRetryTimer);
-  loadRetryTimer = undefined;
-  const resolve = loadRetryResolve;
-  loadRetryResolve = undefined;
-  resolve?.(false);
 }
 
 function text() {

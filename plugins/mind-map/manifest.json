@@ -1,7 +1,9 @@
 {
   "api": {
     "major": 1,
-    "required_features": [],
+    "required_features": [
+      "surface.presentation.v1"
+    ],
     "optional_features": []
   },
   "intents": [
@@ -391,7 +393,7 @@
   "permissions": [],
   "plugin": {
     "display_name": "Mind Map",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "slug": "mind-map"
   },
   "presentation": {

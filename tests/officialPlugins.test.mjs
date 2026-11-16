@@ -52,16 +52,16 @@ describe('official plugin repository contract', () => {
     assert.equal(weather.name, 'weather');
     assert.equal(weather.manifest.schema_version, 'redevplugin.source.v1');
     assert.equal(weather.manifest.plugin.slug, 'weather');
-    assert.equal(weather.manifest.plugin.version, '1.4.0');
+    assert.equal(weather.manifest.plugin.version, '1.4.1');
     assert.deepEqual(weather.manifest.permissions, ['network.client']);
-    assert.deepEqual(weather.manifest.api.required_features, ['net.http.v1']);
+    assert.deepEqual(weather.manifest.api.required_features, ['net.http.v1', 'surface.presentation.v1']);
     assert.equal(weather.manifest.presentation.icon.path, 'ui/assets/weather-plugin.png');
     assert.equal(weather.manifest.surfaces[0].surface_id, 'weather.dashboard');
     assert.equal(mindMap.manifest.schema_version, 'redevplugin.source.v1');
     assert.equal(mindMap.manifest.plugin.slug, 'mind-map');
-    assert.equal(mindMap.manifest.plugin.version, '1.4.0');
+    assert.equal(mindMap.manifest.plugin.version, '1.4.1');
     assert.deepEqual(mindMap.manifest.permissions, []);
-    assert.deepEqual(mindMap.manifest.api.required_features, []);
+    assert.deepEqual(mindMap.manifest.api.required_features, ['surface.presentation.v1']);
     assert.equal(mindMap.manifest.workers[0].scope, 'user');
     assert.equal(mindMap.manifest.workers[0].artifact, 'workers/mind-map.wasm');
     assert.deepEqual(mindMap.manifest.methods.map(({ method }) => method), [
@@ -85,8 +85,8 @@ describe('official plugin repository contract', () => {
 
   it('resolves each global release tag to exactly one plugin', async () => {
     const sources = await loadAllPluginSources(repoRoot);
-    assert.equal(resolvePluginForReleaseTag(sources, 'weather-v1.4.0').name, 'weather');
-    assert.equal(resolvePluginForReleaseTag(sources, 'mind-map-v1.4.0').name, 'mind-map');
+    assert.equal(resolvePluginForReleaseTag(sources, 'weather-v1.4.1').name, 'weather');
+    assert.equal(resolvePluginForReleaseTag(sources, 'mind-map-v1.4.1').name, 'mind-map');
     assert.throws(() => resolvePluginForReleaseTag(sources, 'v9.9.9'), /exactly one plugin/u);
 
     const duplicate = structuredClone(sources[0]);

@@ -48,6 +48,7 @@ const harness = createPluginTestHarness({
 export const PluginBridgeClient = harness.BridgeClient;
 Object.assign(window, { __weatherTest: {
   pending: () => pending.map(({ method, input }) => ({ method, input })),
+  presented: () => harness.presented,
   context: (language: string, theme = 'light') => harness.context(context(language, theme)),
   settle: (options: { fail?: boolean; source?: string; hourly?: boolean; empty?: boolean } = {}) => {
     const call = pending.shift();

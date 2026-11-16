@@ -16,6 +16,31 @@ before(async () => {
 });
 after(async () => { await browser?.close(); await server?.close(); });
 const pending = (page) => page.evaluate(() => window.__weatherTest.pending());
+for (const failed of [false, true]) test(`first presentation commits restored content or error without animation frames (failure: ${failed})`, async (t) => {
+  const page = await browser.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  t.after(async () => { await page.close(); assert.deepEqual(errors, []); });
+  await page.addInitScript(() => { window.requestAnimationFrame = () => 1; });
+  await page.goto(base + '/?theme=light&hold-state=1&fixture=full&sky=night');
+  await page.waitForFunction(() => window.__weatherTest?.pending().length === 1, null, { polling: 20 });
+  assert.equal(await page.evaluate(() => window.__weatherTest.presented()), false);
+  await page.evaluate(fail => {
+    window.__weatherTest.context('en-US', 'dark');
+    window.__weatherTest.settle({ fail });
+  }, failed);
+  await page.waitForFunction(() => window.__weatherTest.presented(), null, { polling: 20, timeout: 2000 });
+  assert.equal(await page.locator('html.dark').count(), 1);
+  assert.equal(await page.locator('.weather-starting, .loading-state').count(), 0);
+  if (failed) {
+    assert.equal(await page.locator('.onboarding').count(), 1);
+    assert.equal(await page.locator('.chooser-status.error').count(), 1);
+  } else {
+    assert.equal(await page.locator('.forecast-dashboard').count(), 1);
+    assert.equal(await page.locator('.weather-app.sky-clear-night').count(), 1);
+    assert.equal(await page.getByTestId('place-name').textContent(), 'Beijing');
+  }
+});
 test('cold weather restoration starts in the host theme without a guessed sky', async (t) => {
   const page = await browser.newPage();
   t.after(() => page.close());
